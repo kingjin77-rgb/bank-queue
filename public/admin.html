@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>관리자 및 전광판</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="bg-slate-900 text-white min-h-screen p-6 flex flex-col justify-between select-none">
+
+  <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 mb-6 flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center gap-4">
+      <span class="text-sm font-semibold text-slate-400">운영 은행:</span>
+      <select id="select-bank" class="bg-slate-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold outline-none">
+        <option value="우리은행" selected>우리은행</option>
+        <option value="국민은행">국민은행</option>
+        <option value="신한은행">신한은행</option>
+        <option value="하나은행">하나은행</option>
+      </select>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <span class="text-sm font-semibold text-slate-400">배치 창구 수:</span>
+      <div class="flex gap-1" id="counter-btn-group">
+        <button onclick="setCounterCount(2)" class="counter-btn px-3 py-1 bg-slate-700 rounded-lg text-sm font-bold">2명</button>
+        <button onclick="setCounterCount(3)" class="counter-btn px-3 py-1 bg-slate-700 rounded-lg text-sm font-bold">3명</button>
+        <button onclick="setCounterCount(4)" class="counter-btn px-3 py-1 bg-blue-600 rounded-lg text-sm font-bold">4명</button>
+        <button onclick="setCounterCount(5)" class="counter-btn px-3 py-1 bg-slate-700 rounded-lg text-sm font-bold">5명</button>
+        <button onclick="setCounterCount(6)" class="counter-btn px-3 py-1 bg-slate-700 rounded-lg text-sm font-bold">6명</button>
+      </div>
+    </div>
+  </div>
+
+  <main class="flex-1 flex flex-col justify-center">
+    <div class="text-center mb-6">
+      <h1 class="text-3xl font-extrabold tracking-wider" id="board-title">우리은행 대기 현황</h1>
+    </div>
+
+    <div id="counter-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+  </main>
+
+  <footer class="mt-6 bg-slate-800/60 p-4 rounded-xl flex justify-between items-center text-slate-400 text-sm">
+    <span>전체 대기 인원: <b class="text-yellow-400 text-lg" id="total-wait">0명</b></span>
+    <span>실시간 동기화 상태: <b class="text-emerald-400">정상</b></span>
+  </footer>
+
+  <script>
+    const socket = io();
+    let currentCounters = 4;
+    let currentStatusMap = {};
+
+    function setCounterCount(count) {
+      currentCounters = count;
+      socket.emit('update_admin_settings', { 
+        newBankName: document.getElementById('select-bank').value, 
+        newActiveCounters: count 
+      });
+    }
+
+    document.getElementById('select-bank').addEventListener('change', (e) => {
+      socket.emit('update_admin_settings', { 
+        newBankName: e.target.value, 
+        newActiveCounters: currentCounters 
+      });
+    });
+
+    socket.on('state_update', (data) => {
+      document.getElementById('total-wait').innerText = `${data.totalWaiting}명`;
+      document.getElementById('board-title').innerText = `${data.bankName} 대기 현황`;
+      document.getElementById('select-bank').value = data.bankName;
+      currentCounters = data.activeCounters;
+      currentStatusMap = data.counterStatus;
+
+      document.querySelectorAll('.counter-btn').forEach(btn => {
+        if (btn.innerText === `${currentCounters}명`) {
+          btn.className = "counter-btn px-3 py-1 bg-blue-600 rounded-lg text-sm font-bold";
+        } else {
+          btn.className = "counter-btn px-3 py-1 bg-slate-700 rounded-lg text-sm font-bold";
+        }
+      });
+
+      renderBoard();
+    });
+
+    function renderBoard() {
+      const grid = document.getElementById('counter-grid');
+      grid.innerHTML = '';
+      grid.className = `grid gap-4 ${currentCounters <= 3 ? 'grid-cols-' + currentCounters : 'grid-cols-2 md:grid-cols-' + Math.min(currentCounters, 4)}`;
+
+      for (let i = 1; i <= currentCounters; i++) {
+        const info = currentStatusMap[i];
+        const isCalling = info && info.ticketNo;
+        const card = document.createElement('div');
+        card.className = `bg-slate-800 rounded-2xl p-6 border ${isCalling ? 'border-blue-500 shadow-lg shadow-blue-500/10' : 'border-slate-700'} flex flex-col items-center justify-center`;
+        card.innerHTML = `
+          <span class="text-xs font-bold text-slate-400 mb-1">${i}번 창구</span>
+          <div class="text-5xl font-black ${isCalling ? 'text-yellow-400' : 'text-slate-600'} my-2">${isCalling ? info.ticketNo + '번' : '-'}</div>
+          <span class="text-xs font-semibold ${isCalling ? 'text-blue-400' : 'text-slate-500'}">${isCalling ? (info.status === 'CALLED' ? '호출 중' : '상담 중') : '대기 중'}</span>
+        `;
+        grid.appendChild(card);
+      }
+    }
+  </script>
+</body>
+</html>

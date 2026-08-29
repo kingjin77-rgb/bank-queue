@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>상담석 대기 관리</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 h-screen flex flex-col p-4 select-none">
+
+  <header class="bg-white rounded-2xl p-4 shadow-sm flex justify-between items-center mb-4">
+    <div class="flex items-center gap-3">
+      <span class="bg-blue-600 text-white font-bold px-3 py-1 rounded-lg text-sm" id="bank-label">우리은행</span>
+      <select id="counter-select" onchange="changeCounter(this.value)" class="text-xl font-bold bg-gray-50 border rounded-lg px-2 py-1">
+        <option value="1">1번 창구</option>
+        <option value="2">2번 창구</option>
+        <option value="3">3번 창구</option>
+        <option value="4">4번 창구</option>
+        <option value="5">5번 창구</option>
+        <option value="6">6번 창구</option>
+      </select>
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="text-xs text-slate-500">전체 대기:</span>
+      <span class="text-lg font-bold text-red-500" id="queue-count">0명</span>
+    </div>
+  </header>
+
+  <main class="flex-1 grid grid-cols-3 gap-4 min-h-0">
+    <div class="col-span-2 bg-white rounded-2xl shadow-sm p-6 flex flex-col justify-between">
+      <div>
+        <div class="flex justify-between items-center">
+          <span class="text-sm font-semibold text-slate-400">진행 상태</span>
+          <span id="status-badge" class="bg-gray-100 text-gray-600 text-xs font-bold px-3 py-1 rounded-full">대기 중</span>
+        </div>
+        
+        <div class="text-center my-8">
+          <p class="text-sm text-slate-400">호출 번호</p>
+          <div class="text-7xl font-extrabold text-slate-800 mt-2" id="current-serving">-</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-3">
+        <button onclick="callCustomer()" id="btn-call" class="py-5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-lg font-bold rounded-xl shadow-md transition">
+          📢 고객 호출
+        </button>
+        <button onclick="startConsult()" id="btn-start" disabled class="py-5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-lg font-bold rounded-xl shadow-md transition disabled:bg-slate-300 disabled:scale-100">
+          ▶ 상담 시작
+        </button>
+        <button onclick="finishConsult()" id="btn-finish" disabled class="py-5 bg-slate-800 hover:bg-slate-900 active:scale-95 text-white text-lg font-bold rounded-xl shadow-md transition disabled:bg-slate-300 disabled:scale-100">
+          ✔ 상담 종료
+        </button>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm p-4 flex flex-col">
+      <h2 class="text-sm font-bold text-slate-600 mb-3">대기 고객 목록</h2>
+      <div class="flex-1 overflow-y-auto space-y-2 pr-1" id="queue-list"></div>
+    </div>
+  </main>
+
+  <script>
+    const socket = io();
+    let counterId = 1;
+
+    function changeCounter(val) {
+      counterId = Number(val);
+    }
+
+    function setStatus(text, colorClass) {
+      const badge = document.getElementById('status-badge');
+      badge.className = `text-xs font-bold px-3 py-1 rounded-full ${colorClass}`;
+      badge.innerText = text;
+    }
+
+    function callCustomer() {
+      socket.emit('call_next', { counterId });
+    }
+
+    function startConsult() {
+      socket.emit('start_consult', { counterId });
+      setStatus("상담 진행 중", "bg-emerald-100 text-emerald-800");
+      document.getElementById('btn-call').disabled = true;
+      document.getElementById('btn-start').disabled = true;
+      document.getElementById('btn-finish').disabled = false;
+    }
+
+    function finishConsult() {
+      socket.emit('finish_consult', { counterId });
+    }
+
+    socket.on('call_success', (data) => {
+      document.getElementById('current-serving').innerText = `${data.ticketNo}번`;
+      setStatus("고객 호출 중", "bg-yellow-100 text-yellow-800");
+      document.getElementById('btn-start').disabled = false;
+    });
+
+    socket.on('consult_finished', () => {
+      setStatus("대기 중", "bg-gray-100 text-gray-600");
+      document.getElementById('current-serving').innerText = "-";
+      document.getElementById('btn-call').disabled = false;
+      document.getElementById('btn-finish').disabled = true;
+    });
+
+    socket.on('state_update', (data) => {
+      document.getElementById('bank-label').innerText = data.bankName;
+      document.getElementById('queue-count').innerText = `${data.totalWaiting}명`;
+
+      const list = document.getElementById('queue-list');
+      list.innerHTML = '';
+      data.queueList.forEach((q) => {
+        const item = document.createElement('div');
+        item.className = 'flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100';
+        item.innerHTML = `
+          <span class="font-bold text-slate-700">${q.ticketNo}번</span>
+          <span class="text-xs text-slate-400">${q.order === 1 ? '다음 순서' : q.order + '번째'}</span>
+        `;
+        list.appendChild(item);
+      });
+    });
+
+    socket.on('error_msg', (msg) => alert(msg));
+  </script>
+</body>
+</html>
