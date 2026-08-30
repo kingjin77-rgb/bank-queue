@@ -78,7 +78,7 @@
     <span>전체 실시간 총 대기 인원: <b class="text-amber-400 text-base font-black ml-1" id="total-wait-sum">0명</b></span>
     <span class="flex items-center gap-1.5">
       <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
-      실시간 동기화 정상 작동 중
+      실시간 동기화 정상 작동 중 (무한 음성 킵얼라이브 활성)
     </span>
   </footer>
 
@@ -90,14 +90,14 @@
     let currentStats = [];
     let audioCtx = null;
     let announcerVoice = null;
+    window.speechQueue = []; // 브라우저 가비지 컬렉션(GC) 방어용 전역 배열
 
     if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(e => {});
 
-    // 최고 품질의 한국어 여성 안내원 보이스 필터링
+    // 한국어 보이스 매핑
     function initVoices() {
       if ('speechSynthesis' in window) {
         const voices = window.speechSynthesis.getVoices();
-        // 1순위: 자연스러운 고품질 한국어 여성 보이스 (구글/삼성/애플 프리미엄)
         announcerVoice = voices.find(v => (v.lang === 'ko-KR' || v.lang.startsWith('ko')) && (v.name.includes('Natural') || v.name.includes('Neural') || v.name.includes('Google') || v.name.includes('Yuna') || v.name.includes('Heami'))) 
                         || voices.find(v => v.lang === 'ko-KR' || v.lang.startsWith('ko')) 
                         || null;
@@ -106,6 +106,13 @@
     if ('speechSynthesis' in window) {
       window.speechSynthesis.onvoiceschanged = initVoices;
       initVoices();
+
+      // 🛡️ [핵심] 브라우저 TTS 프리징 방지용 무한 킵얼라이브 (12초마다 엔진 자동 갱신)
+      setInterval(() => {
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        }
+      }, 12000);
     }
 
     function unlockMedia() {
@@ -118,18 +125,18 @@
     document.addEventListener('touchstart', unlockMedia, { once: true });
     document.addEventListener('click', unlockMedia, { once: true });
 
-    // 🔊 [정갈한 차임벨 + 잡음 0% 아나운서 방송 엔진]
+    // 🔊 [오류 제로 실시간 방송 엔진]
     function broadcastCall(ticketNo, counterName) {
       unlockMedia();
 
-      // 1. 맑고 부드러운 고급 호텔/백화점 2음 차임벨
+      // 1. 맑은 2음 차임벨
       try {
         const now = audioCtx.currentTime;
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(659.25, now); // 미 (E5)
-        osc.frequency.setValueAtTime(523.25, now + 0.28); // 도 (C5)
+        osc.frequency.setValueAtTime(659.25, now);
+        osc.frequency.setValueAtTime(523.25, now + 0.28);
         gain.gain.setValueAtTime(0.25, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
         osc.connect(gain);
@@ -138,20 +145,31 @@
         osc.stop(now + 0.65);
       } catch(e) {}
 
-      // 2. 아나운서 안내 멘트 발화
+      // 2. 음성 합성 큐 안전 발화
       if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
+        window.speechSynthesis.cancel(); // 잔류 큐 제거
 
         const text = `${ticketNo}번 고객님, ${counterName}로 오시기 바랍니다.`;
         const utter = new SpeechSynthesisUtterance(text);
         utter.lang = 'ko-KR';
-        utter.rate = 0.88;  // 현장 청취에 가장 안정적인 속도
-        utter.pitch = 1.05; // 맑고 상냥한 아나운서 톤
+        utter.rate = 0.88;
+        utter.pitch = 1.05;
         utter.volume = 1.0;
 
         if (announcerVoice) utter.voice = announcerVoice;
 
+        // GC 방어를 위해 배열에 보관 후 종료 시 제거
+        window.speechQueue.push(utter);
+        utter.onend = () => {
+          window.speechQueue = window.speechQueue.filter(item => item !== utter);
+        };
+        utter.onerror = () => {
+          window.speechQueue = window.speechQueue.filter(item => item !== utter);
+          window.speechSynthesis.resume();
+        };
+
         setTimeout(() => {
+          window.speechSynthesis.resume();
           window.speechSynthesis.speak(utter);
         }, 320);
       }
