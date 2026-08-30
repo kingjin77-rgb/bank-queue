@@ -7,105 +7,149 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    @keyframes pulse-ring {
-      0% { transform: scale(0.95); opacity: 0.8; }
-      50% { transform: scale(1.05); opacity: 0.4; }
-      100% { transform: scale(0.95); opacity: 0.8; }
-    }
+    @keyframes pulse-ring { 0% { transform: scale(0.95); opacity: 0.8; } 50% { transform: scale(1.05); opacity: 0.4; } 100% { transform: scale(0.95); opacity: 0.8; } }
     .calling-animation { animation: pulse-ring 1.5s infinite ease-in-out; }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 flex flex-col justify-between min-h-screen p-4 select-none">
 
-  <!-- 대기 화면 -->
-  <div id="screen-waiting" class="flex flex-col items-center justify-between h-full flex-1">
+  <!-- 1. 은행 선택 화면 (첫 방문 시) -->
+  <div id="screen-select-bank" class="flex flex-col justify-center items-center flex-1 max-w-sm mx-auto w-full py-6">
+    <div class="text-center mb-8">
+      <span class="bg-blue-100 text-blue-800 text-xs font-black px-3 py-1 rounded-full">스마트 현장 접수</span>
+      <h1 class="text-2xl font-black text-slate-900 mt-2">상담받으실 은행을<br/>선택해주세요</h1>
+      <p class="text-xs text-slate-400 mt-2">터치 즉시 스마트 모바일 번호표가 발권됩니다.</p>
+    </div>
+    <div id="bank-button-list" class="w-full space-y-3"></div>
+  </div>
+
+  <!-- 2. 대기 화면 (발권 완료 시) -->
+  <div id="screen-waiting" class="hidden flex-col items-center justify-between h-full flex-1 max-w-sm mx-auto w-full">
     <div class="w-full text-center mt-4">
-      <div id="bank-badge" class="inline-block bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full mb-2">
-        우리은행
+      <div id="my-bank-badge" class="inline-block bg-blue-600 text-white text-xs font-bold px-3.5 py-1 rounded-full mb-2 shadow-sm">
+        -
       </div>
-      <h1 class="text-xl font-bold text-slate-800">모바일 스마트 대기표</h1>
+      <h1 class="text-xl font-bold text-slate-800">모바일 대기표</h1>
     </div>
 
-    <div class="w-full max-w-sm bg-white rounded-3xl shadow-lg p-6 text-center border border-slate-100">
-      <p class="text-sm text-slate-400 font-medium">내 번호표</p>
-      <div class="text-6xl font-black text-blue-600 my-4" id="my-number">-</div>
-      <div class="inline-block bg-emerald-50 text-emerald-600 text-xs font-semibold px-2.5 py-1 rounded-md mb-2">
-        발권 접수 완료
+    <div class="w-full bg-white rounded-3xl shadow-lg p-6 text-center border border-slate-100 my-auto">
+      <p class="text-xs text-slate-400 font-bold tracking-wider">내 접수 번호</p>
+      <div class="text-6xl font-black text-blue-600 my-3" id="my-number">-</div>
+      
+      <div id="pre-alert-badge" class="hidden bg-amber-500 text-white text-xs font-black px-3 py-1 rounded-full animate-bounce mb-3 shadow">
+        ⚡ 곧 차례입니다! 부스 근처로 이동해주세요.
       </div>
 
-      <div class="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-4">
+      <div class="border-t border-slate-100 grid grid-cols-2 gap-3 pt-4">
         <div class="bg-slate-50 p-3 rounded-2xl">
-          <p class="text-xs text-slate-400">전체 대기</p>
-          <p class="text-lg font-bold text-slate-700 mt-1" id="total-wait-count">-</p>
+          <p class="text-[11px] text-slate-400">해당 은행 대기</p>
+          <p class="text-base font-bold text-slate-700 mt-1" id="bank-total-wait">-</p>
         </div>
         <div class="bg-slate-50 p-3 rounded-2xl">
-          <p class="text-xs text-slate-400">내 앞 대기자</p>
-          <p class="text-lg font-bold text-red-500 mt-1" id="waiting-count">-</p>
+          <p class="text-[11px] text-slate-400">내 앞 대기자</p>
+          <p class="text-base font-black text-red-500 mt-1" id="my-ahead-count">-</p>
         </div>
       </div>
     </div>
 
     <!-- 순서 미루기 버튼 -->
-    <div class="w-full max-w-sm flex flex-col gap-3 mb-6">
-      <button 
-        id="btn-delay" 
-        onclick="delayOrder()" 
-        class="w-full py-4 bg-slate-900 active:scale-95 text-white font-bold rounded-2xl shadow-lg transition flex items-center justify-center gap-2">
+    <div class="w-full flex flex-col gap-2 mb-6">
+      <button id="btn-delay" onclick="delayOrder()" class="w-full py-4 bg-slate-900 active:scale-95 text-white font-bold rounded-2xl shadow-lg flex items-center justify-center gap-2">
         <span>순서 3칸 뒤로 미루기</span>
-        <span id="delay-badge" class="bg-amber-400 text-slate-900 text-xs px-2.5 py-0.5 rounded-full font-black">남은 3회</span>
+        <span id="delay-badge" class="bg-amber-400 text-slate-900 text-xs px-2 py-0.5 rounded-full font-black">남은 3회</span>
       </button>
+      <p class="text-[11px] text-center text-slate-400">화면을 켜두시면 순서 도달 시 진동과 알림음이 울립니다.</p>
     </div>
   </div>
 
-  <!-- 호출 화면 (전체 팝업) -->
+  <!-- 3. 호출 팝업 화면 -->
   <div id="screen-called" class="fixed inset-0 bg-blue-600 z-50 hidden flex-col items-center justify-center p-6 text-white text-center">
-    <div class="calling-animation w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mb-6">
+    <div class="calling-animation w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mb-4">
       <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
       </svg>
     </div>
-
-    <p class="text-xl font-medium opacity-90 mb-1">고객님의 차례입니다!</p>
+    <p class="text-xl font-bold opacity-90">고객님의 차례입니다!</p>
     <div class="text-6xl font-black tracking-tight my-2" id="called-number">-</div>
     
-    <div class="bg-white text-slate-900 px-6 py-5 rounded-3xl shadow-2xl mt-4 w-full max-w-xs">
+    <div class="bg-white text-slate-900 px-6 py-4 rounded-3xl shadow-2xl mt-4 w-full max-w-xs">
       <p class="text-xs font-bold text-slate-400">배정 창구</p>
       <p class="text-2xl font-black text-blue-600 mt-1" id="counter-info">-</p>
     </div>
 
-    <p class="text-sm text-blue-100 mt-6 animate-pulse">해당 창구로 방문해주시기 바랍니다.</p>
-
     <button onclick="closeCallPopup()" class="mt-8 px-6 py-3 bg-white/10 hover:bg-white/20 border border-white/30 rounded-2xl text-xs font-bold">
-      확인 (닫기)
+      창구로 이동 중 (확인)
     </button>
   </div>
 
   <script>
     const socket = io();
-    
-    // 로컬 스토리지에서 기존 발권 번호 확인
     let savedTicket = localStorage.getItem('bank_queue_ticket');
+    let savedBank = localStorage.getItem('bank_queue_bank');
     let myTicket = savedTicket ? Number(savedTicket) : null;
+    let myBank = savedBank || null;
 
     window.addEventListener('load', () => {
-      if (myTicket) {
-        // 이미 발권된 번호가 있으면 신규 발권 요청 안 함
-        document.getElementById('my-number').innerText = `${myTicket}번`;
-      } else {
-        // 최초 접속일 때만 1회 발권 요청
-        socket.emit('issue_ticket');
+      if (myTicket && myBank) {
+        showWaitingScreen(myTicket, myBank);
       }
     });
 
-    // 신규 발권 완료 시 로컬 스토리지에 영구 저장
+    // 은행 목록 렌더링
+    socket.on('state_update', (data) => {
+      if (!myTicket) {
+        const list = document.getElementById('bank-button-list');
+        list.innerHTML = '';
+        data.banks.forEach(b => {
+          const btn = document.createElement('button');
+          btn.className = 'w-full py-4 px-6 bg-white hover:bg-blue-50 active:scale-98 border border-slate-200 text-slate-800 font-bold rounded-2xl shadow-sm text-base flex justify-between items-center transition';
+          const bankStat = data.stats.find(s => s.bank === b);
+          btn.innerHTML = `<span>${b}</span><span class="text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg">대기 ${bankStat ? bankStat.waiting : 0}명</span>`;
+          btn.onclick = () => selectBankAndIssue(b);
+          list.appendChild(btn);
+        });
+      } else {
+        // 대기 순번 및 2명 전 사전 알림
+        const sameBankQueue = data.queueList.filter(q => q.bank === myBank);
+        const myIndex = sameBankQueue.findIndex(q => Number(q.ticketNo) === Number(myTicket));
+        
+        document.getElementById('bank-total-wait').innerText = `${sameBankQueue.length}명`;
+        
+        if (myIndex !== -1) {
+          document.getElementById('my-ahead-count').innerText = `${myIndex}명`;
+          const myItem = sameBankQueue[myIndex];
+          document.getElementById('delay-badge').innerText = `남은 ${3 - myItem.delayCount}회`;
+          
+          // ⚡ 내 앞 2명 이하일 때 사전 진동/알림
+          if (myIndex > 0 && myIndex <= 2) {
+            document.getElementById('pre-alert-badge').classList.remove('hidden');
+            if ("vibrate" in navigator) navigator.vibrate([100, 100, 100]);
+          } else {
+            document.getElementById('pre-alert-badge').classList.add('hidden');
+          }
+        }
+      }
+    });
+
+    function selectBankAndIssue(bank) {
+      socket.emit('issue_ticket', { selectedBank: bank });
+    }
+
     socket.on('ticket_issued', (data) => {
       myTicket = Number(data.ticketNo);
+      myBank = data.bank;
       localStorage.setItem('bank_queue_ticket', myTicket);
-      
-      document.getElementById('my-number').innerText = `${myTicket}번`;
-      document.getElementById('waiting-count').innerText = `${Math.max(0, data.order - 1)}명`;
-      document.getElementById('bank-badge').innerText = data.bank;
+      localStorage.setItem('bank_queue_bank', myBank);
+      showWaitingScreen(myTicket, myBank);
     });
+
+    function showWaitingScreen(ticket, bank) {
+      document.getElementById('screen-select-bank').classList.add('hidden');
+      document.getElementById('screen-waiting').classList.remove('hidden');
+      document.getElementById('screen-waiting').classList.add('flex');
+      document.getElementById('my-number').innerText = `${ticket}번`;
+      document.getElementById('my-bank-badge').innerText = bank;
+    }
 
     function delayOrder() {
       if (!myTicket) return;
@@ -114,23 +158,13 @@
 
     socket.on('order_delayed', (data) => {
       document.getElementById('delay-badge').innerText = `남은 ${data.delayRemaining}회`;
-      document.getElementById('waiting-count').innerText = `${Math.max(0, data.newOrder - 1)}명`;
-      alert(`순서가 뒤로 미뤄졌습니다. (내 앞 대기자: ${Math.max(0, data.newOrder - 1)}명)`);
-
-      if (data.delayRemaining === 0) {
-        const btn = document.getElementById('btn-delay');
-        btn.disabled = true;
-        btn.classList.add('bg-slate-400', 'cursor-not-allowed');
-        btn.classList.remove('bg-slate-900');
-      }
+      alert('순서가 3칸 뒤로 미뤄졌습니다.');
     });
 
     // 상담사 호출 수신
     socket.on('customer_called', (data) => {
       if (myTicket && Number(data.ticketNo) === Number(myTicket)) {
-        if ("vibrate" in navigator) {
-          navigator.vibrate([300, 150, 300, 150, 500]);
-        }
+        if ("vibrate" in navigator) navigator.vibrate([400, 200, 400, 200, 600]);
         playAlarmSound();
         document.getElementById('counter-info').innerText = `${data.counterName} [${data.bankName}]`;
         document.getElementById('called-number').innerText = `${data.ticketNo}번`;
@@ -139,35 +173,23 @@
       }
     });
 
-    // 실시간 대기열 동기화
-    socket.on('state_update', (data) => {
-      document.getElementById('total-wait-count').innerText = `${data.totalWaiting}명`;
-      
-      if (myTicket) {
-        const myItem = data.queueList.find(q => Number(q.ticketNo) === Number(myTicket));
-        if (myItem) {
-          const myPos = data.queueList.findIndex(q => Number(q.ticketNo) === Number(myTicket));
-          document.getElementById('waiting-count').innerText = `${myPos}명`;
-          document.getElementById('bank-badge').innerText = myItem.bank;
-          document.getElementById('delay-badge').innerText = `남은 ${3 - myItem.delayCount}회`;
-        } else {
-          // 대기열 목록에 내 번호가 없으면 (이미 상담 완료되었거나 취소된 경우)
-          const isServing = Object.values(data.counterStatus).some(c => c && Number(c.ticketNo) === Number(myTicket));
-          if (!isServing && document.getElementById('screen-called').classList.contains('hidden')) {
-            document.getElementById('waiting-count').innerText = `0명 (완료)`;
-          }
-        }
+    // 상담 완료 시 번호표 소멸 및 첫 화면 복귀
+    socket.on('customer_finished', (data) => {
+      if (myTicket && Number(data.ticketNo) === Number(myTicket)) {
+        localStorage.removeItem('bank_queue_ticket');
+        localStorage.removeItem('bank_queue_bank');
+        alert('상담이 완료되었습니다. 이용해 주셔서 감사합니다.');
+        location.reload();
       }
     });
 
-    // 관리자가 전체 리셋했을 때 로컬 스토리지도 비우고 새로고침
     socket.on('system_reset_alert', () => {
-      localStorage.removeItem('bank_queue_ticket');
-      alert('대기열이 관리자에 의해 초기화되었습니다. 새로 발권합니다.');
+      localStorage.clear();
+      alert('시스템이 초기화되었습니다.');
       location.reload();
     });
 
-    socket.on('error_msg', (msg) => alert(msg));
+    socket.on('error_msg', msg => alert(msg));
 
     function playAlarmSound() {
       try {

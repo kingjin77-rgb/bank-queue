@@ -9,48 +9,61 @@
 </head>
 <body class="bg-slate-100 text-slate-800 h-screen flex flex-col p-4 select-none">
 
+  <!-- 헤더 -->
   <header class="bg-white rounded-2xl p-4 shadow-sm flex justify-between items-center mb-4">
     <div class="flex items-center gap-3">
-      <span class="bg-blue-600 text-white font-bold px-3 py-1.5 rounded-lg text-sm" id="current-bank-label">우리은행</span>
-      <select id="teller-select" onchange="changeTeller(this.value)" class="text-base md:text-lg font-bold bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 outline-none">
-      </select>
+      <span class="bg-blue-600 text-white font-bold px-3.5 py-1.5 rounded-xl text-sm" id="current-bank-label">우리은행</span>
+      <select id="teller-select" onchange="changeTeller(this.value)" class="text-base font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 outline-none"></select>
     </div>
-    <div class="flex items-center gap-2">
-      <span class="text-xs text-slate-400">총 대기 고객:</span>
-      <span class="text-lg font-bold text-red-500" id="queue-count">0명</span>
+    <div class="flex items-center gap-3">
+      <span class="text-xs text-slate-400">내 은행 대기: <b class="text-base font-black text-red-500 ml-1" id="bank-queue-count">0명</b></span>
     </div>
   </header>
 
+  <!-- 메인 작업창 -->
   <main class="flex-1 grid grid-cols-3 gap-4 min-h-0">
-    <div class="col-span-2 bg-white rounded-2xl shadow-sm p-6 flex flex-col justify-between">
+    
+    <!-- 좌측 메인 컨트롤 -->
+    <div class="col-span-2 bg-white rounded-3xl shadow-sm p-6 flex flex-col justify-between">
       <div>
         <div class="flex justify-between items-center">
-          <span class="text-sm font-semibold text-slate-400">진행 상태</span>
-          <span id="status-badge" class="bg-slate-100 text-slate-600 text-xs font-bold px-3 py-1 rounded-full">대기 중</span>
+          <span class="text-xs font-bold text-slate-400">진행 상태</span>
+          <span id="status-badge" class="bg-slate-100 text-slate-600 text-xs font-black px-3 py-1 rounded-full">대기 중</span>
         </div>
         
         <div class="text-center my-8">
-          <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">현재 상담 번호</p>
+          <p class="text-xs text-slate-400 font-bold uppercase tracking-wider">현재 상담 고객 번호</p>
           <div class="text-7xl font-black text-slate-800 mt-2" id="current-serving">-</div>
         </div>
       </div>
 
-      <div class="grid grid-cols-3 gap-3">
-        <button onclick="callCustomer()" id="btn-call" class="py-5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-base md:text-lg font-bold rounded-2xl shadow-md transition">
+      <!-- 제어 버튼군 -->
+      <div class="grid grid-cols-4 gap-3">
+        <button onclick="callCustomer()" id="btn-call" class="col-span-1 py-5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold rounded-2xl shadow-md transition text-base">
           📢 고객 호출
         </button>
-        <button onclick="startConsult()" id="btn-start" disabled class="py-5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-base md:text-lg font-bold rounded-2xl shadow-md transition disabled:bg-slate-200 disabled:text-slate-400">
+        <button onclick="startConsult()" id="btn-start" disabled class="col-span-1 py-5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold rounded-2xl shadow-md transition disabled:bg-slate-200 disabled:text-slate-400 text-base">
           ▶ 상담 시작
         </button>
-        <button onclick="finishConsult()" id="btn-finish" disabled class="py-5 bg-slate-900 hover:bg-black active:scale-95 text-white text-base md:text-lg font-bold rounded-2xl shadow-md transition disabled:bg-slate-200 disabled:text-slate-400">
-          ✔ 상담 종료
+        <button onclick="markNoShow()" id="btn-noshow" disabled class="col-span-1 py-5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold rounded-2xl shadow-md transition disabled:bg-slate-200 disabled:text-slate-400 text-base">
+          ⏳ 부재(보류)
+        </button>
+        <button onclick="finishConsult()" id="btn-finish" disabled class="col-span-1 py-5 bg-slate-900 hover:bg-black active:scale-95 text-white font-bold rounded-2xl shadow-md transition disabled:bg-slate-200 disabled:text-slate-400 text-base">
+          ✔ 상담 완료
         </button>
       </div>
     </div>
 
-    <div class="bg-white rounded-2xl shadow-sm p-4 flex flex-col">
-      <h2 class="text-sm font-bold text-slate-700 mb-3">대기 고객 목록</h2>
-      <div class="flex-1 overflow-y-auto space-y-2 pr-1" id="queue-list"></div>
+    <!-- 우측 대기 및 부재 고객 목록 -->
+    <div class="bg-white rounded-3xl shadow-sm p-4 flex flex-col min-h-0">
+      <h2 class="text-xs font-bold text-slate-700 mb-2">우리 은행 대기열</h2>
+      <div class="flex-1 overflow-y-auto space-y-2 pr-1 mb-4" id="queue-list"></div>
+
+      <!-- 부재자 보류 목록 -->
+      <div class="border-t border-slate-100 pt-3">
+        <h2 class="text-xs font-bold text-amber-600 mb-2">⏳ 부재 보류자 목록</h2>
+        <div class="max-h-32 overflow-y-auto space-y-1.5" id="noshow-list"></div>
+      </div>
     </div>
   </main>
 
@@ -58,23 +71,30 @@
     const socket = io();
     let currentTellerId = null;
     let allTellers = [];
+    let myBank = '';
+
+    // 화면 꺼짐 방지 (WakeLock)
+    if ('wakeLock' in navigator) {
+      navigator.wakeLock.request('screen').catch(e => {});
+    }
 
     function changeTeller(val) {
       currentTellerId = String(val);
       const teller = allTellers.find(t => String(t.id) === currentTellerId);
       if (teller) {
+        myBank = teller.bank;
         document.getElementById('current-bank-label').innerText = teller.bank;
       }
     }
 
     function setStatus(text, colorClass) {
       const badge = document.getElementById('status-badge');
-      badge.className = `text-xs font-bold px-3 py-1 rounded-full ${colorClass}`;
+      badge.className = `text-xs font-black px-3 py-1 rounded-full ${colorClass}`;
       badge.innerText = text;
     }
 
     function callCustomer() {
-      if (!currentTellerId) return alert('상담석을 먼저 선택해주세요.');
+      if (!currentTellerId) return alert('창구를 선택해주세요.');
       socket.emit('call_next', { tellerId: currentTellerId });
     }
 
@@ -83,7 +103,18 @@
       setStatus("상담 진행 중", "bg-emerald-100 text-emerald-800");
       document.getElementById('btn-call').disabled = true;
       document.getElementById('btn-start').disabled = true;
+      document.getElementById('btn-noshow').disabled = true;
       document.getElementById('btn-finish').disabled = false;
+    }
+
+    function markNoShow() {
+      if (confirm('고객이 부재중입니까? 부재 목록으로 이동하고 다음 고객을 호출할 수 있습니다.')) {
+        socket.emit('mark_no_show', { tellerId: currentTellerId });
+      }
+    }
+
+    function recallNoShow(ticketNo) {
+      socket.emit('recall_no_show', { tellerId: currentTellerId, ticketNo });
     }
 
     function finishConsult() {
@@ -92,21 +123,22 @@
 
     socket.on('call_success', (data) => {
       document.getElementById('current-serving').innerText = `${data.ticketNo}번`;
-      setStatus("고객 호출 중", "bg-yellow-100 text-yellow-800");
+      setStatus("📢 고객 호출 중", "bg-yellow-100 text-yellow-800");
       document.getElementById('btn-start').disabled = false;
+      document.getElementById('btn-noshow').disabled = false;
     });
 
     socket.on('consult_finished', () => {
       setStatus("대기 중", "bg-slate-100 text-slate-600");
       document.getElementById('current-serving').innerText = "-";
       document.getElementById('btn-call').disabled = false;
+      document.getElementById('btn-start').disabled = true;
+      document.getElementById('btn-noshow').disabled = true;
       document.getElementById('btn-finish').disabled = true;
     });
 
     socket.on('state_update', (data) => {
       allTellers = data.tellers;
-      document.getElementById('queue-count').innerText = `${data.totalWaiting}명`;
-
       const select = document.getElementById('teller-select');
       const prevVal = currentTellerId;
       select.innerHTML = '';
@@ -119,31 +151,44 @@
 
       if (!currentTellerId && data.tellers.length > 0) {
         currentTellerId = String(data.tellers[0].id);
-        document.getElementById('current-bank-label').innerText = data.tellers[0].bank;
+        myBank = data.tellers[0].bank;
+        document.getElementById('current-bank-label').innerText = myBank;
       } else if (data.tellers.some(t => String(t.id) === String(prevVal))) {
         select.value = prevVal;
       }
 
+      // 내 은행 대기열 필터링
+      const bankQueue = data.queueList.filter(q => q.bank === myBank);
+      document.getElementById('bank-queue-count').innerText = `${bankQueue.length}명`;
+
       const list = document.getElementById('queue-list');
       list.innerHTML = '';
-      data.queueList.forEach((q) => {
+      bankQueue.forEach((q, idx) => {
         const item = document.createElement('div');
-        item.className = 'flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100';
+        item.className = 'flex justify-between items-center p-2.5 bg-slate-50 rounded-xl border border-slate-100';
         item.innerHTML = `
-          <div>
-            <span class="font-bold text-slate-800">${q.ticketNo}번</span>
-            <span class="text-[11px] text-slate-400 block">${q.bank}</span>
-          </div>
-          <div class="text-right">
-            <span class="text-xs font-semibold text-blue-600">${q.order === 1 ? '다음 순서' : q.order + '번째'}</span>
-            ${q.delayCount > 0 ? `<span class="text-[10px] text-amber-500 block">미룸 ${q.delayCount}회</span>` : ''}
-          </div>
+          <span class="font-bold text-slate-800 text-sm">${q.ticketNo}번</span>
+          <span class="text-xs font-bold text-blue-600">${idx === 0 ? '다음 호출' : (idx + 1) + '번째'}</span>
         `;
         list.appendChild(item);
       });
+
+      // 부재 보류자 목록
+      const noshowBox = document.getElementById('noshow-list');
+      noshowBox.innerHTML = '';
+      const bankNoShows = data.noShowList.filter(n => n.bank === myBank);
+      bankNoShows.forEach(n => {
+        const row = document.createElement('div');
+        row.className = 'flex justify-between items-center p-2 bg-amber-50 rounded-xl text-xs';
+        row.innerHTML = `
+          <span class="font-bold text-amber-900">${n.ticketNo}번 (${n.noShowAt})</span>
+          <button onclick="recallNoShow(${n.ticketNo})" class="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-[10px]">재호출</button>
+        `;
+        noshowBox.appendChild(row);
+      });
     });
 
-    socket.on('error_msg', (msg) => alert(msg));
+    socket.on('error_msg', msg => alert(msg));
   </script>
 </body>
 </html>
