@@ -14,10 +14,10 @@ let queue = [];
 let noShowList = []; 
 let banks = ['우리은행', '국민은행', '신한은행', '하나은행', '농협은행'];
 let tellers = [
-  { id: 1, name: '1번 창구 (김상담)', bank: '우리은행' },
-  { id: 2, name: '2번 창구 (이상담)', bank: '우리은행' },
-  { id: 3, name: '3번 창구 (박상담)', bank: '국민은행' },
-  { id: 4, name: '4번 창구 (최상담)', bank: '국민은행' }
+  { id: 1, name: '우리은행 1번 창구', bank: '우리은행' },
+  { id: 2, name: '우리은행 2번 창구', bank: '우리은행' },
+  { id: 3, name: '국민은행 1번 창구', bank: '국민은행' },
+  { id: 4, name: '국민은행 2번 창구', bank: '국민은행' }
 ];
 let counterStatus = {}; 
 let consultHistory = []; 
@@ -215,15 +215,22 @@ io.on('connection', (socket) => {
   });
   socket.on('admin_delete_bank', ({ bankName }) => {
     banks = banks.filter(b => b !== bankName);
+    tellers = tellers.filter(t => t.bank !== bankName);
     broadcastState();
   });
 
-  // 관리자 상담원 관리
-  socket.on('admin_add_teller', ({ name, bank }) => {
+  // 관리자: 자동 창구 순번 생성 (+1 카운팅)
+  socket.on('admin_add_auto_teller', ({ bank }) => {
+    if (!bank) return;
+    const sameBankTellers = tellers.filter(t => t.bank === bank);
+    const nextNumber = sameBankTellers.length + 1;
+    const autoName = `${bank} ${nextNumber}번 창구`;
     const newId = tellers.length > 0 ? Math.max(...tellers.map(t => Number(t.id))) + 1 : 1;
-    tellers.push({ id: newId, name, bank });
+    
+    tellers.push({ id: newId, name: autoName, bank });
     broadcastState();
   });
+
   socket.on('admin_delete_teller', ({ tellerId }) => {
     const tid = String(tellerId);
     tellers = tellers.filter(t => String(t.id) !== tid);

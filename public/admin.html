@@ -20,7 +20,7 @@
         <h1 class="text-xl font-black text-white flex items-center gap-2">
           ⚙️ 현장 통합 관제 센터
         </h1>
-        <p class="text-xs text-slate-400 mt-1">은행 및 상담부스 실시간 공석·상담 현황 모니터링</p>
+        <p class="text-xs text-slate-400 mt-1">은행별 원클릭 창구 자동 생성 및 실시간 공석 모니터링</p>
       </div>
 
       <div class="flex items-center gap-2.5">
@@ -33,27 +33,28 @@
       </div>
     </div>
 
-    <!-- 은행 & 상담원 관리 그리드 -->
+    <!-- 은행 추가 & 원클릭 창구 자동 생성 그리드 -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
-      <!-- 은행 관리 -->
+      <!-- 은행 추가 -->
       <div class="bg-slate-900/70 p-4 rounded-2xl border border-slate-700/60">
-        <span class="text-xs font-bold text-slate-400 block mb-2">🏛️ 등록 은행 관리</span>
+        <span class="text-xs font-bold text-slate-400 block mb-2">🏛️ 등록 은행 목록 (삭제 시 해당 은행 창구도 함께 정리)</span>
         <div id="bank-tags" class="flex flex-wrap gap-1.5 mb-3"></div>
         <div class="flex gap-2">
           <input id="input-new-bank" type="text" placeholder="새 은행명 입력" class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-blue-500" />
-          <button onclick="addNewBank()" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-xs font-bold rounded-xl">은행 추가</button>
+          <button onclick="addNewBank()" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-xs font-bold rounded-xl whitespace-nowrap">은행 추가</button>
         </div>
       </div>
 
-      <!-- 창구 관리 -->
+      <!-- 원클릭 자동 창구 생성 -->
       <div class="bg-slate-900/70 p-4 rounded-2xl border border-slate-700/60">
-        <span class="text-xs font-bold text-slate-400 block mb-2">👤 창구(상담원) 추가</span>
+        <span class="text-xs font-bold text-slate-400 block mb-2">⚡ 은행 선택 후 클릭 시 자동 순번 창구 생성 (+1 자동 카운팅)</span>
         <div class="flex gap-2 mb-2">
-          <input id="input-teller-name" type="text" placeholder="창구명 (예: 5번 창구)" class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-blue-500" />
-          <select id="select-teller-bank" class="bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white outline-none"></select>
-          <button onclick="addNewTeller()" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-xs font-bold rounded-xl">생성</button>
+          <select id="select-teller-bank" class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-emerald-500"></select>
+          <button onclick="addAutoTeller()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-xs font-bold rounded-xl shadow whitespace-nowrap">
+            + 창구 1개 자동 생성
+          </button>
         </div>
-        <div id="teller-manage-list" class="flex flex-wrap gap-1.5 max-h-16 overflow-y-auto pr-1"></div>
+        <p class="text-[11px] text-slate-500">이름을 적을 필요 없이 선택한 은행의 다음 창구 번호로 자동 생성됩니다.</p>
       </div>
     </div>
   </div>
@@ -61,11 +62,11 @@
   <!-- 2. 은행별 상담부스 실시간 현황판 (공석 확인) -->
   <main class="flex-1 my-2">
     <div class="flex items-center justify-between mb-4">
-      <h2 class="text-sm font-bold text-slate-400 tracking-wider uppercase">🏛️ 은행별 상담부스 현황 및 공석 파악</h2>
+      <h2 class="text-sm font-bold text-slate-400 tracking-wider uppercase">🏛️ 은행별 상담부스 공석 및 상담 현황</h2>
       <div class="flex items-center gap-3 text-xs">
-        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> 빈자리(대기중)</span>
-        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> 호출중</span>
-        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> 상담진행중</span>
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> 빈자리(호출대기)</span>
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> 📢 호출중</span>
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> ▶ 상담진행중</span>
       </div>
     </div>
 
@@ -78,7 +79,7 @@
     <span>전체 실시간 총 대기 인원: <b class="text-amber-400 text-base font-black ml-1" id="total-wait-sum">0명</b></span>
     <span class="flex items-center gap-1.5">
       <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
-      실시간 동기화 정상
+      실시간 동기화 정상 작동 중 (새로고침 불필요)
     </span>
   </footer>
 
@@ -96,19 +97,24 @@
       socket.emit('admin_add_bank', { bankName: val });
       input.value = '';
     }
+
     function deleteBank(bankName) {
-      if (confirm(`'${bankName}' 삭제하시겠습니까?`)) socket.emit('admin_delete_bank', { bankName });
+      if (confirm(`'${bankName}' 및 해당 은행에 배정된 모든 창구를 삭제하시겠습니까?`)) {
+        socket.emit('admin_delete_bank', { bankName });
+      }
     }
 
-    function addNewTeller() {
-      const name = document.getElementById('input-teller-name').value.trim();
+    // 은행 선택 후 원클릭 자동 순번 생성
+    function addAutoTeller() {
       const bank = document.getElementById('select-teller-bank').value;
-      if (!name) return;
-      socket.emit('admin_add_teller', { name, bank });
-      document.getElementById('input-teller-name').value = '';
+      if (!bank) return alert('은행을 먼저 선택해주세요.');
+      socket.emit('admin_add_auto_teller', { bank });
     }
+
     function deleteTeller(tellerId) {
-      if (confirm('해당 창구를 삭제하시겠습니까?')) socket.emit('admin_delete_teller', { tellerId });
+      if (confirm('해당 창구를 삭제하시겠습니까?')) {
+        socket.emit('admin_delete_teller', { tellerId });
+      }
     }
 
     function downloadCSV() {
@@ -129,6 +135,7 @@
       }
     }
 
+    // 실시간 상태 업데이트 (새로고침 없이 100% 자동 즉시 반영)
     socket.on('state_update', (data) => {
       currentBanks = data.banks;
       currentTellers = data.tellers;
@@ -137,11 +144,14 @@
 
       document.getElementById('total-wait-sum').innerText = `${data.totalWaiting}명`;
 
-      // 은행 목록 태그
+      // 은행 목록 태그 렌더링
       const bankTags = document.getElementById('bank-tags');
       const tellerBankSelect = document.getElementById('select-teller-bank');
+      const prevSelectedBank = tellerBankSelect.value;
+
       bankTags.innerHTML = '';
       tellerBankSelect.innerHTML = '';
+      
       data.banks.forEach(b => {
         const tag = document.createElement('span');
         tag.className = 'bg-blue-900/60 border border-blue-500/40 text-blue-300 text-xs px-2.5 py-1 rounded-lg font-bold inline-flex items-center gap-1.5';
@@ -154,20 +164,14 @@
         tellerBankSelect.appendChild(opt);
       });
 
-      // 창구 태그
-      const tellerManageList = document.getElementById('teller-manage-list');
-      tellerManageList.innerHTML = '';
-      data.tellers.forEach(t => {
-        const chip = document.createElement('span');
-        chip.className = 'bg-slate-800 border border-slate-700 text-slate-300 text-xs px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5';
-        chip.innerHTML = `${t.name} (${t.bank}) <button onclick="deleteTeller(${t.id})" class="text-rose-400 hover:text-rose-200 font-bold ml-1">×</button>`;
-        tellerManageList.appendChild(chip);
-      });
+      if (data.banks.includes(prevSelectedBank)) {
+        tellerBankSelect.value = prevSelectedBank;
+      }
 
+      // 현황판 즉시 재렌더링
       renderBankSections();
     });
 
-    // 은행별 섹션 및 부스 공석 렌더링
     function renderBankSections() {
       const container = document.getElementById('bank-sections');
       container.innerHTML = '';
@@ -178,7 +182,7 @@
         const waitingCount = bankStat ? bankStat.waiting : 0;
         const completedCount = bankStat ? bankStat.completed : 0;
 
-        // 공석(대기중) 수 계산
+        // 공석(대기중) 계산
         const emptyCount = bankTellers.filter(t => !currentStatusMap[String(t.id)] || !currentStatusMap[String(t.id)].ticketNo).length;
 
         const section = document.createElement('div');
@@ -186,7 +190,7 @@
 
         let boothCardsHtml = '';
         if (bankTellers.length === 0) {
-          boothCardsHtml = `<div class="col-span-full text-slate-500 text-xs py-3 text-center">등록된 상담 부스가 없습니다. 상단에서 창구를 생성해주세요.</div>`;
+          boothCardsHtml = `<div class="col-span-full text-slate-500 text-xs py-4 text-center">등록된 창구가 없습니다. 상단에서 [+ 창구 1개 자동 생성]을 눌러주세요.</div>`;
         } else {
           bankTellers.forEach(t => {
             const tid = String(t.id);
@@ -196,28 +200,31 @@
             const isInProgress = statusInfo && statusInfo.status === 'IN_PROGRESS';
 
             let cardBg = 'bg-slate-900/80 border-slate-700';
-            let badgeHtml = '<span class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[11px] font-bold px-2 py-0.5 rounded-full">🟢 빈자리 (호출 대기)</span>';
+            let badgeHtml = '<span class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[11px] font-bold px-2 py-0.5 rounded-full">🟢 빈자리</span>';
             let numberHtml = '<span class="text-slate-600 text-3xl font-black">-</span>';
 
             if (isCalled) {
-              cardBg = 'bg-amber-950/30 border-amber-500/80 shadow-lg shadow-amber-500/10';
+              cardBg = 'bg-amber-950/40 border-amber-500/80 shadow-lg shadow-amber-500/10';
               badgeHtml = '<span class="bg-amber-500 text-slate-950 text-[11px] font-black px-2 py-0.5 rounded-full animate-pulse">📢 호출 중</span>';
               numberHtml = `<span class="text-amber-400 text-3xl font-black">${statusInfo.ticketNo}번</span>`;
             } else if (isInProgress) {
-              cardBg = 'bg-blue-950/30 border-blue-500/80 shadow-lg shadow-blue-500/10';
-              badgeHtml = '<span class="bg-blue-600 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">▶ 상담 진행 중</span>';
+              cardBg = 'bg-blue-950/40 border-blue-500/80 shadow-lg shadow-blue-500/10';
+              badgeHtml = '<span class="bg-blue-600 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">▶ 상담 중</span>';
               numberHtml = `<span class="text-blue-400 text-3xl font-black">${statusInfo.ticketNo}번</span>`;
             }
 
             boothCardsHtml += `
-              <div class="${cardBg} border rounded-2xl p-4 flex flex-col justify-between transition">
-                <div class="flex justify-between items-center mb-2">
-                  <span class="font-bold text-sm text-slate-200">${t.name}</span>
-                  ${badgeHtml}
+              <div class="${cardBg} border rounded-2xl p-4 flex flex-col justify-between transition relative group">
+                <button onclick="deleteTeller(${t.id})" title="창구 삭제" class="absolute top-2.5 right-2.5 text-slate-500 hover:text-rose-400 font-bold text-xs p-1">×</button>
+                <div class="flex justify-between items-center mb-2 pr-4">
+                  <span class="font-extrabold text-sm text-slate-200">${t.name}</span>
                 </div>
                 <div class="my-2 text-center">
-                  <p class="text-[10px] text-slate-500 font-bold uppercase">현재 배정</p>
+                  <p class="text-[10px] text-slate-400 font-bold uppercase">배정 번호</p>
                   <div class="mt-1">${numberHtml}</div>
+                </div>
+                <div class="mt-2 text-center">
+                  ${badgeHtml}
                 </div>
               </div>
             `;
@@ -231,7 +238,7 @@
                 🏛️ ${bankName}
               </span>
               <span class="bg-emerald-500/20 text-emerald-300 text-xs font-bold px-2.5 py-1 rounded-lg border border-emerald-500/30">
-                공석 부스: ${emptyCount} / ${bankTellers.length}개
+                공석 창구: ${emptyCount} / ${bankTellers.length}개
               </span>
             </div>
             <div class="flex items-center gap-3 text-xs">
