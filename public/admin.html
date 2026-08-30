@@ -23,7 +23,6 @@
       </div>
 
       <div class="flex items-center gap-2.5">
-        <!-- 🔊 음성 테스트 버튼 -->
         <button onclick="testVoice()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5">
           🔊 음성 안내 테스트 듣기
         </button>
@@ -90,63 +89,72 @@
 
     if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(e => {});
 
-    function unlockAudio() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    // 오디오 및 음성 엔진 동시 언락
+    function unlockAllAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.resume();
+      }
     }
-    document.addEventListener('touchstart', unlockAudio, { once: true });
-    document.addEventListener('click', unlockAudio, { once: true });
+    document.addEventListener('touchstart', unlockAllAudio, { once: true });
+    document.addEventListener('click', unlockAllAudio, { once: true });
 
-    // 🔊 딩동 차임벨 + 갤럭시/아이폰 100% 보장 음성 오디오 재생 엔진
-    function speakAudio(text) {
-      unlockAudio();
-      
-      // 1. 딩동 차임벨 생성
+    // 🔊 100% 확실한 음성 출력 엔진 (차임벨 + Web Speech 모바일 강제 큐 실행)
+    function playChimeAndVoice(text) {
+      unlockAllAudio();
+
+      // 1. 차임벨 재생
       try {
         const now = audioCtx.currentTime;
-        const osc1 = audioCtx.createOscillator();
+        const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
 
-        osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(659.25, now);
-        osc1.frequency.setValueAtTime(523.25, now + 0.25);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(659.25, now);
+        osc.frequency.setValueAtTime(523.25, now + 0.25);
 
         gain.gain.setValueAtTime(0.3, now);
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
 
-        osc1.connect(gain);
+        osc.connect(gain);
         gain.connect(audioCtx.destination);
-        osc1.start(now);
-        osc1.stop(now + 0.6);
+        osc.start(now);
+        osc.stop(now + 0.6);
       } catch(e) {}
 
-      // 2. 고음질 음성 오디오 스트리밍 재생 (갤럭시/안드로이드 완벽 호환)
-      const encodedText = encodeURIComponent(text);
-      const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=ko&client=tw-ob`;
-      
-      const audio = new Audio(audioUrl);
-      audio.volume = 1.0;
-      
-      setTimeout(() => {
-        audio.play().catch(() => {
-          // 오디오 차단 시 브라우저 내장 TTS로 2차 대체 실행
-          if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-            const utter = new SpeechSynthesisUtterance(text);
-            utter.lang = 'ko-KR';
-            utter.rate = 0.9;
-            window.speechSynthesis.speak(utter);
-          }
-        });
-      }, 400);
+      // 2. 안드로이드/갤럭시 음성 엔진 직접 호출
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); // 큐 초기화
+
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = 'ko-KR';
+        utter.rate = 0.92;
+        utter.pitch = 1.0;
+        utter.volume = 1.0;
+
+        // 보이스 탐색 후 한국어 주입
+        const voices = window.speechSynthesis.getVoices();
+        const koVoice = voices.find(v => v.lang.startsWith('ko') || v.name.includes('Korean') || v.name.includes('한국어'));
+        if (koVoice) utter.voice = koVoice;
+
+        // 모바일 지연 버그 방지: 0.3초 후 발화
+        setTimeout(() => {
+          window.speechSynthesis.speak(utter);
+        }, 300);
+      }
     }
 
     function testVoice() {
-      speakAudio("105번 고객님, 우리은행 1번 창구로 오시기 바랍니다.");
+      playChimeAndVoice("백오번 고객님, 우리은행 일번 창구로 오시기 바랍니다.");
     }
 
     socket.on('customer_called', (data) => {
-      speakAudio(`${data.ticketNo}번 고객님, ${data.counterName} 창구로 오시기 바랍니다.`);
+      playChimeAndVoice(`${data.ticketNo}번 고객님, ${data.counterName} 창구로 오시기 바랍니다.`);
     });
 
     function addNewBank() {
