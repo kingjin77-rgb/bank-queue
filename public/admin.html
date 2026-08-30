@@ -13,7 +13,6 @@
 </head>
 <body class="bg-[#0F172A] text-white min-h-screen p-6 flex flex-col justify-between select-none antialiased">
 
-  <!-- 1. 상단 컨트롤 헤더 -->
   <div class="bg-slate-800/90 rounded-3xl p-6 border border-slate-700/80 shadow-2xl mb-6">
     <div class="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-slate-700">
       <div>
@@ -24,6 +23,9 @@
       </div>
 
       <div class="flex items-center gap-2.5">
+        <button onclick="testVoice()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5">
+          🔊 음성 안내 테스트 듣기
+        </button>
         <button onclick="downloadCSV()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition">
           📊 통계 엑셀(CSV) 다운로드
         </button>
@@ -33,11 +35,9 @@
       </div>
     </div>
 
-    <!-- 은행 추가 & 원클릭 창구 자동 생성 그리드 -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
-      <!-- 은행 추가 -->
       <div class="bg-slate-900/70 p-4 rounded-2xl border border-slate-700/60">
-        <span class="text-xs font-bold text-slate-400 block mb-2">🏛️ 등록 은행 목록 (삭제 시 해당 은행 창구도 함께 정리)</span>
+        <span class="text-xs font-bold text-slate-400 block mb-2">🏛️ 등록 은행 목록</span>
         <div id="bank-tags" class="flex flex-wrap gap-1.5 mb-3"></div>
         <div class="flex gap-2">
           <input id="input-new-bank" type="text" placeholder="새 은행명 입력" class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-blue-500" />
@@ -45,7 +45,6 @@
         </div>
       </div>
 
-      <!-- 원클릭 자동 창구 생성 -->
       <div class="bg-slate-900/70 p-4 rounded-2xl border border-slate-700/60">
         <span class="text-xs font-bold text-slate-400 block mb-2">⚡ 은행 선택 후 클릭 시 자동 순번 창구 생성 (+1 자동 카운팅)</span>
         <div class="flex gap-2 mb-2">
@@ -59,7 +58,6 @@
     </div>
   </div>
 
-  <!-- 2. 은행별 상담부스 실시간 현황판 (공석 확인) -->
   <main class="flex-1 my-2">
     <div class="flex items-center justify-between mb-4">
       <h2 class="text-sm font-bold text-slate-400 tracking-wider uppercase">🏛️ 은행별 상담부스 공석 및 상담 현황</h2>
@@ -70,16 +68,14 @@
       </div>
     </div>
 
-    <!-- 은행별 섹션 컨테이너 -->
     <div id="bank-sections" class="space-y-6"></div>
   </main>
 
-  <!-- 3. 하단 상태 바 -->
   <footer class="mt-6 bg-slate-800/80 border border-slate-700 p-4 rounded-2xl flex justify-between items-center text-xs text-slate-400">
     <span>전체 실시간 총 대기 인원: <b class="text-amber-400 text-base font-black ml-1" id="total-wait-sum">0명</b></span>
     <span class="flex items-center gap-1.5">
       <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
-      실시간 동기화 정상 작동 중 (새로고침 불필요)
+      실시간 동기화 정상 작동 중
     </span>
   </footer>
 
@@ -89,6 +85,53 @@
     let currentTellers = [];
     let currentStatusMap = {};
     let currentStats = [];
+    let audioCtx = null;
+
+    if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(e => {});
+
+    function unlockAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    }
+    document.addEventListener('click', unlockAudio, { once: true });
+
+    function playChimeAndTTS(speechText) {
+      try {
+        unlockAudio();
+        const now = audioCtx.currentTime;
+        const osc1 = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(659.25, now);
+        osc1.frequency.setValueAtTime(523.25, now + 0.3);
+
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.7);
+
+        osc1.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.7);
+
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const utter = new SpeechSynthesisUtterance(speechText);
+          utter.lang = 'ko-KR';
+          utter.rate = 0.95;
+          setTimeout(() => window.speechSynthesis.speak(utter), 500);
+        }
+      } catch(e) {}
+    }
+
+    function testVoice() {
+      unlockAudio();
+      playChimeAndTTS("딩동! 105번 고객님, 우리은행 1번 창구로 오시기 바랍니다.");
+    }
+
+    socket.on('customer_called', (data) => {
+      playChimeAndTTS(`딩동! ${data.ticketNo}번 고객님, ${data.counterName} 창구로 오시기 바랍니다.`);
+    });
 
     function addNewBank() {
       const input = document.getElementById('input-new-bank');
@@ -104,7 +147,6 @@
       }
     }
 
-    // 은행 선택 후 원클릭 자동 순번 생성
     function addAutoTeller() {
       const bank = document.getElementById('select-teller-bank').value;
       if (!bank) return alert('은행을 먼저 선택해주세요.');
@@ -135,7 +177,6 @@
       }
     }
 
-    // 실시간 상태 업데이트 (새로고침 없이 100% 자동 즉시 반영)
     socket.on('state_update', (data) => {
       currentBanks = data.banks;
       currentTellers = data.tellers;
@@ -144,7 +185,6 @@
 
       document.getElementById('total-wait-sum').innerText = `${data.totalWaiting}명`;
 
-      // 은행 목록 태그 렌더링
       const bankTags = document.getElementById('bank-tags');
       const tellerBankSelect = document.getElementById('select-teller-bank');
       const prevSelectedBank = tellerBankSelect.value;
@@ -168,7 +208,6 @@
         tellerBankSelect.value = prevSelectedBank;
       }
 
-      // 현황판 즉시 재렌더링
       renderBankSections();
     });
 
@@ -182,7 +221,6 @@
         const waitingCount = bankStat ? bankStat.waiting : 0;
         const completedCount = bankStat ? bankStat.completed : 0;
 
-        // 공석(대기중) 계산
         const emptyCount = bankTellers.filter(t => !currentStatusMap[String(t.id)] || !currentStatusMap[String(t.id)].ticketNo).length;
 
         const section = document.createElement('div');

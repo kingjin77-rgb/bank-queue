@@ -100,46 +100,50 @@
   <script>
     const socket = io();
     let audioCtx = null;
-    let savedTicket = localStorage.getItem('bank_queue_ticket');
-    let savedBank = localStorage.getItem('bank_queue_bank');
-    let myTicket = savedTicket ? Number(savedTicket) : null;
-    let myBank = savedBank || null;
+    let isInitialized = false;
 
-    // 모바일 터치 시 오디오 엔진 깨우기
     function unlockAudio() {
-      if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      }
-      if (audioCtx && audioCtx.state === 'suspended') {
-        audioCtx.resume();
-      }
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
     }
     document.addEventListener('touchstart', unlockAudio, { once: true });
     document.addEventListener('click', unlockAudio, { once: true });
 
-    window.addEventListener('load', () => {
-      if (myTicket && myBank) {
-        showWaitingScreen(myTicket, myBank);
-      }
-    });
+    function getSavedTicket() {
+      const t = localStorage.getItem('bank_queue_ticket');
+      return t ? Number(t) : null;
+    }
+    function getSavedBank() {
+      return localStorage.getItem('bank_queue_bank');
+    }
 
+    // 상태 업데이트 수신
     socket.on('state_update', (data) => {
+      let myTicket = getSavedTicket();
+      let myBank = getSavedBank();
+
+      // 내 번호가 대기열 목록 또는 현재 상담/호출 중인 창구에 있는지 확인
+      const inQueue = data.queueList.some(q => Number(q.ticketNo) === Number(myTicket));
+      const inCounter = Object.values(data.counterStatus).some(c => c && Number(c.ticketNo) === Number(myTicket));
+      const inNoShow = data.noShowList.some(n => Number(n.ticketNo) === Number(myTicket));
+
+      // 🔴 이미 종료된 번호표이거나 존재하지 않는 번호일 경우: 자동 해제 및 첫 화면 복구
+      if (myTicket && !inQueue && !inCounter && !inNoShow) {
+        localStorage.removeItem('bank_queue_ticket');
+        localStorage.removeItem('bank_queue_bank');
+        myTicket = null;
+        myBank = null;
+        showSelectBankScreen(data);
+        return;
+      }
+
+      // 발권 전 상태인 경우: 은행 선택 버튼 렌더링
       if (!myTicket) {
-        const list = document.getElementById('bank-button-list');
-        list.innerHTML = '';
-        data.banks.forEach(b => {
-          const btn = document.createElement('button');
-          btn.className = 'w-full py-4 px-5 bg-white hover:bg-slate-50 active:scale-[0.98] border border-slate-200/90 text-slate-900 font-bold rounded-2xl shadow-sm flex justify-between items-center transition';
-          const bankStat = data.stats.find(s => s.bank === b);
-          const waitNum = bankStat ? bankStat.waiting : 0;
-          btn.innerHTML = `
-            <span class="text-base font-bold">${b}</span>
-            <span class="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-xl border border-blue-100">대기 ${waitNum}명</span>
-          `;
-          btn.onclick = () => { unlockAudio(); selectBankAndIssue(b); };
-          list.appendChild(btn);
-        });
+        showSelectBankScreen(data);
       } else {
+        // 발권 후 대기 중인 경우: 실시간 순번 갱신
+        showWaitingScreen(myTicket, myBank);
+
         const sameBankQueue = data.queueList.filter(q => q.bank === myBank);
         const myIndex = sameBankQueue.findIndex(q => Number(q.ticketNo) === Number(myTicket));
         
@@ -160,16 +164,35 @@
       }
     });
 
+    function showSelectBankScreen(data) {
+      document.getElementById('screen-waiting').classList.add('hidden');
+      document.getElementById('screen-waiting').classList.remove('flex');
+      document.getElementById('screen-select-bank').classList.remove('hidden');
+
+      const list = document.getElementById('bank-button-list');
+      list.innerHTML = '';
+      data.banks.forEach(b => {
+        const btn = document.createElement('button');
+        btn.className = 'w-full py-4 px-5 bg-white hover:bg-slate-50 active:scale-[0.98] border border-slate-200/90 text-slate-900 font-bold rounded-2xl shadow-sm flex justify-between items-center transition';
+        const bankStat = data.stats.find(s => s.bank === b);
+        const waitNum = bankStat ? bankStat.waiting : 0;
+        btn.innerHTML = `
+          <span class="text-base font-bold">${b}</span>
+          <span class="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-xl border border-blue-100">대기 ${waitNum}명</span>
+        `;
+        btn.onclick = () => { unlockAudio(); selectBankAndIssue(b); };
+        list.appendChild(btn);
+      });
+    }
+
     function selectBankAndIssue(bank) {
       socket.emit('issue_ticket', { selectedBank: bank });
     }
 
     socket.on('ticket_issued', (data) => {
-      myTicket = Number(data.ticketNo);
-      myBank = data.bank;
-      localStorage.setItem('bank_queue_ticket', myTicket);
-      localStorage.setItem('bank_queue_bank', myBank);
-      showWaitingScreen(myTicket, myBank);
+      localStorage.setItem('bank_queue_ticket', data.ticketNo);
+      localStorage.setItem('bank_queue_bank', data.bank);
+      showWaitingScreen(data.ticketNo, data.bank);
     });
 
     function showWaitingScreen(ticket, bank) {
@@ -181,6 +204,7 @@
     }
 
     function delayOrder() {
+      const myTicket = getSavedTicket();
       if (!myTicket) return;
       socket.emit('delay_order', { ticketNo: myTicket });
     }
@@ -192,9 +216,10 @@
 
     // 상담사 호출 수신
     socket.on('customer_called', (data) => {
+      const myTicket = getSavedTicket();
       if (myTicket && Number(data.ticketNo) === Number(myTicket)) {
         if ("vibrate" in navigator) navigator.vibrate([400, 200, 400, 200, 600]);
-        playChimeAndTTS(`${data.ticketNo}번 고객님, ${data.counterName} ${data.bankName} 창구로 오시기 바랍니다.`);
+        playChimeAndTTS(`${data.ticketNo}번 고객님, ${data.counterName} 창구로 오시기 바랍니다.`);
         
         document.getElementById('counter-info').innerText = `${data.counterName} [${data.bankName}]`;
         document.getElementById('called-number').innerText = `${data.ticketNo}번`;
@@ -203,10 +228,13 @@
       }
     });
 
+    // 상담 종료 신호 수신
     socket.on('customer_finished', (data) => {
+      const myTicket = getSavedTicket();
       if (myTicket && Number(data.ticketNo) === Number(myTicket)) {
-        localStorage.clear();
-        alert('상담이 완료되었습니다. 감사합니다.');
+        localStorage.removeItem('bank_queue_ticket');
+        localStorage.removeItem('bank_queue_bank');
+        alert('상담이 정상 완료되었습니다. 이용해 주셔서 감사합니다.');
         location.reload();
       }
     });
@@ -218,33 +246,31 @@
 
     socket.on('error_msg', msg => alert(msg));
 
-    // 맑은 딩동 벨소리 + TTS 합성
     function playChimeAndTTS(speechText) {
       try {
         unlockAudio();
         const now = audioCtx.currentTime;
         const osc1 = audioCtx.createOscillator();
-        const osc2 = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
 
         osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(659.25, now); // E5
-        osc1.frequency.setValueAtTime(523.25, now + 0.35); // C5
+        osc1.frequency.setValueAtTime(659.25, now);
+        osc1.frequency.setValueAtTime(523.25, now + 0.3);
 
         gain.gain.setValueAtTime(0.3, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.7);
 
         osc1.connect(gain);
         gain.connect(audioCtx.destination);
         osc1.start(now);
-        osc1.stop(now + 0.8);
+        osc1.stop(now + 0.7);
 
         if ('speechSynthesis' in window) {
           window.speechSynthesis.cancel();
           const utter = new SpeechSynthesisUtterance(speechText);
           utter.lang = 'ko-KR';
           utter.rate = 0.95;
-          setTimeout(() => window.speechSynthesis.speak(utter), 600);
+          setTimeout(() => window.speechSynthesis.speak(utter), 500);
         }
       } catch(e) {}
     }

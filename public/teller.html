@@ -13,7 +13,6 @@
 </head>
 <body class="bg-slate-100 text-slate-900 min-h-screen flex flex-col p-3 md:p-6 select-none antialiased">
 
-  <!-- 1. 반응형 상단 헤더 -->
   <header class="bg-white rounded-2xl p-3.5 md:p-4 shadow-sm flex flex-wrap justify-between items-center gap-3 mb-3 md:mb-5 border border-slate-200/80">
     <div class="flex items-center gap-2 md:gap-3 flex-1 min-w-[200px]">
       <span class="bg-blue-600 text-white font-black px-3 py-1.5 rounded-xl text-xs md:text-sm whitespace-nowrap shadow-sm" id="current-bank-label">우리은행</span>
@@ -27,13 +26,9 @@
     </div>
   </header>
 
-  <!-- 2. 메인 반응형 컨테이너 (모바일: 1열 스택 / 태블릿·PC: 2열 분할) -->
   <main class="flex-1 flex flex-col lg:grid lg:grid-cols-3 gap-3 md:gap-5 min-h-0">
     
-    <!-- 좌측(모바일 상단) 메인 컨트롤 패널 -->
     <div class="lg:col-span-2 bg-white rounded-3xl shadow-sm p-4 md:p-8 flex flex-col justify-between border border-slate-200/80">
-      
-      <!-- 상단 진행 상태 및 현재 번호 -->
       <div>
         <div class="flex justify-between items-center pb-3 border-b border-slate-100">
           <span class="text-xs font-bold text-slate-400 tracking-wider">진행 상태</span>
@@ -46,7 +41,6 @@
         </div>
       </div>
 
-      <!-- 제어 버튼 (모바일: 2x2 그리드 / PC: 4열 가로 배치) -->
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 md:gap-3 mt-4">
         <button onclick="callCustomer()" id="btn-call" class="py-4 md:py-5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black rounded-2xl shadow-md transition text-xs sm:text-sm md:text-base flex items-center justify-center">
           📢 고객 호출
@@ -63,10 +57,7 @@
       </div>
     </div>
 
-    <!-- 우측(모바일 하단) 대기 고객 & 부재 목록 -->
     <div class="bg-white rounded-3xl shadow-sm p-4 md:p-5 flex flex-col min-h-0 border border-slate-200/80 mt-2 lg:mt-0">
-      
-      <!-- 대기열 목록 -->
       <div class="flex-1 flex flex-col min-h-[140px] md:min-h-0">
         <div class="flex justify-between items-center mb-2">
           <h2 class="text-xs font-bold text-slate-700">내 은행 실시간 대기열</h2>
@@ -75,12 +66,10 @@
         <div class="flex-1 overflow-y-auto max-h-40 lg:max-h-none space-y-1.5 pr-1 mb-3" id="queue-list"></div>
       </div>
 
-      <!-- 부재 보류자 목록 -->
       <div class="border-t border-slate-100 pt-3">
         <h2 class="text-xs font-bold text-amber-600 mb-2">⏳ 부재(No-Show) 보류자</h2>
         <div class="max-h-28 overflow-y-auto space-y-1.5 pr-1" id="noshow-list"></div>
       </div>
-
     </div>
   </main>
 
@@ -91,12 +80,8 @@
     let myBank = '';
     let audioCtx = null;
 
-    // 화면 꺼짐 방지
-    if ('wakeLock' in navigator) {
-      navigator.wakeLock.request('screen').catch(e => {});
-    }
+    if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(e => {});
 
-    // 모바일 터치 오디오 언락
     function unlockAudio() {
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
@@ -187,7 +172,6 @@
         select.value = prevVal;
       }
 
-      // 내 은행 대기열 목록
       const bankQueue = data.queueList.filter(q => q.bank === myBank);
       document.getElementById('bank-queue-count').innerText = `${bankQueue.length}명`;
       document.getElementById('queue-mini-count').innerText = `${bankQueue.length}명 대기`;
@@ -208,7 +192,6 @@
         });
       }
 
-      // 부재 보류자 목록
       const noshowBox = document.getElementById('noshow-list');
       noshowBox.innerHTML = '';
       const bankNoShows = data.noShowList.filter(n => n.bank === myBank);

@@ -206,7 +206,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 관리자 은행 관리
+  // 은행 관리
   socket.on('admin_add_bank', ({ bankName }) => {
     if (bankName && !banks.includes(bankName)) {
       banks.push(bankName);
@@ -219,7 +219,7 @@ io.on('connection', (socket) => {
     broadcastState();
   });
 
-  // 관리자: 자동 창구 순번 생성 (+1 카운팅)
+  // 자동 창구 순번 생성 (+1)
   socket.on('admin_add_auto_teller', ({ bank }) => {
     if (!bank) return;
     const sameBankTellers = tellers.filter(t => t.bank === bank);
