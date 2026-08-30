@@ -24,7 +24,7 @@
 
       <div class="flex items-center gap-2.5">
         <button onclick="testLocalAudio()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5">
-          🔊 안내 음성 테스트 (내부 파일)
+          🔊 안내 음성 테스트 (녹음 파일)
         </button>
         <button onclick="downloadCSV()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition">
           📊 통계 엑셀(CSV) 다운로드
@@ -85,13 +85,37 @@
     let currentTellers = [];
     let currentStatusMap = {};
     let currentStats = [];
+    let audioCtx = null;
 
-    // 🔊 [100% 보장] 내부 MP3 오디오 재생
+    if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(e => {});
+
+    // 🔊 [정확한 파일명 call.mp3.m4a 연결]
+    const callAudio = new Audio('/call.mp3.m4a');
+    callAudio.load();
+
     function playLocalAudio() {
-      const audio = new Audio('/call.mp3');
-      audio.volume = 1.0;
-      audio.play().catch(e => {
-        alert('화면을 한 번 터치한 후 다시 눌러주세요.');
+      // 1. 딩동 차임벨 출력
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(659.25, now);
+        osc.frequency.setValueAtTime(523.25, now + 0.2);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.5);
+      } catch(e) {}
+
+      // 2. 녹음하신 안내 음성 재생
+      callAudio.currentTime = 0;
+      callAudio.play().catch(error => {
+        console.error("Audio error:", error);
       });
     }
 
