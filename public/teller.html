@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>상담석 대기 관리</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
@@ -11,64 +11,76 @@
     body { font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif; word-break: keep-all; }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-900 h-screen flex flex-col p-4 select-none antialiased">
+<body class="bg-slate-100 text-slate-900 min-h-screen flex flex-col p-3 md:p-6 select-none antialiased">
 
-  <!-- 헤더 -->
-  <header class="bg-white rounded-2xl p-4 shadow-sm flex justify-between items-center mb-4 border border-slate-200/80">
-    <div class="flex items-center gap-3">
-      <span class="bg-blue-600 text-white font-bold px-3.5 py-1.5 rounded-xl text-xs md:text-sm shadow-sm" id="current-bank-label">우리은행</span>
-      <select id="teller-select" onchange="changeTeller(this.value)" class="text-sm md:text-base font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 outline-none">
+  <!-- 1. 반응형 상단 헤더 -->
+  <header class="bg-white rounded-2xl p-3.5 md:p-4 shadow-sm flex flex-wrap justify-between items-center gap-3 mb-3 md:mb-5 border border-slate-200/80">
+    <div class="flex items-center gap-2 md:gap-3 flex-1 min-w-[200px]">
+      <span class="bg-blue-600 text-white font-black px-3 py-1.5 rounded-xl text-xs md:text-sm whitespace-nowrap shadow-sm" id="current-bank-label">우리은행</span>
+      <select id="teller-select" onchange="changeTeller(this.value)" class="flex-1 max-w-xs text-xs md:text-base font-extrabold bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 outline-none focus:border-blue-500">
       </select>
     </div>
-    <div class="flex items-center gap-2">
-      <span class="text-xs font-medium text-slate-400">내 은행 대기:</span>
-      <span class="text-base md:text-lg font-black text-rose-500" id="bank-queue-count">0명</span>
+    
+    <div class="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+      <span class="text-[11px] md:text-xs font-bold text-slate-400">내 은행 대기:</span>
+      <span class="text-sm md:text-lg font-black text-rose-500" id="bank-queue-count">0명</span>
     </div>
   </header>
 
-  <!-- 메인 작업창 -->
-  <main class="flex-1 grid grid-cols-3 gap-4 min-h-0">
+  <!-- 2. 메인 반응형 컨테이너 (모바일: 1열 스택 / 태블릿·PC: 2열 분할) -->
+  <main class="flex-1 flex flex-col lg:grid lg:grid-cols-3 gap-3 md:gap-5 min-h-0">
     
-    <!-- 좌측 메인 컨트롤 (2칸 차지) -->
-    <div class="col-span-2 bg-white rounded-3xl shadow-sm p-6 md:p-8 flex flex-col justify-between border border-slate-200/80">
+    <!-- 좌측(모바일 상단) 메인 컨트롤 패널 -->
+    <div class="lg:col-span-2 bg-white rounded-3xl shadow-sm p-4 md:p-8 flex flex-col justify-between border border-slate-200/80">
+      
+      <!-- 상단 진행 상태 및 현재 번호 -->
       <div>
-        <div class="flex justify-between items-center">
+        <div class="flex justify-between items-center pb-3 border-b border-slate-100">
           <span class="text-xs font-bold text-slate-400 tracking-wider">진행 상태</span>
-          <span id="status-badge" class="bg-slate-100 text-slate-600 text-xs font-extrabold px-3.5 py-1 rounded-full">대기 중</span>
+          <span id="status-badge" class="bg-slate-100 text-slate-600 text-xs font-extrabold px-3 py-1 rounded-full">대기 중</span>
         </div>
         
         <div class="text-center my-6 md:my-10">
           <p class="text-xs font-bold text-slate-400 tracking-widest uppercase">현재 상담 고객</p>
-          <div class="text-7xl md:text-8xl font-black text-slate-900 mt-2 tracking-tight" id="current-serving">-</div>
+          <div class="text-5xl sm:text-6xl md:text-8xl font-black text-slate-900 mt-2 tracking-tight" id="current-serving">-</div>
         </div>
       </div>
 
-      <!-- 제어 버튼 4종 -->
-      <div class="grid grid-cols-4 gap-3">
-        <button onclick="callCustomer()" id="btn-call" class="py-5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold rounded-2xl shadow-md transition text-sm md:text-base">
+      <!-- 제어 버튼 (모바일: 2x2 그리드 / PC: 4열 가로 배치) -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 md:gap-3 mt-4">
+        <button onclick="callCustomer()" id="btn-call" class="py-4 md:py-5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black rounded-2xl shadow-md transition text-xs sm:text-sm md:text-base flex items-center justify-center">
           📢 고객 호출
         </button>
-        <button onclick="startConsult()" id="btn-start" disabled class="py-5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold rounded-2xl shadow-md transition disabled:bg-slate-100 disabled:text-slate-400 text-sm md:text-base">
+        <button onclick="startConsult()" id="btn-start" disabled class="py-4 md:py-5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black rounded-2xl shadow-md transition disabled:bg-slate-100 disabled:text-slate-400 text-xs sm:text-sm md:text-base flex items-center justify-center">
           ▶ 상담 시작
         </button>
-        <button onclick="markNoShow()" id="btn-noshow" disabled class="py-5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold rounded-2xl shadow-md transition disabled:bg-slate-100 disabled:text-slate-400 text-sm md:text-base">
+        <button onclick="markNoShow()" id="btn-noshow" disabled class="py-4 md:py-5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-black rounded-2xl shadow-md transition disabled:bg-slate-100 disabled:text-slate-400 text-xs sm:text-sm md:text-base flex items-center justify-center">
           ⏳ 부재(보류)
         </button>
-        <button onclick="finishConsult()" id="btn-finish" disabled class="py-5 bg-slate-900 hover:bg-black active:scale-95 text-white font-bold rounded-2xl shadow-md transition disabled:bg-slate-100 disabled:text-slate-400 text-sm md:text-base">
+        <button onclick="finishConsult()" id="btn-finish" disabled class="py-4 md:py-5 bg-slate-900 hover:bg-black active:scale-95 text-white font-black rounded-2xl shadow-md transition disabled:bg-slate-100 disabled:text-slate-400 text-xs sm:text-sm md:text-base flex items-center justify-center">
           ✔ 상담 완료
         </button>
       </div>
     </div>
 
-    <!-- 우측 대기/부재 목록 (1칸 차지) -->
-    <div class="bg-white rounded-3xl shadow-sm p-5 flex flex-col min-h-0 border border-slate-200/80">
-      <h2 class="text-xs font-bold text-slate-700 mb-2.5">내 은행 대기열</h2>
-      <div class="flex-1 overflow-y-auto space-y-2 pr-1 mb-4" id="queue-list"></div>
-
-      <div class="border-t border-slate-100 pt-3">
-        <h2 class="text-xs font-bold text-amber-600 mb-2">⏳ 부재 보류자</h2>
-        <div class="max-h-36 overflow-y-auto space-y-1.5" id="noshow-list"></div>
+    <!-- 우측(모바일 하단) 대기 고객 & 부재 목록 -->
+    <div class="bg-white rounded-3xl shadow-sm p-4 md:p-5 flex flex-col min-h-0 border border-slate-200/80 mt-2 lg:mt-0">
+      
+      <!-- 대기열 목록 -->
+      <div class="flex-1 flex flex-col min-h-[140px] md:min-h-0">
+        <div class="flex justify-between items-center mb-2">
+          <h2 class="text-xs font-bold text-slate-700">내 은행 실시간 대기열</h2>
+          <span class="text-[11px] text-blue-600 font-bold" id="queue-mini-count">0명</span>
+        </div>
+        <div class="flex-1 overflow-y-auto max-h-40 lg:max-h-none space-y-1.5 pr-1 mb-3" id="queue-list"></div>
       </div>
+
+      <!-- 부재 보류자 목록 -->
+      <div class="border-t border-slate-100 pt-3">
+        <h2 class="text-xs font-bold text-amber-600 mb-2">⏳ 부재(No-Show) 보류자</h2>
+        <div class="max-h-28 overflow-y-auto space-y-1.5 pr-1" id="noshow-list"></div>
+      </div>
+
     </div>
   </main>
 
@@ -79,12 +91,17 @@
     let myBank = '';
     let audioCtx = null;
 
-    if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(e => {});
+    // 화면 꺼짐 방지
+    if ('wakeLock' in navigator) {
+      navigator.wakeLock.request('screen').catch(e => {});
+    }
 
+    // 모바일 터치 오디오 언락
     function unlockAudio() {
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
     }
+    document.addEventListener('touchstart', unlockAudio, { once: true });
     document.addEventListener('click', unlockAudio, { once: true });
 
     function changeTeller(val) {
@@ -98,7 +115,7 @@
 
     function setStatus(text, colorClass) {
       const badge = document.getElementById('status-badge');
-      badge.className = `text-xs font-extrabold px-3.5 py-1 rounded-full ${colorClass}`;
+      badge.className = `text-xs font-extrabold px-3 py-1 rounded-full ${colorClass}`;
       badge.innerText = text;
     }
 
@@ -138,8 +155,7 @@
       document.getElementById('btn-start').disabled = false;
       document.getElementById('btn-noshow').disabled = false;
 
-      // 상담사 태블릿/스피커에서도 즉시 음성 및 차임벨 송출
-      playChimeAndTTS(`${data.ticketNo}번 고객님, ${data.counterName} ${data.bankName} 창구로 오시기 바랍니다.`);
+      playChimeAndTTS(`${data.ticketNo}번 고객님, ${data.counterName} 창구로 오시기 바랍니다.`);
     });
 
     socket.on('consult_finished', () => {
@@ -171,33 +187,44 @@
         select.value = prevVal;
       }
 
+      // 내 은행 대기열 목록
       const bankQueue = data.queueList.filter(q => q.bank === myBank);
       document.getElementById('bank-queue-count').innerText = `${bankQueue.length}명`;
+      document.getElementById('queue-mini-count').innerText = `${bankQueue.length}명 대기`;
 
       const list = document.getElementById('queue-list');
       list.innerHTML = '';
-      bankQueue.forEach((q, idx) => {
-        const item = document.createElement('div');
-        item.className = 'flex justify-between items-center p-2.5 bg-slate-50 rounded-xl border border-slate-100';
-        item.innerHTML = `
-          <span class="font-extrabold text-slate-800 text-sm">${q.ticketNo}번</span>
-          <span class="text-xs font-bold text-blue-600">${idx === 0 ? '다음 호출' : (idx + 1) + '번째'}</span>
-        `;
-        list.appendChild(item);
-      });
+      if (bankQueue.length === 0) {
+        list.innerHTML = '<div class="text-[11px] text-slate-400 py-3 text-center">대기 중인 고객이 없습니다.</div>';
+      } else {
+        bankQueue.forEach((q, idx) => {
+          const item = document.createElement('div');
+          item.className = 'flex justify-between items-center p-2 bg-slate-50 rounded-xl border border-slate-100 text-xs';
+          item.innerHTML = `
+            <span class="font-extrabold text-slate-800">${q.ticketNo}번</span>
+            <span class="font-bold text-blue-600 text-[11px]">${idx === 0 ? '다음 호출' : (idx + 1) + '번째'}</span>
+          `;
+          list.appendChild(item);
+        });
+      }
 
+      // 부재 보류자 목록
       const noshowBox = document.getElementById('noshow-list');
       noshowBox.innerHTML = '';
       const bankNoShows = data.noShowList.filter(n => n.bank === myBank);
-      bankNoShows.forEach(n => {
-        const row = document.createElement('div');
-        row.className = 'flex justify-between items-center p-2 bg-amber-50 rounded-xl text-xs';
-        row.innerHTML = `
-          <span class="font-bold text-amber-900">${n.ticketNo}번 (${n.noShowAt})</span>
-          <button onclick="recallNoShow(${n.ticketNo})" class="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-[10px]">재호출</button>
-        `;
-        noshowBox.appendChild(row);
-      });
+      if (bankNoShows.length === 0) {
+        noshowBox.innerHTML = '<div class="text-[11px] text-slate-400 py-1 text-center">보류된 고객이 없습니다.</div>';
+      } else {
+        bankNoShows.forEach(n => {
+          const row = document.createElement('div');
+          row.className = 'flex justify-between items-center p-1.5 bg-amber-50 rounded-xl text-xs';
+          row.innerHTML = `
+            <span class="font-bold text-amber-900 text-[11px]">${n.ticketNo}번</span>
+            <button onclick="recallNoShow(${n.ticketNo})" class="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold rounded-lg text-[10px]">재호출</button>
+          `;
+          noshowBox.appendChild(row);
+        });
+      }
     });
 
     function playChimeAndTTS(speechText) {
@@ -208,20 +235,20 @@
         const gain = audioCtx.createGain();
         osc1.type = 'sine';
         osc1.frequency.setValueAtTime(659.25, now);
-        osc1.frequency.setValueAtTime(523.25, now + 0.35);
+        osc1.frequency.setValueAtTime(523.25, now + 0.3);
         gain.gain.setValueAtTime(0.3, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.7);
         osc1.connect(gain);
         gain.connect(audioCtx.destination);
         osc1.start(now);
-        osc1.stop(now + 0.8);
+        osc1.stop(now + 0.7);
 
         if ('speechSynthesis' in window) {
           window.speechSynthesis.cancel();
           const utter = new SpeechSynthesisUtterance(speechText);
           utter.lang = 'ko-KR';
           utter.rate = 0.95;
-          setTimeout(() => window.speechSynthesis.speak(utter), 600);
+          setTimeout(() => window.speechSynthesis.speak(utter), 500);
         }
       } catch(e) {}
     }
