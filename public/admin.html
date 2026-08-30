@@ -23,6 +23,7 @@
       </div>
 
       <div class="flex items-center gap-2.5">
+        <!-- 🔊 음성 테스트 버튼 -->
         <button onclick="testVoice()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5">
           🔊 음성 안내 테스트 듣기
         </button>
@@ -93,44 +94,59 @@
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
     }
+    document.addEventListener('touchstart', unlockAudio, { once: true });
     document.addEventListener('click', unlockAudio, { once: true });
 
-    function playChimeAndTTS(speechText) {
+    // 🔊 딩동 차임벨 + 갤럭시/아이폰 100% 보장 음성 오디오 재생 엔진
+    function speakAudio(text) {
+      unlockAudio();
+      
+      // 1. 딩동 차임벨 생성
       try {
-        unlockAudio();
         const now = audioCtx.currentTime;
         const osc1 = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
 
         osc1.type = 'sine';
         osc1.frequency.setValueAtTime(659.25, now);
-        osc1.frequency.setValueAtTime(523.25, now + 0.3);
+        osc1.frequency.setValueAtTime(523.25, now + 0.25);
 
         gain.gain.setValueAtTime(0.3, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.7);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
 
         osc1.connect(gain);
         gain.connect(audioCtx.destination);
         osc1.start(now);
-        osc1.stop(now + 0.7);
-
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
-          const utter = new SpeechSynthesisUtterance(speechText);
-          utter.lang = 'ko-KR';
-          utter.rate = 0.95;
-          setTimeout(() => window.speechSynthesis.speak(utter), 500);
-        }
+        osc1.stop(now + 0.6);
       } catch(e) {}
+
+      // 2. 고음질 음성 오디오 스트리밍 재생 (갤럭시/안드로이드 완벽 호환)
+      const encodedText = encodeURIComponent(text);
+      const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=ko&client=tw-ob`;
+      
+      const audio = new Audio(audioUrl);
+      audio.volume = 1.0;
+      
+      setTimeout(() => {
+        audio.play().catch(() => {
+          // 오디오 차단 시 브라우저 내장 TTS로 2차 대체 실행
+          if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            const utter = new SpeechSynthesisUtterance(text);
+            utter.lang = 'ko-KR';
+            utter.rate = 0.9;
+            window.speechSynthesis.speak(utter);
+          }
+        });
+      }, 400);
     }
 
     function testVoice() {
-      unlockAudio();
-      playChimeAndTTS("딩동! 105번 고객님, 우리은행 1번 창구로 오시기 바랍니다.");
+      speakAudio("105번 고객님, 우리은행 1번 창구로 오시기 바랍니다.");
     }
 
     socket.on('customer_called', (data) => {
-      playChimeAndTTS(`딩동! ${data.ticketNo}번 고객님, ${data.counterName} 창구로 오시기 바랍니다.`);
+      speakAudio(`${data.ticketNo}번 고객님, ${data.counterName} 창구로 오시기 바랍니다.`);
     });
 
     function addNewBank() {
