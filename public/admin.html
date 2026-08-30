@@ -9,20 +9,17 @@
 </head>
 <body class="bg-slate-900 text-white min-h-screen p-4 md:p-6 flex flex-col justify-between select-none">
 
-  <!-- 1. 상단 관리자 컨트롤 패널 -->
+  <!-- 상단 관리자 설정 -->
   <div class="bg-slate-800 p-5 rounded-3xl border border-slate-700 shadow-xl mb-6 space-y-4">
-    
     <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-700">
       <h2 class="text-lg font-bold text-white flex items-center gap-2">
         ⚙️ 현장 운영 관리 설정
       </h2>
-      <!-- 🔴 전체 대기열 초기화 (리셋) 버튼 -->
       <button onclick="resetAllQueue()" class="px-4 py-2 bg-red-600 hover:bg-red-700 active:scale-95 text-white text-xs font-black rounded-xl shadow transition">
         ⚠️ 대기열 전체 초기화 (리셋)
       </button>
     </div>
 
-    <!-- 은행 추가 및 관리 -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-700/60">
         <span class="text-xs font-bold text-slate-400 block mb-2">🏛️ 등록된 은행 목록</span>
@@ -33,7 +30,6 @@
         </div>
       </div>
 
-      <!-- 상담원 추가 및 관리 -->
       <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-700/60">
         <span class="text-xs font-bold text-slate-400 block mb-2">👤 상담원(창구) 추가</span>
         <div class="flex gap-2 mb-2">
@@ -46,22 +42,21 @@
     </div>
   </div>
 
-  <!-- 2. 메인 실시간 전광판 (DID 모드) -->
+  <!-- 메인 실시간 전광판 -->
   <main class="flex-1 flex flex-col justify-center my-4">
     <div class="text-center mb-6">
       <h1 class="text-3xl md:text-4xl font-black tracking-wider text-white">실시간 창구 대기 현황</h1>
     </div>
 
-    <!-- 창구 상태 카드 그리드 -->
     <div id="counter-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
   </main>
 
-  <!-- 3. 하단 상태 바 -->
+  <!-- 하단 상태 바 -->
   <footer class="mt-4 bg-slate-800/80 p-4 rounded-2xl flex justify-between items-center text-slate-400 text-xs md:text-sm">
     <span>전체 대기 인원: <b class="text-yellow-400 text-lg font-black ml-1" id="total-wait">0명</b></span>
     <span class="flex items-center gap-1.5">
       <span class="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></span>
-      실시간 동기화 상태 정상
+      실시간 동기화 정상
     </span>
   </footer>
 
@@ -71,7 +66,6 @@
     let currentTellers = [];
     let currentStatusMap = {};
 
-    // 1. 은행 관리 로직
     function addNewBank() {
       const input = document.getElementById('input-new-bank');
       const val = input.value.trim();
@@ -86,39 +80,36 @@
       }
     }
 
-    // 2. 상담원 관리 로직
     function addNewTeller() {
       const nameInput = document.getElementById('input-teller-name');
       const bankSelect = document.getElementById('select-teller-bank');
       const name = nameInput.value.trim();
       const bank = bankSelect.value;
-      if (!name) return alert('상담원(창구) 이름을 입력하세요.');
+      if (!name) return alert('상담원 이름을 입력하세요.');
       socket.emit('admin_add_teller', { name, bank });
       nameInput.value = '';
     }
 
     function deleteTeller(tellerId) {
-      if (confirm('해당 상담 창구를 삭제하시겠습니까?')) {
+      if (confirm('해당 창구를 삭제하시겠습니까?')) {
         socket.emit('admin_delete_teller', { tellerId });
       }
     }
 
-    // 3. 전체 리셋
     function resetAllQueue() {
-      if (confirm('⚠️ 경고: 모든 대기 순번 및 발권 데이터가 100번으로 완전 초기화됩니다. 진행하시겠습니까?')) {
+      if (confirm('⚠️ 경고: 모든 대기 순번이 100번으로 완전 초기화됩니다. 진행하시겠습니까?')) {
         socket.emit('admin_reset_queue');
       }
     }
 
-    // 4. 상태 렌더링
     socket.on('state_update', (data) => {
       currentBanks = data.banks;
       currentTellers = data.tellers;
-      currentStatusMap = data.counterStatus;
+      currentStatusMap = data.counterStatus || {};
 
       document.getElementById('total-wait').innerText = `${data.totalWaiting}명`;
 
-      // 은행 태그 렌더링
+      // 은행 태그
       const bankTags = document.getElementById('bank-tags');
       const tellerBankSelect = document.getElementById('select-teller-bank');
       bankTags.innerHTML = '';
@@ -136,7 +127,7 @@
         tellerBankSelect.appendChild(opt);
       });
 
-      // 상담원 삭제 칩 렌더링
+      // 상담원 태그
       const tellerManageList = document.getElementById('teller-manage-list');
       tellerManageList.innerHTML = '';
       data.tellers.forEach(t => {
@@ -154,20 +145,24 @@
       grid.innerHTML = '';
 
       currentTellers.forEach(t => {
-        const info = currentStatusMap[t.id];
+        const tid = String(t.id);
+        const info = currentStatusMap[tid];
         const isCalling = info && info.ticketNo;
+        const isCalled = info && info.status === 'CALLED';
+        const isInProgress = info && info.status === 'IN_PROGRESS';
+
         const card = document.createElement('div');
-        card.className = `bg-slate-800/90 rounded-3xl p-5 border ${isCalling ? 'border-blue-500 shadow-xl shadow-blue-500/20' : 'border-slate-700/70'} flex flex-col items-center justify-center transition`;
+        card.className = `bg-slate-800/90 rounded-3xl p-5 border ${isCalling ? (isCalled ? 'border-amber-400 shadow-xl shadow-amber-500/20' : 'border-emerald-500 shadow-xl shadow-emerald-500/20') : 'border-slate-700/70'} flex flex-col items-center justify-center transition`;
         card.innerHTML = `
           <div class="flex items-center justify-between w-full px-2">
-            <span class="text-xs font-bold text-slate-400">${t.name}</span>
+            <span class="text-xs font-bold text-slate-300">${t.name}</span>
             <span class="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full">${t.bank}</span>
           </div>
-          <div class="text-5xl md:text-6xl font-black ${isCalling ? 'text-amber-400' : 'text-slate-600'} my-3">
+          <div class="text-5xl md:text-6xl font-black ${isCalling ? (isCalled ? 'text-amber-400 animate-pulse' : 'text-emerald-400') : 'text-slate-600'} my-3">
             ${isCalling ? info.ticketNo + '번' : '-'}
           </div>
-          <span class="text-xs font-bold ${isCalling ? 'text-blue-400' : 'text-slate-500'}">
-            ${isCalling ? (info.status === 'CALLED' ? '호출 중' : '상담 중') : '대기 중'}
+          <span class="text-xs font-bold ${isCalling ? (isCalled ? 'text-amber-400' : 'text-emerald-400') : 'text-slate-500'}">
+            ${isCalling ? (isCalled ? '📢 호출 중' : '▶ 상담 진행 중') : '대기 중'}
           </span>
         `;
         grid.appendChild(card);

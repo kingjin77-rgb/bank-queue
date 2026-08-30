@@ -23,7 +23,7 @@
       <div id="bank-badge" class="inline-block bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full mb-2">
         우리은행
       </div>
-      <h1 class="text-xl font-bold text-slate-800">모바일 대기표</h1>
+      <h1 class="text-xl font-bold text-slate-800">모바일 스마트 대기표</h1>
     </div>
 
     <div class="w-full max-w-sm bg-white rounded-3xl shadow-lg p-6 text-center border border-slate-100">
@@ -57,7 +57,7 @@
     </div>
   </div>
 
-  <!-- 호출 화면 -->
+  <!-- 호출 화면 (전체 팝업) -->
   <div id="screen-called" class="fixed inset-0 bg-blue-600 z-50 hidden flex-col items-center justify-center p-6 text-white text-center">
     <div class="calling-animation w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mb-6">
       <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -73,7 +73,7 @@
       <p class="text-2xl font-black text-blue-600 mt-1" id="counter-info">-</p>
     </div>
 
-    <p class="text-sm text-blue-100 mt-6 animate-pulse">창구로 방문해주시기 바랍니다.</p>
+    <p class="text-sm text-blue-100 mt-6 animate-pulse">해당 창구로 방문해주시기 바랍니다.</p>
 
     <button onclick="closeCallPopup()" class="mt-8 px-6 py-3 bg-white/10 hover:bg-white/20 border border-white/30 rounded-2xl text-xs font-bold">
       확인 (닫기)
@@ -82,14 +82,26 @@
 
   <script>
     const socket = io();
-    let myTicket = null;
+    
+    // 로컬 스토리지에서 기존 발권 번호 확인
+    let savedTicket = localStorage.getItem('bank_queue_ticket');
+    let myTicket = savedTicket ? Number(savedTicket) : null;
 
     window.addEventListener('load', () => {
-      socket.emit('issue_ticket');
+      if (myTicket) {
+        // 이미 발권된 번호가 있으면 신규 발권 요청 안 함
+        document.getElementById('my-number').innerText = `${myTicket}번`;
+      } else {
+        // 최초 접속일 때만 1회 발권 요청
+        socket.emit('issue_ticket');
+      }
     });
 
+    // 신규 발권 완료 시 로컬 스토리지에 영구 저장
     socket.on('ticket_issued', (data) => {
-      myTicket = data.ticketNo;
+      myTicket = Number(data.ticketNo);
+      localStorage.setItem('bank_queue_ticket', myTicket);
+      
       document.getElementById('my-number').innerText = `${myTicket}번`;
       document.getElementById('waiting-count').innerText = `${Math.max(0, data.order - 1)}명`;
       document.getElementById('bank-badge').innerText = data.bank;
@@ -113,28 +125,44 @@
       }
     });
 
+    // 상담사 호출 수신
     socket.on('customer_called', (data) => {
-      if ("vibrate" in navigator) {
-        navigator.vibrate([300, 150, 300, 150, 500]);
+      if (myTicket && Number(data.ticketNo) === Number(myTicket)) {
+        if ("vibrate" in navigator) {
+          navigator.vibrate([300, 150, 300, 150, 500]);
+        }
+        playAlarmSound();
+        document.getElementById('counter-info').innerText = `${data.counterName} [${data.bankName}]`;
+        document.getElementById('called-number').innerText = `${data.ticketNo}번`;
+        document.getElementById('screen-called').classList.remove('hidden');
+        document.getElementById('screen-called').classList.add('flex');
       }
-      playAlarmSound();
-      document.getElementById('counter-info').innerText = `${data.counterName} (${data.bankName})`;
-      document.getElementById('called-number').innerText = `${data.ticketNo}번`;
-      document.getElementById('screen-called').classList.remove('hidden');
-      document.getElementById('screen-called').classList.add('flex');
     });
 
+    // 실시간 대기열 동기화
     socket.on('state_update', (data) => {
       document.getElementById('total-wait-count').innerText = `${data.totalWaiting}명`;
+      
       if (myTicket) {
-        const myPos = data.queueList.findIndex(q => q.ticketNo === myTicket);
-        if (myPos !== -1) {
+        const myItem = data.queueList.find(q => Number(q.ticketNo) === Number(myTicket));
+        if (myItem) {
+          const myPos = data.queueList.findIndex(q => Number(q.ticketNo) === Number(myTicket));
           document.getElementById('waiting-count').innerText = `${myPos}명`;
+          document.getElementById('bank-badge').innerText = myItem.bank;
+          document.getElementById('delay-badge').innerText = `남은 ${3 - myItem.delayCount}회`;
+        } else {
+          // 대기열 목록에 내 번호가 없으면 (이미 상담 완료되었거나 취소된 경우)
+          const isServing = Object.values(data.counterStatus).some(c => c && Number(c.ticketNo) === Number(myTicket));
+          if (!isServing && document.getElementById('screen-called').classList.contains('hidden')) {
+            document.getElementById('waiting-count').innerText = `0명 (완료)`;
+          }
         }
       }
     });
 
+    // 관리자가 전체 리셋했을 때 로컬 스토리지도 비우고 새로고침
     socket.on('system_reset_alert', () => {
+      localStorage.removeItem('bank_queue_ticket');
       alert('대기열이 관리자에 의해 초기화되었습니다. 새로 발권합니다.');
       location.reload();
     });

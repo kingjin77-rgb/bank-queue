@@ -13,7 +13,6 @@
     <div class="flex items-center gap-3">
       <span class="bg-blue-600 text-white font-bold px-3 py-1.5 rounded-lg text-sm" id="current-bank-label">우리은행</span>
       <select id="teller-select" onchange="changeTeller(this.value)" class="text-base md:text-lg font-bold bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 outline-none">
-        <!-- 동적 렌더링 -->
       </select>
     </div>
     <div class="flex items-center gap-2">
@@ -61,8 +60,8 @@
     let allTellers = [];
 
     function changeTeller(val) {
-      currentTellerId = Number(val);
-      const teller = allTellers.find(t => t.id === currentTellerId);
+      currentTellerId = String(val);
+      const teller = allTellers.find(t => String(t.id) === currentTellerId);
       if (teller) {
         document.getElementById('current-bank-label').innerText = teller.bank;
       }
@@ -108,7 +107,6 @@
       allTellers = data.tellers;
       document.getElementById('queue-count').innerText = `${data.totalWaiting}명`;
 
-      // 상담사 셀렉트박스 동기화
       const select = document.getElementById('teller-select');
       const prevVal = currentTellerId;
       select.innerHTML = '';
@@ -120,13 +118,12 @@
       });
 
       if (!currentTellerId && data.tellers.length > 0) {
-        currentTellerId = data.tellers[0].id;
+        currentTellerId = String(data.tellers[0].id);
         document.getElementById('current-bank-label').innerText = data.tellers[0].bank;
-      } else if (data.tellers.some(t => t.id === prevVal)) {
+      } else if (data.tellers.some(t => String(t.id) === String(prevVal))) {
         select.value = prevVal;
       }
 
-      // 대기목록 렌더링
       const list = document.getElementById('queue-list');
       list.innerHTML = '';
       data.queueList.forEach((q) => {
