@@ -92,7 +92,7 @@
     <span>전체 실시간 총 대기 인원: <b class="text-amber-400 text-base font-black ml-1" id="total-wait-sum">0명</b></span>
     <span class="flex items-center gap-1.5">
       <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
-      실시간 전 기기 동기화 정상 작동 중
+      실시간 전 기기 동기화 정상 작동 중 (하드웨어 음성 언락됨)
     </span>
   </footer>
 
@@ -103,35 +103,37 @@
     let currentStatusMap = {};
     let currentStats = [];
     let audioCtx = null;
-    let announcerVoice = null;
+    let isSpeechUnlocked = false;
     window.utteranceHolder = null;
 
     if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(e => {});
 
-    function initVoices() {
-      if ('speechSynthesis' in window) {
-        const voices = window.speechSynthesis.getVoices();
-        announcerVoice = voices.find(v => (v.lang === 'ko-KR' || v.lang.startsWith('ko')) && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Yuna') || v.name.includes('Heami'))) 
-                        || voices.find(v => v.lang === 'ko-KR' || v.lang.startsWith('ko')) 
-                        || null;
+    // 🛡️ [핵심] 첫 터치/클릭 즉시 오디오와 TTS 하드웨어를 영구 언락
+    function forceUnlockAudioHardware() {
+      // 1. Web Audio Context 언락
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+
+      // 2. 모바일 브라우저 SpeechSynthesis 무음 발화로 강제 잠금 해제
+      if ('speechSynthesis' in window && !isSpeechUnlocked) {
+        window.speechSynthesis.resume();
+        const silentUtter = new SpeechSynthesisUtterance(' ');
+        silentUtter.volume = 0.01;
+        silentUtter.rate = 10;
+        window.speechSynthesis.speak(silentUtter);
+        isSpeechUnlocked = true;
       }
     }
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.onvoiceschanged = initVoices;
-      initVoices();
-    }
 
-    function unlockMedia() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-      if ('speechSynthesis' in window) window.speechSynthesis.resume();
-    }
-    document.addEventListener('touchstart', unlockMedia, { passive: true });
-    document.addEventListener('click', unlockMedia, { passive: true });
+    document.addEventListener('touchstart', forceUnlockAudioHardware, { passive: true });
+    document.addEventListener('touchend', forceUnlockAudioHardware, { passive: true });
+    document.addEventListener('click', forceUnlockAudioHardware, { passive: true });
 
+    // 🔊 [100% 모바일 호환 동적 음성 방송 함수]
     function broadcastCall(ticketNo, counterName) {
-      unlockMedia();
+      forceUnlockAudioHardware();
 
+      // 1. 딩동 차임벨
       try {
         const now = audioCtx.currentTime;
         const osc = audioCtx.createOscillator();
@@ -147,21 +149,28 @@
         osc.stop(now + 0.5);
       } catch(e) {}
 
+      // 2. 음성 발화 (스마트폰 크롬/삼성인터넷 표준 방식)
       if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
+        window.speechSynthesis.cancel(); // 이전 찌꺼기 큐 청소
 
         const text = `${ticketNo}번 고객님, ${counterName}로 오시기 바랍니다.`;
         const utter = new SpeechSynthesisUtterance(text);
         utter.lang = 'ko-KR';
         utter.rate = 0.88;
-        utter.pitch = 1.05;
+        utter.pitch = 1.0;
         utter.volume = 1.0;
 
-        if (announcerVoice) utter.voice = announcerVoice;
+        const voices = window.speechSynthesis.getVoices();
+        const koVoice = voices.find(v => v.lang === 'ko-KR' || v.lang.startsWith('ko'));
+        if (koVoice) utter.voice = koVoice;
 
+        // GC 방어
         window.utteranceHolder = utter;
         utter.onend = () => { window.utteranceHolder = null; };
-        utter.onerror = () => { window.speechSynthesis.resume(); };
+        utter.onerror = () => {
+          window.utteranceHolder = null;
+          window.speechSynthesis.resume();
+        };
 
         window.speechSynthesis.resume();
         window.speechSynthesis.speak(utter);
@@ -172,13 +181,11 @@
       broadcastCall(num, counter);
     }
 
-    // 도우미 원클릭 대리 발권 실행
     function issueProxyTicket(bankName) {
       socket.emit('issue_ticket', { selectedBank: bankName });
     }
 
     socket.on('ticket_issued', (data) => {
-      // 대시보드 화면에서 대리 발권 성공 시 알림
       alert(`[대리 발권 완료]\n은행: ${data.bank}\n배정 번호: ${data.ticketNo}번\n\n고객님께 번호를 안내해 주세요.`);
     });
 
@@ -258,7 +265,6 @@
         opt.innerText = b;
         tellerBankSelect.appendChild(opt);
 
-        // 원클릭 대리 발권 버튼 렌더링
         const pBtn = document.createElement('button');
         pBtn.className = 'px-4 py-2.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow transition flex items-center gap-1.5';
         pBtn.innerHTML = `<span>+</span> <span>${b} 대리발권</span>`;
