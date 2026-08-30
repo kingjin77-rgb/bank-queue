@@ -14,23 +14,23 @@
     body { font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif; word-break: keep-all; }
   </style>
 </head>
-<body class="bg-[#0F172A] text-white min-h-screen p-6 flex flex-col justify-between select-none antialiased">
+<body class="bg-[#0F172A] text-white min-h-screen p-4 md:p-6 flex flex-col justify-between select-none antialiased">
 
-  <div class="bg-slate-800/90 rounded-3xl p-6 border border-slate-700/80 shadow-2xl mb-6">
+  <div class="bg-slate-800/90 rounded-3xl p-5 md:p-6 border border-slate-700/80 shadow-2xl mb-6">
     <div class="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-slate-700">
       <div>
         <h1 class="text-xl font-black text-white flex items-center gap-2">
           ⚙️ 현장 통합 관제 센터
         </h1>
-        <p class="text-xs text-slate-400 mt-1">은행별 실시간 가변 번호 음성 방송 및 공석 모니터링</p>
+        <p class="text-xs text-slate-400 mt-1">스마트 태그 연동 & 입구 어르신 원클릭 대리 발권 센터</p>
       </div>
 
-      <div class="flex items-center gap-2.5">
+      <div class="flex flex-wrap items-center gap-2">
         <button onclick="testDynamicVoice(101, '우리은행 1번 창구')" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5">
-          🔊 101번 안내 방송
+          🔊 101번 방송 테스트
         </button>
         <button onclick="testDynamicVoice(102, '국민은행 2번 창구')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5">
-          🔊 102번 안내 방송
+          🔊 102번 방송 테스트
         </button>
         <button onclick="downloadCSV()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition">
           📊 통계 CSV
@@ -41,7 +41,18 @@
       </div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
+    <!-- ⚡ [도우미용 입구 원클릭 대리 발권 섹션] -->
+    <div class="bg-blue-950/40 border border-blue-500/40 rounded-2xl p-4 my-4">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-extrabold text-blue-300 flex items-center gap-1.5">
+          🎫 입구 도우미용 [원클릭 대리 번호표 발권]
+        </span>
+        <span class="text-[11px] text-blue-400">스마트폰이 없거나 미숙한 어르신께 즉시 번호표를 배정합니다.</span>
+      </div>
+      <div id="proxy-bank-buttons" class="flex flex-wrap gap-2.5"></div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
       <div class="bg-slate-900/70 p-4 rounded-2xl border border-slate-700/60">
         <span class="text-xs font-bold text-slate-400 block mb-2">🏛️ 등록 은행 목록</span>
         <div id="bank-tags" class="flex flex-wrap gap-1.5 mb-3"></div>
@@ -52,7 +63,7 @@
       </div>
 
       <div class="bg-slate-900/70 p-4 rounded-2xl border border-slate-700/60">
-        <span class="text-xs font-bold text-slate-400 block mb-2">⚡ 은행 선택 후 클릭 시 자동 순번 창구 생성 (+1 자동 카운팅)</span>
+        <span class="text-xs font-bold text-slate-400 block mb-2">⚡ 원클릭 창구 자동 생성</span>
         <div class="flex gap-2 mb-2">
           <select id="select-teller-bank" class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-emerald-500"></select>
           <button onclick="addAutoTeller()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-xs font-bold rounded-xl shadow whitespace-nowrap">
@@ -81,7 +92,7 @@
     <span>전체 실시간 총 대기 인원: <b class="text-amber-400 text-base font-black ml-1" id="total-wait-sum">0명</b></span>
     <span class="flex items-center gap-1.5">
       <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
-      실시간 동기화 정상 작동 중 (무한 음성 킵얼라이브 활성)
+      실시간 전 기기 동기화 정상 작동 중
     </span>
   </footer>
 
@@ -93,14 +104,14 @@
     let currentStats = [];
     let audioCtx = null;
     let announcerVoice = null;
-    window.speechQueue = [];
+    window.utteranceHolder = null;
 
     if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(e => {});
 
     function initVoices() {
       if ('speechSynthesis' in window) {
         const voices = window.speechSynthesis.getVoices();
-        announcerVoice = voices.find(v => (v.lang === 'ko-KR' || v.lang.startsWith('ko')) && (v.name.includes('Natural') || v.name.includes('Neural') || v.name.includes('Google') || v.name.includes('Yuna') || v.name.includes('Heami'))) 
+        announcerVoice = voices.find(v => (v.lang === 'ko-KR' || v.lang.startsWith('ko')) && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Yuna') || v.name.includes('Heami'))) 
                         || voices.find(v => v.lang === 'ko-KR' || v.lang.startsWith('ko')) 
                         || null;
       }
@@ -108,23 +119,15 @@
     if ('speechSynthesis' in window) {
       window.speechSynthesis.onvoiceschanged = initVoices;
       initVoices();
-
-      setInterval(() => {
-        if (window.speechSynthesis.paused) {
-          window.speechSynthesis.resume();
-        }
-      }, 12000);
     }
 
     function unlockMedia() {
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.resume();
-      }
+      if ('speechSynthesis' in window) window.speechSynthesis.resume();
     }
-    document.addEventListener('touchstart', unlockMedia, { once: true });
-    document.addEventListener('click', unlockMedia, { once: true });
+    document.addEventListener('touchstart', unlockMedia, { passive: true });
+    document.addEventListener('click', unlockMedia, { passive: true });
 
     function broadcastCall(ticketNo, counterName) {
       unlockMedia();
@@ -135,13 +138,13 @@
         const gain = audioCtx.createGain();
         osc.type = 'sine';
         osc.frequency.setValueAtTime(659.25, now);
-        osc.frequency.setValueAtTime(523.25, now + 0.28);
-        gain.gain.setValueAtTime(0.25, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+        osc.frequency.setValueAtTime(523.25, now + 0.2);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
         osc.start(now);
-        osc.stop(now + 0.65);
+        osc.stop(now + 0.5);
       } catch(e) {}
 
       if ('speechSynthesis' in window) {
@@ -156,25 +159,28 @@
 
         if (announcerVoice) utter.voice = announcerVoice;
 
-        window.speechQueue.push(utter);
-        utter.onend = () => {
-          window.speechQueue = window.speechQueue.filter(item => item !== utter);
-        };
-        utter.onerror = () => {
-          window.speechQueue = window.speechQueue.filter(item => item !== utter);
-          window.speechSynthesis.resume();
-        };
+        window.utteranceHolder = utter;
+        utter.onend = () => { window.utteranceHolder = null; };
+        utter.onerror = () => { window.speechSynthesis.resume(); };
 
-        setTimeout(() => {
-          window.speechSynthesis.resume();
-          window.speechSynthesis.speak(utter);
-        }, 320);
+        window.speechSynthesis.resume();
+        window.speechSynthesis.speak(utter);
       }
     }
 
     function testDynamicVoice(num, counter) {
       broadcastCall(num, counter);
     }
+
+    // 도우미 원클릭 대리 발권 실행
+    function issueProxyTicket(bankName) {
+      socket.emit('issue_ticket', { selectedBank: bankName });
+    }
+
+    socket.on('ticket_issued', (data) => {
+      // 대시보드 화면에서 대리 발권 성공 시 알림
+      alert(`[대리 발권 완료]\n은행: ${data.bank}\n배정 번호: ${data.ticketNo}번\n\n고객님께 번호를 안내해 주세요.`);
+    });
 
     socket.on('customer_called', (data) => {
       broadcastCall(data.ticketNo, data.counterName);
@@ -234,10 +240,12 @@
 
       const bankTags = document.getElementById('bank-tags');
       const tellerBankSelect = document.getElementById('select-teller-bank');
+      const proxyButtons = document.getElementById('proxy-bank-buttons');
       const prevSelectedBank = tellerBankSelect.value;
 
       bankTags.innerHTML = '';
       tellerBankSelect.innerHTML = '';
+      proxyButtons.innerHTML = '';
       
       data.banks.forEach(b => {
         const tag = document.createElement('span');
@@ -249,6 +257,13 @@
         opt.value = b;
         opt.innerText = b;
         tellerBankSelect.appendChild(opt);
+
+        // 원클릭 대리 발권 버튼 렌더링
+        const pBtn = document.createElement('button');
+        pBtn.className = 'px-4 py-2.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow transition flex items-center gap-1.5';
+        pBtn.innerHTML = `<span>+</span> <span>${b} 대리발권</span>`;
+        pBtn.onclick = () => issueProxyTicket(b);
+        proxyButtons.appendChild(pBtn);
       });
 
       if (data.banks.includes(prevSelectedBank)) {

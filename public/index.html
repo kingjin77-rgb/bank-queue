@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>스마트 모바일 대기표</title>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -16,6 +17,7 @@
 </head>
 <body class="bg-[#F8FAFC] text-slate-900 min-h-screen flex flex-col justify-between p-5 select-none antialiased">
 
+  <!-- 1. 은행 선택 화면 (일반 접속 시) -->
   <div id="screen-select-bank" class="flex flex-col justify-center items-center flex-1 max-w-sm mx-auto w-full py-4">
     <div class="text-center mb-8">
       <div class="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 text-xs font-bold px-3 py-1 rounded-full mb-3 border border-blue-100/80">
@@ -23,12 +25,13 @@
         스마트 현장 접수
       </div>
       <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight leading-snug">상담받으실 은행을<br/>선택해 주세요</h1>
-      <p class="text-xs font-medium text-slate-500 mt-2">터치 즉시 스마트 모바일 번호표가 발권됩니다.</p>
+      <p class="text-xs font-medium text-slate-500 mt-2">터치 즉시 모바일 번호표가 발권됩니다.</p>
     </div>
     
     <div id="bank-button-list" class="w-full space-y-3"></div>
   </div>
 
+  <!-- 2. 대기 화면 (태그 시 0.1초 만에 바로 진입) -->
   <div id="screen-waiting" class="hidden flex-col items-center justify-between h-full flex-1 max-w-sm mx-auto w-full">
     <div class="w-full text-center mt-3">
       <span id="my-bank-badge" class="inline-block bg-blue-600 text-white text-xs font-bold px-3.5 py-1 rounded-full shadow-sm mb-2">
@@ -62,10 +65,11 @@
         <span>순서 3칸 뒤로 미루기</span>
         <span id="delay-badge" class="bg-amber-400 text-slate-950 text-xs px-2.5 py-0.5 rounded-full font-black">남은 3회</span>
       </button>
-      <p class="text-[11px] text-center text-slate-400 font-medium">화면이 꺼지지 않도록 자동 유지되며, 순서 도달 시 음성과 진동이 울립니다.</p>
+      <p class="text-[11px] text-center text-slate-400 font-medium">화면을 켜두시면 차례 도달 시 음성과 진동으로 안내합니다.</p>
     </div>
   </div>
 
+  <!-- 3. 호출 팝업 화면 -->
   <div id="screen-called" class="fixed inset-0 bg-[#2563EB] z-50 hidden flex-col items-center justify-between p-6 text-white text-center">
     <div class="w-full flex justify-end">
       <span class="bg-white/20 text-white text-[11px] font-bold px-3 py-1 rounded-full backdrop-blur-sm">실시간 호출</span>
@@ -95,20 +99,33 @@
   <script>
     const socket = io();
     let audioCtx = null;
+    let announcerVoice = null;
+    window.utteranceHolder = null;
+    let hasAutoIssued = false;
 
     function requestWakeLock() {
-      if ('wakeLock' in navigator) {
-        navigator.wakeLock.request('screen').catch(e => {});
-      }
+      if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(e => {});
     }
 
-    function unlockAudio() {
+    function initVoices() {
+      if ('speechSynthesis' in window) {
+        const voices = window.speechSynthesis.getVoices();
+        announcerVoice = voices.find(v => v.lang === 'ko-KR' || v.lang.startsWith('ko')) || null;
+      }
+    }
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = initVoices;
+      initVoices();
+    }
+
+    function unlockMedia() {
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+      if ('speechSynthesis' in window) window.speechSynthesis.resume();
       requestWakeLock();
     }
-    document.addEventListener('touchstart', unlockAudio, { once: true });
-    document.addEventListener('click', unlockAudio, { once: true });
+    document.addEventListener('touchstart', unlockMedia, { passive: true });
+    document.addEventListener('click', unlockMedia, { passive: true });
 
     function getSavedTicket() {
       const t = localStorage.getItem('bank_queue_ticket');
@@ -118,49 +135,65 @@
       return localStorage.getItem('bank_queue_bank');
     }
 
-    // 🔊 딩동 + 한국어 음성 오디오 재생
-    function speakAudio(text) {
-      unlockAudio();
+    // ⚡ [NFC 스마트 태그 자동 발권 감지]
+    function checkNfcAutoIssue(banks) {
+      if (hasAutoIssued) return;
+      const urlParams = new URLSearchParams(window.location.search);
+      const tagBank = urlParams.get('bank');
+      const savedTicket = getSavedTicket();
+
+      // 태그 URL로 들어왔고, 기존에 발권한 번호표가 없는 경우 즉시 자동 발권
+      if (tagBank && !savedTicket) {
+        const matchedBank = banks.find(b => b.trim() === tagBank.trim());
+        if (matchedBank) {
+          hasAutoIssued = true;
+          unlockMedia();
+          selectBankAndIssue(matchedBank);
+        }
+      }
+    }
+
+    function playChimeAndVoice(text) {
+      unlockMedia();
       try {
         const now = audioCtx.currentTime;
-        const osc1 = audioCtx.createOscillator();
+        const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
-
-        osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(659.25, now);
-        osc1.frequency.setValueAtTime(523.25, now + 0.25);
-
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
-
-        osc1.connect(gain);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(659.25, now);
+        osc.frequency.setValueAtTime(523.25, now + 0.2);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+        osc.connect(gain);
         gain.connect(audioCtx.destination);
-        osc1.start(now);
-        osc1.stop(now + 0.6);
+        osc.start(now);
+        osc.stop(now + 0.5);
       } catch(e) {}
 
-      const encodedText = encodeURIComponent(text);
-      const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=ko&client=tw-ob`;
-      
-      const audio = new Audio(audioUrl);
-      audio.volume = 1.0;
-      
-      setTimeout(() => {
-        audio.play().catch(() => {
-          if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-            const utter = new SpeechSynthesisUtterance(text);
-            utter.lang = 'ko-KR';
-            utter.rate = 0.9;
-            window.speechSynthesis.speak(utter);
-          }
-        });
-      }, 400);
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = 'ko-KR';
+        utter.rate = 0.88;
+        utter.pitch = 1.05;
+        utter.volume = 1.0;
+        if (announcerVoice) utter.voice = announcerVoice;
+
+        window.utteranceHolder = utter;
+        utter.onend = () => { window.utteranceHolder = null; };
+        utter.onerror = () => { window.speechSynthesis.resume(); };
+
+        window.speechSynthesis.resume();
+        window.speechSynthesis.speak(utter);
+      }
     }
 
     socket.on('state_update', (data) => {
       let myTicket = getSavedTicket();
       let myBank = getSavedBank();
+
+      // 스마트 태그 URL 접속 감지
+      checkNfcAutoIssue(data.banks);
 
       const inQueue = data.queueList.some(q => Number(q.ticketNo) === Number(myTicket));
       const inCounter = Object.values(data.counterStatus).some(c => c && Number(c.ticketNo) === Number(myTicket));
@@ -217,7 +250,7 @@
           <span class="text-base font-bold">${b}</span>
           <span class="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-xl border border-blue-100">대기 ${waitNum}명</span>
         `;
-        btn.onclick = () => { unlockAudio(); selectBankAndIssue(b); };
+        btn.onclick = () => { unlockMedia(); selectBankAndIssue(b); };
         list.appendChild(btn);
       });
     }
@@ -229,6 +262,7 @@
     socket.on('ticket_issued', (data) => {
       localStorage.setItem('bank_queue_ticket', data.ticketNo);
       localStorage.setItem('bank_queue_bank', data.bank);
+      if ("vibrate" in navigator) navigator.vibrate(200);
       showWaitingScreen(data.ticketNo, data.bank);
       requestWakeLock();
     });
@@ -256,7 +290,7 @@
       const myTicket = getSavedTicket();
       if (myTicket && Number(data.ticketNo) === Number(myTicket)) {
         if ("vibrate" in navigator) navigator.vibrate([400, 200, 400, 200, 600]);
-        speakAudio(`${data.ticketNo}번 고객님, ${data.counterName} 창구로 오시기 바랍니다.`);
+        playChimeAndVoice(`${data.ticketNo}번 고객님, ${data.counterName} 창구로 오시기 바랍니다.`);
         
         document.getElementById('counter-info').innerText = `${data.counterName} [${data.bankName}]`;
         document.getElementById('called-number').innerText = `${data.ticketNo}번`;
