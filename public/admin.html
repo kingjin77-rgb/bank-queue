@@ -19,18 +19,21 @@
         <h1 class="text-xl font-black text-white flex items-center gap-2">
           ⚙️ 현장 통합 관제 센터
         </h1>
-        <p class="text-xs text-slate-400 mt-1">은행별 원클릭 창구 자동 생성 및 실시간 공석 모니터링</p>
+        <p class="text-xs text-slate-400 mt-1">은행별 실시간 가변 번호 음성 방송 및 공석 모니터링</p>
       </div>
 
       <div class="flex items-center gap-2.5">
-        <button onclick="testLocalAudio()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5">
-          🔊 안내 음성 테스트 (녹음 파일)
+        <button onclick="testDynamicVoice(101, '우리은행 1번 창구')" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5">
+          🔊 101번 안내 방송
+        </button>
+        <button onclick="testDynamicVoice(102, '국민은행 2번 창구')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5">
+          🔊 102번 안내 방송
         </button>
         <button onclick="downloadCSV()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition">
-          📊 통계 엑셀(CSV) 다운로드
+          📊 통계 CSV
         </button>
         <button onclick="resetAllQueue()" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition">
-          ⚠️ 대기열 전체 초기화
+          ⚠️ 전체 초기화
         </button>
       </div>
     </div>
@@ -60,9 +63,9 @@
 
   <main class="flex-1 my-2">
     <div class="flex items-center justify-between mb-4">
-      <h2 class="text-sm font-bold text-slate-400 tracking-wider uppercase">🏛️ 은행별 상담부스 공석 및 상담 현황</h2>
+      <h2 class="text-sm font-bold text-slate-400 tracking-wider uppercase">🏛️ 은행별 상담부스 공석 및 실시간 호출 현황</h2>
       <div class="flex items-center gap-3 text-xs">
-        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> 빈자리(호출대기)</span>
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> 빈자리(대기)</span>
         <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> 📢 호출중</span>
         <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> ▶ 상담진행중</span>
       </div>
@@ -86,45 +89,80 @@
     let currentStatusMap = {};
     let currentStats = [];
     let audioCtx = null;
+    let announcerVoice = null;
 
     if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(e => {});
 
-    // 🔊 [정확한 파일명 call.mp3.m4a 연결]
-    const callAudio = new Audio('/call.mp3.m4a');
-    callAudio.load();
+    // 최고 품질의 한국어 여성 안내원 보이스 필터링
+    function initVoices() {
+      if ('speechSynthesis' in window) {
+        const voices = window.speechSynthesis.getVoices();
+        // 1순위: 자연스러운 고품질 한국어 여성 보이스 (구글/삼성/애플 프리미엄)
+        announcerVoice = voices.find(v => (v.lang === 'ko-KR' || v.lang.startsWith('ko')) && (v.name.includes('Natural') || v.name.includes('Neural') || v.name.includes('Google') || v.name.includes('Yuna') || v.name.includes('Heami'))) 
+                        || voices.find(v => v.lang === 'ko-KR' || v.lang.startsWith('ko')) 
+                        || null;
+      }
+    }
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = initVoices;
+      initVoices();
+    }
 
-    function playLocalAudio() {
-      // 1. 딩동 차임벨 출력
+    function unlockMedia() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.resume();
+      }
+    }
+    document.addEventListener('touchstart', unlockMedia, { once: true });
+    document.addEventListener('click', unlockMedia, { once: true });
+
+    // 🔊 [정갈한 차임벨 + 잡음 0% 아나운서 방송 엔진]
+    function broadcastCall(ticketNo, counterName) {
+      unlockMedia();
+
+      // 1. 맑고 부드러운 고급 호텔/백화점 2음 차임벨
       try {
-        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
         const now = audioCtx.currentTime;
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(659.25, now);
-        osc.frequency.setValueAtTime(523.25, now + 0.2);
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+        osc.frequency.setValueAtTime(659.25, now); // 미 (E5)
+        osc.frequency.setValueAtTime(523.25, now + 0.28); // 도 (C5)
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
         osc.start(now);
-        osc.stop(now + 0.5);
+        osc.stop(now + 0.65);
       } catch(e) {}
 
-      // 2. 녹음하신 안내 음성 재생
-      callAudio.currentTime = 0;
-      callAudio.play().catch(error => {
-        console.error("Audio error:", error);
-      });
+      // 2. 아나운서 안내 멘트 발화
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+
+        const text = `${ticketNo}번 고객님, ${counterName}로 오시기 바랍니다.`;
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = 'ko-KR';
+        utter.rate = 0.88;  // 현장 청취에 가장 안정적인 속도
+        utter.pitch = 1.05; // 맑고 상냥한 아나운서 톤
+        utter.volume = 1.0;
+
+        if (announcerVoice) utter.voice = announcerVoice;
+
+        setTimeout(() => {
+          window.speechSynthesis.speak(utter);
+        }, 320);
+      }
     }
 
-    function testLocalAudio() {
-      playLocalAudio();
+    function testDynamicVoice(num, counter) {
+      broadcastCall(num, counter);
     }
 
     socket.on('customer_called', (data) => {
-      playLocalAudio();
+      broadcastCall(data.ticketNo, data.counterName);
     });
 
     function addNewBank() {
