@@ -3,91 +3,119 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>스마트 번호표</title>
+  <title>스마트 모바일 대기표</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    @keyframes pulse-ring { 0% { transform: scale(0.95); opacity: 0.8; } 50% { transform: scale(1.05); opacity: 0.4; } 100% { transform: scale(0.95); opacity: 0.8; } }
-    .calling-animation { animation: pulse-ring 1.5s infinite ease-in-out; }
+    body { font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif; word-break: keep-all; }
+    .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px); border: 1px solid rgba(226, 232, 240, 0.8); }
+    @keyframes pulse-ring { 0% { transform: scale(0.9); opacity: 0.9; } 50% { transform: scale(1.1); opacity: 0.4; } 100% { transform: scale(0.9); opacity: 0.9; } }
+    .calling-pulse { animation: pulse-ring 1.8s infinite ease-in-out; }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-800 flex flex-col justify-between min-h-screen p-4 select-none">
+<body class="bg-[#F8FAFC] text-slate-900 min-h-screen flex flex-col justify-between p-5 select-none antialiased">
 
-  <!-- 1. 은행 선택 화면 (첫 방문 시) -->
-  <div id="screen-select-bank" class="flex flex-col justify-center items-center flex-1 max-w-sm mx-auto w-full py-6">
+  <!-- 1. 은행 선택 화면 -->
+  <div id="screen-select-bank" class="flex flex-col justify-center items-center flex-1 max-w-sm mx-auto w-full py-4">
     <div class="text-center mb-8">
-      <span class="bg-blue-100 text-blue-800 text-xs font-black px-3 py-1 rounded-full">스마트 현장 접수</span>
-      <h1 class="text-2xl font-black text-slate-900 mt-2">상담받으실 은행을<br/>선택해주세요</h1>
-      <p class="text-xs text-slate-400 mt-2">터치 즉시 스마트 모바일 번호표가 발권됩니다.</p>
+      <div class="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 text-xs font-bold px-3 py-1 rounded-full mb-3 border border-blue-100/80">
+        <span class="w-1.5 h-1.5 bg-blue-600 rounded-full animate-pulse"></span>
+        스마트 현장 접수
+      </div>
+      <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight leading-snug">상담받으실 은행을<br/>선택해 주세요</h1>
+      <p class="text-xs font-medium text-slate-500 mt-2">터치 즉시 스마트 모바일 번호표가 발권됩니다.</p>
     </div>
+    
     <div id="bank-button-list" class="w-full space-y-3"></div>
   </div>
 
-  <!-- 2. 대기 화면 (발권 완료 시) -->
+  <!-- 2. 대기 화면 -->
   <div id="screen-waiting" class="hidden flex-col items-center justify-between h-full flex-1 max-w-sm mx-auto w-full">
-    <div class="w-full text-center mt-4">
-      <div id="my-bank-badge" class="inline-block bg-blue-600 text-white text-xs font-bold px-3.5 py-1 rounded-full mb-2 shadow-sm">
-        -
-      </div>
-      <h1 class="text-xl font-bold text-slate-800">모바일 대기표</h1>
+    <div class="w-full text-center mt-3">
+      <span id="my-bank-badge" class="inline-block bg-blue-600 text-white text-xs font-bold px-3.5 py-1 rounded-full shadow-sm mb-2">
+        우리은행
+      </span>
+      <h2 class="text-lg font-bold text-slate-800">모바일 스마트 대기표</h2>
     </div>
 
-    <div class="w-full bg-white rounded-3xl shadow-lg p-6 text-center border border-slate-100 my-auto">
-      <p class="text-xs text-slate-400 font-bold tracking-wider">내 접수 번호</p>
-      <div class="text-6xl font-black text-blue-600 my-3" id="my-number">-</div>
+    <div class="w-full glass-card rounded-[32px] p-7 text-center shadow-xl shadow-slate-200/60 my-auto">
+      <p class="text-xs font-bold text-slate-400 tracking-widest uppercase">내 접수 번호</p>
+      <div class="text-6xl font-black text-blue-600 my-4 tracking-tighter" id="my-number">-</div>
       
-      <div id="pre-alert-badge" class="hidden bg-amber-500 text-white text-xs font-black px-3 py-1 rounded-full animate-bounce mb-3 shadow">
-        ⚡ 곧 차례입니다! 부스 근처로 이동해주세요.
+      <!-- 2명 전 사전 안내 배지 -->
+      <div id="pre-alert-badge" class="hidden bg-amber-500 text-white text-xs font-black px-3.5 py-1.5 rounded-full animate-bounce mb-4 shadow-md">
+        ⚡ 곧 차례입니다! 부스 앞으로 이동해 주세요.
       </div>
 
-      <div class="border-t border-slate-100 grid grid-cols-2 gap-3 pt-4">
-        <div class="bg-slate-50 p-3 rounded-2xl">
-          <p class="text-[11px] text-slate-400">해당 은행 대기</p>
-          <p class="text-base font-bold text-slate-700 mt-1" id="bank-total-wait">-</p>
+      <div class="border-t border-slate-100 grid grid-cols-2 gap-3 pt-5">
+        <div class="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
+          <p class="text-[11px] font-medium text-slate-400">해당 은행 대기</p>
+          <p class="text-lg font-extrabold text-slate-700 mt-0.5" id="bank-total-wait">-</p>
         </div>
-        <div class="bg-slate-50 p-3 rounded-2xl">
-          <p class="text-[11px] text-slate-400">내 앞 대기자</p>
-          <p class="text-base font-black text-red-500 mt-1" id="my-ahead-count">-</p>
+        <div class="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
+          <p class="text-[11px] font-medium text-slate-400">내 앞 대기자</p>
+          <p class="text-lg font-black text-rose-500 mt-0.5" id="my-ahead-count">-</p>
         </div>
       </div>
     </div>
 
     <!-- 순서 미루기 버튼 -->
-    <div class="w-full flex flex-col gap-2 mb-6">
-      <button id="btn-delay" onclick="delayOrder()" class="w-full py-4 bg-slate-900 active:scale-95 text-white font-bold rounded-2xl shadow-lg flex items-center justify-center gap-2">
+    <div class="w-full flex flex-col gap-2.5 mb-4">
+      <button id="btn-delay" onclick="delayOrder()" class="w-full py-4 bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white font-bold rounded-2xl shadow-lg transition flex items-center justify-center gap-2">
         <span>순서 3칸 뒤로 미루기</span>
-        <span id="delay-badge" class="bg-amber-400 text-slate-900 text-xs px-2 py-0.5 rounded-full font-black">남은 3회</span>
+        <span id="delay-badge" class="bg-amber-400 text-slate-950 text-xs px-2.5 py-0.5 rounded-full font-black">남은 3회</span>
       </button>
-      <p class="text-[11px] text-center text-slate-400">화면을 켜두시면 순서 도달 시 진동과 알림음이 울립니다.</p>
+      <p class="text-[11px] text-center text-slate-400 font-medium">화면을 켜두시면 순서 도달 시 음성 안내와 진동이 울립니다.</p>
     </div>
   </div>
 
-  <!-- 3. 호출 팝업 화면 -->
-  <div id="screen-called" class="fixed inset-0 bg-blue-600 z-50 hidden flex-col items-center justify-center p-6 text-white text-center">
-    <div class="calling-animation w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mb-4">
-      <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
-      </svg>
-    </div>
-    <p class="text-xl font-bold opacity-90">고객님의 차례입니다!</p>
-    <div class="text-6xl font-black tracking-tight my-2" id="called-number">-</div>
-    
-    <div class="bg-white text-slate-900 px-6 py-4 rounded-3xl shadow-2xl mt-4 w-full max-w-xs">
-      <p class="text-xs font-bold text-slate-400">배정 창구</p>
-      <p class="text-2xl font-black text-blue-600 mt-1" id="counter-info">-</p>
+  <!-- 3. 호출 전체 팝업 화면 -->
+  <div id="screen-called" class="fixed inset-0 bg-[#2563EB] z-50 hidden flex-col items-center justify-between p-6 text-white text-center">
+    <div class="w-full flex justify-end">
+      <span class="bg-white/20 text-white text-[11px] font-bold px-3 py-1 rounded-full backdrop-blur-sm">실시간 호출</span>
     </div>
 
-    <button onclick="closeCallPopup()" class="mt-8 px-6 py-3 bg-white/10 hover:bg-white/20 border border-white/30 rounded-2xl text-xs font-bold">
-      창구로 이동 중 (확인)
+    <div class="flex flex-col items-center my-auto">
+      <div class="calling-pulse w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mb-5 backdrop-blur-md">
+        <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+        </svg>
+      </div>
+
+      <p class="text-xl font-bold tracking-tight opacity-95">고객님의 차례입니다!</p>
+      <div class="text-7xl font-black tracking-tight my-3" id="called-number">-</div>
+      
+      <div class="bg-white text-slate-900 px-6 py-4 rounded-3xl shadow-2xl mt-4 w-full max-w-[280px]">
+        <p class="text-[11px] font-bold text-slate-400">방문하실 창구</p>
+        <p class="text-xl font-black text-blue-600 mt-1" id="counter-info">-</p>
+      </div>
+    </div>
+
+    <button onclick="closeCallPopup()" class="w-full max-w-sm py-4 bg-white/10 hover:bg-white/20 border border-white/30 rounded-2xl text-sm font-bold active:scale-[0.98] transition">
+      확인 (창구로 이동)
     </button>
   </div>
 
   <script>
     const socket = io();
+    let audioCtx = null;
     let savedTicket = localStorage.getItem('bank_queue_ticket');
     let savedBank = localStorage.getItem('bank_queue_bank');
     let myTicket = savedTicket ? Number(savedTicket) : null;
     let myBank = savedBank || null;
+
+    // 모바일 터치 시 오디오 엔진 깨우기
+    function unlockAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+    document.addEventListener('touchstart', unlockAudio, { once: true });
+    document.addEventListener('click', unlockAudio, { once: true });
 
     window.addEventListener('load', () => {
       if (myTicket && myBank) {
@@ -95,21 +123,23 @@
       }
     });
 
-    // 은행 목록 렌더링
     socket.on('state_update', (data) => {
       if (!myTicket) {
         const list = document.getElementById('bank-button-list');
         list.innerHTML = '';
         data.banks.forEach(b => {
           const btn = document.createElement('button');
-          btn.className = 'w-full py-4 px-6 bg-white hover:bg-blue-50 active:scale-98 border border-slate-200 text-slate-800 font-bold rounded-2xl shadow-sm text-base flex justify-between items-center transition';
+          btn.className = 'w-full py-4 px-5 bg-white hover:bg-slate-50 active:scale-[0.98] border border-slate-200/90 text-slate-900 font-bold rounded-2xl shadow-sm flex justify-between items-center transition';
           const bankStat = data.stats.find(s => s.bank === b);
-          btn.innerHTML = `<span>${b}</span><span class="text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg">대기 ${bankStat ? bankStat.waiting : 0}명</span>`;
-          btn.onclick = () => selectBankAndIssue(b);
+          const waitNum = bankStat ? bankStat.waiting : 0;
+          btn.innerHTML = `
+            <span class="text-base font-bold">${b}</span>
+            <span class="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-xl border border-blue-100">대기 ${waitNum}명</span>
+          `;
+          btn.onclick = () => { unlockAudio(); selectBankAndIssue(b); };
           list.appendChild(btn);
         });
       } else {
-        // 대기 순번 및 2명 전 사전 알림
         const sameBankQueue = data.queueList.filter(q => q.bank === myBank);
         const myIndex = sameBankQueue.findIndex(q => Number(q.ticketNo) === Number(myTicket));
         
@@ -120,10 +150,9 @@
           const myItem = sameBankQueue[myIndex];
           document.getElementById('delay-badge').innerText = `남은 ${3 - myItem.delayCount}회`;
           
-          // ⚡ 내 앞 2명 이하일 때 사전 진동/알림
           if (myIndex > 0 && myIndex <= 2) {
             document.getElementById('pre-alert-badge').classList.remove('hidden');
-            if ("vibrate" in navigator) navigator.vibrate([100, 100, 100]);
+            if ("vibrate" in navigator) navigator.vibrate([150, 100, 150]);
           } else {
             document.getElementById('pre-alert-badge').classList.add('hidden');
           }
@@ -158,14 +187,15 @@
 
     socket.on('order_delayed', (data) => {
       document.getElementById('delay-badge').innerText = `남은 ${data.delayRemaining}회`;
-      alert('순서가 3칸 뒤로 미뤄졌습니다.');
+      alert('대기 순서가 3칸 뒤로 미뤄졌습니다.');
     });
 
     // 상담사 호출 수신
     socket.on('customer_called', (data) => {
       if (myTicket && Number(data.ticketNo) === Number(myTicket)) {
         if ("vibrate" in navigator) navigator.vibrate([400, 200, 400, 200, 600]);
-        playAlarmSound();
+        playChimeAndTTS(`${data.ticketNo}번 고객님, ${data.counterName} ${data.bankName} 창구로 오시기 바랍니다.`);
+        
         document.getElementById('counter-info').innerText = `${data.counterName} [${data.bankName}]`;
         document.getElementById('called-number').innerText = `${data.ticketNo}번`;
         document.getElementById('screen-called').classList.remove('hidden');
@@ -173,37 +203,49 @@
       }
     });
 
-    // 상담 완료 시 번호표 소멸 및 첫 화면 복귀
     socket.on('customer_finished', (data) => {
       if (myTicket && Number(data.ticketNo) === Number(myTicket)) {
-        localStorage.removeItem('bank_queue_ticket');
-        localStorage.removeItem('bank_queue_bank');
-        alert('상담이 완료되었습니다. 이용해 주셔서 감사합니다.');
+        localStorage.clear();
+        alert('상담이 완료되었습니다. 감사합니다.');
         location.reload();
       }
     });
 
     socket.on('system_reset_alert', () => {
       localStorage.clear();
-      alert('시스템이 초기화되었습니다.');
       location.reload();
     });
 
     socket.on('error_msg', msg => alert(msg));
 
-    function playAlarmSound() {
+    // 맑은 딩동 벨소리 + TTS 합성
+    function playChimeAndTTS(speechText) {
       try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(880, ctx.currentTime);
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.6);
+        unlockAudio();
+        const now = audioCtx.currentTime;
+        const osc1 = audioCtx.createOscillator();
+        const osc2 = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(659.25, now); // E5
+        osc1.frequency.setValueAtTime(523.25, now + 0.35); // C5
+
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+
+        osc1.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.8);
+
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const utter = new SpeechSynthesisUtterance(speechText);
+          utter.lang = 'ko-KR';
+          utter.rate = 0.95;
+          setTimeout(() => window.speechSynthesis.speak(utter), 600);
+        }
       } catch(e) {}
     }
 

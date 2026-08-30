@@ -9,10 +9,9 @@ const io = new Server(server, { cors: { origin: '*' } });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 시스템 상태
 let currentTicketSeq = 100;
-let queue = []; // [{ ticketNo, bank, delayCount, issuedAt }]
-let noShowList = []; // [{ ticketNo, bank, noShowAt }]
+let queue = []; 
+let noShowList = []; 
 let banks = ['우리은행', '국민은행', '신한은행', '하나은행', '농협은행'];
 let tellers = [
   { id: 1, name: '1번 창구 (김상담)', bank: '우리은행' },
@@ -21,15 +20,13 @@ let tellers = [
   { id: 4, name: '4번 창구 (최상담)', bank: '국민은행' }
 ];
 let counterStatus = {}; 
-let consultHistory = []; // 완료된 상담 이력 (엑셀 다운로드용)
-let marqueeNotice = '현장 스마트 대기 시스템 운영 중입니다. 안내에 따라 주시기 바랍니다.';
+let consultHistory = []; 
 
 function broadcastState() {
   io.emit('state_update', {
     banks,
     tellers,
     counterStatus,
-    marqueeNotice,
     noShowList,
     totalWaiting: queue.length,
     queueList: queue.map((q, idx) => ({
@@ -47,7 +44,7 @@ function broadcastState() {
 }
 
 io.on('connection', (socket) => {
-  // 1. 발권 (은행별)
+  // 발권
   socket.on('issue_ticket', ({ selectedBank }) => {
     currentTicketSeq += 1;
     const ticket = {
@@ -71,7 +68,7 @@ io.on('connection', (socket) => {
     broadcastState();
   });
 
-  // 2. 순서 미루기
+  // 미루기
   socket.on('delay_order', ({ ticketNo }) => {
     const itemIdx = queue.findIndex(q => Number(q.ticketNo) === Number(ticketNo));
     if (itemIdx === -1) return socket.emit('error_msg', '대기열에 번호표가 없습니다.');
@@ -82,7 +79,6 @@ io.on('connection', (socket) => {
     item.delayCount += 1;
     queue.splice(itemIdx, 1);
 
-    // 같은 은행 기준 3칸 뒤로 이동
     const sameBankIndices = [];
     queue.forEach((q, idx) => { if (q.bank === item.bank) sameBankIndices.push(idx); });
 
@@ -100,13 +96,12 @@ io.on('connection', (socket) => {
     broadcastState();
   });
 
-  // 3. 상담사 호출
+  // 고객 호출
   socket.on('call_next', ({ tellerId }) => {
     const tid = String(tellerId);
     const teller = tellers.find(t => String(t.id) === tid);
     if (!teller) return socket.emit('error_msg', '창구 정보가 올바르지 않습니다.');
 
-    // 해당 상담사 은행 대기자 중 가장 앞선 고객 탐색
     const customerIdx = queue.findIndex(q => q.bank === teller.bank);
     if (customerIdx === -1) {
       return socket.emit('error_msg', `${teller.bank} 대기 고객이 없습니다.`);
@@ -121,18 +116,21 @@ io.on('connection', (socket) => {
       callStartTime: Date.now()
     };
 
-    // 전광판 및 고객 단말기 호출 이벤트
     io.emit('customer_called', {
       ticketNo: servedCustomer.ticketNo,
       counterName: teller.name,
       bankName: teller.bank
     });
 
-    socket.emit('call_success', { ticketNo: servedCustomer.ticketNo });
+    socket.emit('call_success', { 
+      ticketNo: servedCustomer.ticketNo,
+      counterName: teller.name,
+      bankName: teller.bank
+    });
     broadcastState();
   });
 
-  // 4. 상담 시작
+  // 상담 시작
   socket.on('start_consult', ({ tellerId }) => {
     const tid = String(tellerId);
     if (counterStatus[tid]) {
@@ -142,7 +140,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 5. 부재(No-Show) 처리
+  // 부재 처리
   socket.on('mark_no_show', ({ tellerId }) => {
     const tid = String(tellerId);
     if (counterStatus[tid]) {
@@ -159,7 +157,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 6. 부재 고객 복구 호출
+  // 부재 재호출
   socket.on('recall_no_show', ({ tellerId, ticketNo }) => {
     const tid = String(tellerId);
     const teller = tellers.find(t => String(t.id) === tid);
@@ -178,12 +176,16 @@ io.on('connection', (socket) => {
         counterName: teller.name,
         bankName: teller.bank
       });
-      socket.emit('call_success', { ticketNo: recalled.ticketNo });
+      socket.emit('call_success', { 
+        ticketNo: recalled.ticketNo,
+        counterName: teller.name,
+        bankName: teller.bank
+      });
       broadcastState();
     }
   });
 
-  // 7. 상담 종료
+  // 상담 종료
   socket.on('finish_consult', ({ tellerId }) => {
     const tid = String(tellerId);
     if (counterStatus[tid]) {
@@ -197,7 +199,6 @@ io.on('connection', (socket) => {
         finishedAt: new Date().toLocaleTimeString('ko-KR')
       });
 
-      // 고객 단말기 번호표 소멸 이벤트
       io.emit('customer_finished', { ticketNo: current.ticketNo });
       delete counterStatus[tid];
       socket.emit('consult_finished');
@@ -205,7 +206,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 8. 관리자: 은행 추가 / 삭제
+  // 관리자 은행 관리
   socket.on('admin_add_bank', ({ bankName }) => {
     if (bankName && !banks.includes(bankName)) {
       banks.push(bankName);
@@ -217,7 +218,7 @@ io.on('connection', (socket) => {
     broadcastState();
   });
 
-  // 9. 관리자: 상담원 추가 / 삭제
+  // 관리자 상담원 관리
   socket.on('admin_add_teller', ({ name, bank }) => {
     const newId = tellers.length > 0 ? Math.max(...tellers.map(t => Number(t.id))) + 1 : 1;
     tellers.push({ id: newId, name, bank });
@@ -230,13 +231,7 @@ io.on('connection', (socket) => {
     broadcastState();
   });
 
-  // 10. 관리자: 긴급 전광판 공지 변경
-  socket.on('admin_update_notice', ({ notice }) => {
-    marqueeNotice = notice || '';
-    broadcastState();
-  });
-
-  // 11. 관리자: 엑셀(CSV) 요청
+  // 엑셀 다운로드
   socket.on('admin_request_csv', () => {
     let csv = '\uFEFF번호표,은행,담당창구,상담소요시간,종료시각\n';
     consultHistory.forEach(h => {
@@ -245,7 +240,7 @@ io.on('connection', (socket) => {
     socket.emit('admin_download_csv', { csvData: csv });
   });
 
-  // 12. 관리자: 전체 리셋
+  // 전체 초기화
   socket.on('admin_reset_queue', () => {
     currentTicketSeq = 100;
     queue = [];
@@ -260,7 +255,6 @@ io.on('connection', (socket) => {
     banks,
     tellers,
     counterStatus,
-    marqueeNotice,
     noShowList,
     totalWaiting: queue.length,
     queueList: queue.map((q, idx) => ({

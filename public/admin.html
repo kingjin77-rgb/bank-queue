@@ -3,124 +3,78 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>관리자 및 통합 대기 현황판</title>
+  <title>통합 운영 관리 대시보드</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body { font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif; word-break: keep-all; }
+  </style>
 </head>
-<body class="bg-slate-900 text-white min-h-screen p-4 md:p-6 flex flex-col justify-between select-none">
+<body class="bg-[#0F172A] text-white min-h-screen p-6 flex flex-col justify-between select-none antialiased">
 
-  <!-- 1. 상단 관리자 컨트롤 패널 -->
-  <div class="bg-slate-800 p-5 rounded-3xl border border-slate-700 shadow-xl mb-4 space-y-4">
-    
-    <div class="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-700">
-      <div class="flex items-center gap-3">
-        <h2 class="text-base md:text-lg font-bold text-white flex items-center gap-2">⚙️ 통합 관제 센터</h2>
-        <!-- 🔊 음성 안내 토글 버튼 -->
-        <button id="btn-tts-toggle" onclick="toggleTTS()" class="px-3 py-1.5 bg-slate-700 text-slate-300 hover:bg-blue-600 hover:text-white text-xs font-bold rounded-xl transition">
-          🔊 무선 스피커 음성 안내: <span id="tts-status">OFF</span>
-        </button>
+  <!-- 상단 컨트롤 헤더 -->
+  <div class="bg-slate-800/90 rounded-3xl p-6 border border-slate-700/80 shadow-2xl mb-6">
+    <div class="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-slate-700">
+      <div>
+        <h1 class="text-xl font-black text-white flex items-center gap-2">
+          ⚙️ 현장 통합 관제 센터
+        </h1>
+        <p class="text-xs text-slate-400 mt-1">은행 추가, 창구 배치, 실시간 대기 통계 제어</p>
       </div>
-      
-      <div class="flex items-center gap-2">
-        <!-- 엑셀 CSV 다운로드 -->
-        <button onclick="downloadCSV()" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow transition">
-          📊 일일 통계 엑셀(CSV) 다운로드
+
+      <div class="flex items-center gap-2.5">
+        <button onclick="downloadCSV()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition">
+          📊 상담 데이터 엑셀(CSV) 다운로드
         </button>
-        <!-- 전체 리셋 -->
-        <button onclick="resetAllQueue()" class="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow transition">
-          ⚠️ 전체 초기화
+        <button onclick="resetAllQueue()" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition">
+          ⚠️ 대기열 전체 초기화
         </button>
       </div>
     </div>
 
-    <!-- 은행/상담원 설정 및 긴급 공지 -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-      <!-- 은행 관리 -->
-      <div class="bg-slate-900/60 p-3.5 rounded-2xl border border-slate-700/60">
-        <span class="text-[11px] font-bold text-slate-400 block mb-1.5">🏛️ 등록 은행 목록</span>
-        <div id="bank-tags" class="flex flex-wrap gap-1.5 mb-2"></div>
-        <div class="flex gap-1.5">
-          <input id="input-new-bank" type="text" placeholder="은행명" class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white outline-none" />
-          <button onclick="addNewBank()" class="px-3 py-1 bg-blue-600 text-xs font-bold rounded-xl">추가</button>
+    <!-- 은행 & 상담원 관리 그리드 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
+      <!-- 1. 은행 관리 -->
+      <div class="bg-slate-900/70 p-4 rounded-2xl border border-slate-700/60">
+        <span class="text-xs font-bold text-slate-400 block mb-2">🏛️ 등록 은행 관리</span>
+        <div id="bank-tags" class="flex flex-wrap gap-1.5 mb-3"></div>
+        <div class="flex gap-2">
+          <input id="input-new-bank" type="text" placeholder="새 은행명 입력" class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-blue-500" />
+          <button onclick="addNewBank()" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-xs font-bold rounded-xl">은행 추가</button>
         </div>
       </div>
 
-      <!-- 상담원 관리 -->
-      <div class="bg-slate-900/60 p-3.5 rounded-2xl border border-slate-700/60">
-        <span class="text-[11px] font-bold text-slate-400 block mb-1.5">👤 창구(상담원) 추가</span>
-        <div class="flex gap-1.5 mb-2">
-          <input id="input-teller-name" type="text" placeholder="창구명" class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white outline-none" />
-          <select id="select-teller-bank" class="bg-slate-800 border border-slate-700 rounded-xl px-2 py-1 text-xs text-white outline-none"></select>
-          <button onclick="addNewTeller()" class="px-3 py-1 bg-emerald-600 text-xs font-bold rounded-xl">생성</button>
+      <!-- 2. 창구 관리 -->
+      <div class="bg-slate-900/70 p-4 rounded-2xl border border-slate-700/60">
+        <span class="text-xs font-bold text-slate-400 block mb-2">👤 창구(상담원) 추가</span>
+        <div class="flex gap-2 mb-2">
+          <input id="input-teller-name" type="text" placeholder="창구명 (예: 5번 창구)" class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-blue-500" />
+          <select id="select-teller-bank" class="bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white outline-none"></select>
+          <button onclick="addNewTeller()" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-xs font-bold rounded-xl">생성</button>
         </div>
-        <div id="teller-manage-list" class="flex flex-wrap gap-1 max-h-16 overflow-y-auto"></div>
-      </div>
-
-      <!-- 긴급 전광판 공지 -->
-      <div class="bg-slate-900/60 p-3.5 rounded-2xl border border-slate-700/60">
-        <span class="text-[11px] font-bold text-slate-400 block mb-1.5">📢 현황판 자막 공지</span>
-        <div class="flex gap-1.5">
-          <input id="input-notice" type="text" placeholder="공지 메시지 입력" class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white outline-none" />
-          <button onclick="updateNotice()" class="px-3 py-1 bg-amber-600 text-xs font-bold rounded-xl">송출</button>
-        </div>
-        <p class="text-[10px] text-slate-500 mt-2">전광판 하단에 롤링 자막으로 표출됩니다.</p>
+        <div id="teller-manage-list" class="flex flex-wrap gap-1.5 max-h-16 overflow-y-auto pr-1"></div>
       </div>
     </div>
   </div>
 
-  <!-- 2. 은행별 실시간 통계 바 -->
-  <div id="bank-stat-bar" class="flex flex-wrap gap-3 mb-4 justify-center"></div>
+  <!-- 실시간 은행별 통계 요약 카드 -->
+  <div class="my-auto">
+    <h2 class="text-sm font-bold text-slate-400 text-center mb-4 tracking-wider uppercase">실시간 은행별 상담 현황</h2>
+    <div id="bank-stat-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+  </div>
 
-  <!-- 3. 메인 실시간 전광판 (DID 모드) -->
-  <main class="flex-1 flex flex-col justify-center my-2">
-    <div id="counter-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
-  </main>
-
-  <!-- 4. 하단 롤링 전광판 자막 -->
-  <footer class="mt-4 bg-slate-800/90 border border-slate-700/80 p-3 rounded-2xl flex items-center gap-3 overflow-hidden">
-    <span class="bg-amber-500 text-slate-950 font-black text-xs px-2.5 py-1 rounded-lg shrink-0">공지사항</span>
-    <marquee id="marquee-text" class="text-sm font-bold text-amber-200">현장 스마트 대기 시스템 운영 중입니다.</marquee>
+  <!-- 하단 상태 바 -->
+  <footer class="mt-6 bg-slate-800/80 border border-slate-700 p-4 rounded-2xl flex justify-between items-center text-xs text-slate-400">
+    <span>전체 누적 대기 인원: <b class="text-amber-400 text-base font-black ml-1" id="total-wait-sum">0명</b></span>
+    <span class="flex items-center gap-1.5">
+      <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+      실시간 동기화 정상
+    </span>
   </footer>
 
   <script>
     const socket = io();
-    let currentBanks = [];
-    let currentTellers = [];
-    let currentStatusMap = {};
-    let isTTSEnabled = false;
-
-    // 화면 꺼짐 방지
-    if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(e => {});
-
-    function toggleTTS() {
-      isTTSEnabled = !isTTSEnabled;
-      const btn = document.getElementById('btn-tts-toggle');
-      const txt = document.getElementById('tts-status');
-      if (isTTSEnabled) {
-        btn.className = "px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-xl shadow transition";
-        txt.innerText = "ON (활성화)";
-        speakTTS("무선 스피커 음성 안내가 켜졌습니다.");
-      } else {
-        btn.className = "px-3 py-1.5 bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition";
-        txt.innerText = "OFF";
-      }
-    }
-
-    // TTS 음성 송출 (브라우저 Web Speech)
-    function speakTTS(text) {
-      if (!isTTSEnabled || !('speechSynthesis' in window)) return;
-      window.speechSynthesis.cancel();
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = 'ko-KR';
-      utter.rate = 0.95;
-      utter.pitch = 1.0;
-      window.speechSynthesis.speak(utter);
-    }
-
-    // 호출 시 음성 안내
-    socket.on('customer_called', (data) => {
-      speakTTS(`딩동! ${data.ticketNo}번 고객님, ${data.counterName} ${data.bankName} 창구로 오시기 바랍니다.`);
-    });
 
     function addNewBank() {
       const input = document.getElementById('input-new-bank');
@@ -144,11 +98,6 @@
       if (confirm('해당 창구를 삭제하시겠습니까?')) socket.emit('admin_delete_teller', { tellerId });
     }
 
-    function updateNotice() {
-      const notice = document.getElementById('input-notice').value.trim();
-      socket.emit('admin_update_notice', { notice });
-    }
-
     function downloadCSV() {
       socket.emit('admin_request_csv');
     }
@@ -157,7 +106,7 @@
       const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `대기상담통계_${new Date().toISOString().slice(0,10)}.csv`;
+      link.download = `현장상담통계_${new Date().toISOString().slice(0,10)}.csv`;
       link.click();
     });
 
@@ -168,31 +117,40 @@
     }
 
     socket.on('state_update', (data) => {
-      currentBanks = data.banks;
-      currentTellers = data.tellers;
-      currentStatusMap = data.counterStatus || {};
+      document.getElementById('total-wait-sum').innerText = `${data.totalWaiting}명`;
 
-      document.getElementById('marquee-text').innerText = data.marqueeNotice;
-
-      // 은행별 통계 렌더링
-      const statBar = document.getElementById('bank-stat-bar');
-      statBar.innerHTML = '';
+      // 통계 카드 렌더링
+      const statGrid = document.getElementById('bank-stat-grid');
+      statGrid.innerHTML = '';
       data.stats.forEach(s => {
-        const badge = document.createElement('div');
-        badge.className = 'bg-slate-800 px-4 py-2 rounded-2xl border border-slate-700 flex items-center gap-2 text-xs';
-        badge.innerHTML = `<span class="font-bold text-slate-300">${s.bank}</span><span class="text-amber-400 font-bold">대기 ${s.waiting}명</span><span class="text-slate-500">|</span><span class="text-emerald-400 font-bold">완료 ${s.completed}건</span>`;
-        statBar.appendChild(badge);
+        const card = document.createElement('div');
+        card.className = 'bg-slate-800/90 border border-slate-700/80 rounded-3xl p-5 flex flex-col justify-between shadow-lg';
+        card.innerHTML = `
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-extrabold text-white">${s.bank}</span>
+            <span class="text-[10px] bg-blue-600/30 text-blue-400 px-2 py-0.5 rounded-full font-bold">운영 중</span>
+          </div>
+          <div class="my-4">
+            <p class="text-xs text-slate-400 font-medium">현재 대기</p>
+            <p class="text-3xl font-black text-amber-400 mt-1">${s.waiting}명</p>
+          </div>
+          <div class="border-t border-slate-700/60 pt-2 flex justify-between text-xs text-slate-400">
+            <span>완료 건수</span>
+            <span class="font-bold text-emerald-400">${s.completed}건</span>
+          </div>
+        `;
+        statGrid.appendChild(card);
       });
 
-      // 은행 태그
+      // 은행 목록 태그
       const bankTags = document.getElementById('bank-tags');
       const tellerBankSelect = document.getElementById('select-teller-bank');
       bankTags.innerHTML = '';
       tellerBankSelect.innerHTML = '';
       data.banks.forEach(b => {
         const tag = document.createElement('span');
-        tag.className = 'bg-blue-900/60 border border-blue-500/40 text-blue-300 text-[11px] px-2 py-0.5 rounded-lg font-bold inline-flex items-center gap-1';
-        tag.innerHTML = `${b} <button onclick="deleteBank('${b}')" class="text-blue-400 hover:text-white">×</button>`;
+        tag.className = 'bg-blue-900/60 border border-blue-500/40 text-blue-300 text-xs px-2.5 py-1 rounded-lg font-bold inline-flex items-center gap-1.5';
+        tag.innerHTML = `${b} <button onclick="deleteBank('${b}')" class="text-blue-400 hover:text-white font-black ml-1">×</button>`;
         bankTags.appendChild(tag);
 
         const opt = document.createElement('option');
@@ -201,46 +159,16 @@
         tellerBankSelect.appendChild(opt);
       });
 
-      // 창구 태그
+      // 상담원 태그
       const tellerManageList = document.getElementById('teller-manage-list');
       tellerManageList.innerHTML = '';
       data.tellers.forEach(t => {
         const chip = document.createElement('span');
-        chip.className = 'bg-slate-800 border border-slate-700 text-slate-300 text-[10px] px-2 py-0.5 rounded-md inline-flex items-center gap-1';
-        chip.innerHTML = `${t.name} (${t.bank}) <button onclick="deleteTeller(${t.id})" class="text-red-400">×</button>`;
+        chip.className = 'bg-slate-800 border border-slate-700 text-slate-300 text-xs px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5';
+        chip.innerHTML = `${t.name} (${t.bank}) <button onclick="deleteTeller(${t.id})" class="text-rose-400 hover:text-rose-200 font-bold ml-1">×</button>`;
         tellerManageList.appendChild(chip);
       });
-
-      renderBoard();
     });
-
-    function renderBoard() {
-      const grid = document.getElementById('counter-grid');
-      grid.innerHTML = '';
-
-      currentTellers.forEach(t => {
-        const tid = String(t.id);
-        const info = currentStatusMap[tid];
-        const isCalling = info && info.ticketNo;
-        const isCalled = info && info.status === 'CALLED';
-
-        const card = document.createElement('div');
-        card.className = `bg-slate-800/90 rounded-3xl p-5 border ${isCalling ? (isCalled ? 'border-amber-400 shadow-xl shadow-amber-500/20' : 'border-emerald-500 shadow-xl shadow-emerald-500/20') : 'border-slate-700/70'} flex flex-col items-center justify-center transition`;
-        card.innerHTML = `
-          <div class="flex items-center justify-between w-full px-2">
-            <span class="text-xs font-bold text-slate-300">${t.name}</span>
-            <span class="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full">${t.bank}</span>
-          </div>
-          <div class="text-5xl md:text-6xl font-black ${isCalling ? (isCalled ? 'text-amber-400 animate-pulse' : 'text-emerald-400') : 'text-slate-600'} my-3">
-            ${isCalling ? info.ticketNo + '번' : '-'}
-          </div>
-          <span class="text-xs font-bold ${isCalling ? (isCalled ? 'text-amber-400' : 'text-emerald-400') : 'text-slate-500'}">
-            ${isCalling ? (isCalled ? '📢 호출 중' : '▶ 상담 진행 중') : '대기 중'}
-          </span>
-        `;
-        grid.appendChild(card);
-      });
-    }
   </script>
 </body>
 </html>
