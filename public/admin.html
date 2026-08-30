@@ -22,14 +22,14 @@
         <h1 class="text-xl font-black text-white flex items-center gap-2">
           ⚙️ 현장 통합 관제 센터
         </h1>
-        <p class="text-xs text-slate-400 mt-1">스마트 태그 연동 & 입구 어르신 원클릭 대리 발권 센터</p>
+        <p class="text-xs text-slate-400 mt-1">실시간 고음질 안내 방송 및 모니터링</p>
       </div>
 
       <div class="flex flex-wrap items-center gap-2">
-        <button onclick="testDynamicVoice(101, '우리은행 1번 창구')" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5">
+        <button onclick="playCdnVoice(101, '우리은행 1번 창구')" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5">
           🔊 101번 방송 테스트
         </button>
-        <button onclick="testDynamicVoice(102, '국민은행 2번 창구')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5">
+        <button onclick="playCdnVoice(102, '국민은행 2번 창구')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5">
           🔊 102번 방송 테스트
         </button>
         <button onclick="downloadCSV()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition">
@@ -41,13 +41,13 @@
       </div>
     </div>
 
-    <!-- ⚡ [도우미용 입구 원클릭 대리 발권 섹션] -->
+    <!-- ⚡ 도우미 원클릭 대리 발권 -->
     <div class="bg-blue-950/40 border border-blue-500/40 rounded-2xl p-4 my-4">
       <div class="flex items-center justify-between mb-3">
         <span class="text-xs font-extrabold text-blue-300 flex items-center gap-1.5">
           🎫 입구 도우미용 [원클릭 대리 번호표 발권]
         </span>
-        <span class="text-[11px] text-blue-400">스마트폰이 없거나 미숙한 어르신께 즉시 번호표를 배정합니다.</span>
+        <span class="text-[11px] text-blue-400">스마트폰이 없는 어르신께 즉시 번호표를 배정합니다.</span>
       </div>
       <div id="proxy-bank-buttons" class="flex flex-wrap gap-2.5"></div>
     </div>
@@ -92,7 +92,7 @@
     <span>전체 실시간 총 대기 인원: <b class="text-amber-400 text-base font-black ml-1" id="total-wait-sum">0명</b></span>
     <span class="flex items-center gap-1.5">
       <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
-      실시간 전 기기 동기화 정상 작동 중 (하드웨어 음성 언락됨)
+      실시간 동기화 및 음성 방송 정상 작동 중
     </span>
   </footer>
 
@@ -103,35 +103,19 @@
     let currentStatusMap = {};
     let currentStats = [];
     let audioCtx = null;
-    let isSpeechUnlocked = false;
-    window.utteranceHolder = null;
 
     if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(e => {});
 
-    // 🛡️ [핵심] 첫 터치/클릭 즉시 오디오와 TTS 하드웨어를 영구 언락
-    function forceUnlockAudioHardware() {
-      // 1. Web Audio Context 언락
+    function unlockAudio() {
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-
-      // 2. 모바일 브라우저 SpeechSynthesis 무음 발화로 강제 잠금 해제
-      if ('speechSynthesis' in window && !isSpeechUnlocked) {
-        window.speechSynthesis.resume();
-        const silentUtter = new SpeechSynthesisUtterance(' ');
-        silentUtter.volume = 0.01;
-        silentUtter.rate = 10;
-        window.speechSynthesis.speak(silentUtter);
-        isSpeechUnlocked = true;
-      }
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
     }
+    document.addEventListener('touchstart', unlockAudio, { passive: true });
+    document.addEventListener('click', unlockAudio, { passive: true });
 
-    document.addEventListener('touchstart', forceUnlockAudioHardware, { passive: true });
-    document.addEventListener('touchend', forceUnlockAudioHardware, { passive: true });
-    document.addEventListener('click', forceUnlockAudioHardware, { passive: true });
-
-    // 🔊 [100% 모바일 호환 동적 음성 방송 함수]
-    function broadcastCall(ticketNo, counterName) {
-      forceUnlockAudioHardware();
+    // 🔊 [별도 파일 없이 즉시 재생되는 직결 고품질 음성 재생기]
+    function playCdnVoice(ticketNo, counterName) {
+      unlockAudio();
 
       // 1. 딩동 차임벨
       try {
@@ -141,7 +125,7 @@
         osc.type = 'sine';
         osc.frequency.setValueAtTime(659.25, now);
         osc.frequency.setValueAtTime(523.25, now + 0.2);
-        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.setValueAtTime(0.25, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
@@ -149,37 +133,30 @@
         osc.stop(now + 0.5);
       } catch(e) {}
 
-      // 2. 음성 발화 (스마트폰 크롬/삼성인터넷 표준 방식)
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel(); // 이전 찌꺼기 큐 청소
+      // 2. 고객 브라우저에서 직접 다이렉트로 고품질 음성 스트림 재생 (Render IP 차단 우회)
+      const text = `${ticketNo}번 고객님 ${counterName}로 오시기 바랍니다`;
+      const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=ko&client=tw-ob`;
+      
+      const audio = new Audio(audioUrl);
+      audio.volume = 1.0;
 
-        const text = `${ticketNo}번 고객님, ${counterName}로 오시기 바랍니다.`;
-        const utter = new SpeechSynthesisUtterance(text);
-        utter.lang = 'ko-KR';
-        utter.rate = 0.88;
-        utter.pitch = 1.0;
-        utter.volume = 1.0;
-
-        const voices = window.speechSynthesis.getVoices();
-        const koVoice = voices.find(v => v.lang === 'ko-KR' || v.lang.startsWith('ko'));
-        if (koVoice) utter.voice = koVoice;
-
-        // GC 방어
-        window.utteranceHolder = utter;
-        utter.onend = () => { window.utteranceHolder = null; };
-        utter.onerror = () => {
-          window.utteranceHolder = null;
-          window.speechSynthesis.resume();
-        };
-
-        window.speechSynthesis.resume();
-        window.speechSynthesis.speak(utter);
-      }
+      setTimeout(() => {
+        audio.play().catch(() => {
+          // 브라우저 백업 TTS
+          if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            const utter = new SpeechSynthesisUtterance(text);
+            utter.lang = 'ko-KR';
+            utter.rate = 0.88;
+            window.speechSynthesis.speak(utter);
+          }
+        });
+      }, 350);
     }
 
-    function testDynamicVoice(num, counter) {
-      broadcastCall(num, counter);
-    }
+    socket.on('customer_called', (data) => {
+      playCdnVoice(data.ticketNo, data.counterName);
+    });
 
     function issueProxyTicket(bankName) {
       socket.emit('issue_ticket', { selectedBank: bankName });
@@ -187,10 +164,6 @@
 
     socket.on('ticket_issued', (data) => {
       alert(`[대리 발권 완료]\n은행: ${data.bank}\n배정 번호: ${data.ticketNo}번\n\n고객님께 번호를 안내해 주세요.`);
-    });
-
-    socket.on('customer_called', (data) => {
-      broadcastCall(data.ticketNo, data.counterName);
     });
 
     function addNewBank() {
