@@ -13,19 +13,19 @@
 </head>
 <body class="bg-[#0F172A] text-white min-h-screen p-6 flex flex-col justify-between select-none antialiased">
 
-  <!-- 상단 컨트롤 헤더 -->
+  <!-- 1. 상단 컨트롤 헤더 -->
   <div class="bg-slate-800/90 rounded-3xl p-6 border border-slate-700/80 shadow-2xl mb-6">
     <div class="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-slate-700">
       <div>
         <h1 class="text-xl font-black text-white flex items-center gap-2">
           ⚙️ 현장 통합 관제 센터
         </h1>
-        <p class="text-xs text-slate-400 mt-1">은행 추가, 창구 배치, 실시간 대기 통계 제어</p>
+        <p class="text-xs text-slate-400 mt-1">은행 및 상담부스 실시간 공석·상담 현황 모니터링</p>
       </div>
 
       <div class="flex items-center gap-2.5">
         <button onclick="downloadCSV()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition">
-          📊 상담 데이터 엑셀(CSV) 다운로드
+          📊 통계 엑셀(CSV) 다운로드
         </button>
         <button onclick="resetAllQueue()" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition">
           ⚠️ 대기열 전체 초기화
@@ -35,7 +35,7 @@
 
     <!-- 은행 & 상담원 관리 그리드 -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
-      <!-- 1. 은행 관리 -->
+      <!-- 은행 관리 -->
       <div class="bg-slate-900/70 p-4 rounded-2xl border border-slate-700/60">
         <span class="text-xs font-bold text-slate-400 block mb-2">🏛️ 등록 은행 관리</span>
         <div id="bank-tags" class="flex flex-wrap gap-1.5 mb-3"></div>
@@ -45,7 +45,7 @@
         </div>
       </div>
 
-      <!-- 2. 창구 관리 -->
+      <!-- 창구 관리 -->
       <div class="bg-slate-900/70 p-4 rounded-2xl border border-slate-700/60">
         <span class="text-xs font-bold text-slate-400 block mb-2">👤 창구(상담원) 추가</span>
         <div class="flex gap-2 mb-2">
@@ -58,15 +58,24 @@
     </div>
   </div>
 
-  <!-- 실시간 은행별 통계 요약 카드 -->
-  <div class="my-auto">
-    <h2 class="text-sm font-bold text-slate-400 text-center mb-4 tracking-wider uppercase">실시간 은행별 상담 현황</h2>
-    <div id="bank-stat-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
-  </div>
+  <!-- 2. 은행별 상담부스 실시간 현황판 (공석 확인) -->
+  <main class="flex-1 my-2">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-bold text-slate-400 tracking-wider uppercase">🏛️ 은행별 상담부스 현황 및 공석 파악</h2>
+      <div class="flex items-center gap-3 text-xs">
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> 빈자리(대기중)</span>
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> 호출중</span>
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> 상담진행중</span>
+      </div>
+    </div>
 
-  <!-- 하단 상태 바 -->
+    <!-- 은행별 섹션 컨테이너 -->
+    <div id="bank-sections" class="space-y-6"></div>
+  </main>
+
+  <!-- 3. 하단 상태 바 -->
   <footer class="mt-6 bg-slate-800/80 border border-slate-700 p-4 rounded-2xl flex justify-between items-center text-xs text-slate-400">
-    <span>전체 누적 대기 인원: <b class="text-amber-400 text-base font-black ml-1" id="total-wait-sum">0명</b></span>
+    <span>전체 실시간 총 대기 인원: <b class="text-amber-400 text-base font-black ml-1" id="total-wait-sum">0명</b></span>
     <span class="flex items-center gap-1.5">
       <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
       실시간 동기화 정상
@@ -75,6 +84,10 @@
 
   <script>
     const socket = io();
+    let currentBanks = [];
+    let currentTellers = [];
+    let currentStatusMap = {};
+    let currentStats = [];
 
     function addNewBank() {
       const input = document.getElementById('input-new-bank');
@@ -117,30 +130,12 @@
     }
 
     socket.on('state_update', (data) => {
-      document.getElementById('total-wait-sum').innerText = `${data.totalWaiting}명`;
+      currentBanks = data.banks;
+      currentTellers = data.tellers;
+      currentStatusMap = data.counterStatus || {};
+      currentStats = data.stats || [];
 
-      // 통계 카드 렌더링
-      const statGrid = document.getElementById('bank-stat-grid');
-      statGrid.innerHTML = '';
-      data.stats.forEach(s => {
-        const card = document.createElement('div');
-        card.className = 'bg-slate-800/90 border border-slate-700/80 rounded-3xl p-5 flex flex-col justify-between shadow-lg';
-        card.innerHTML = `
-          <div class="flex justify-between items-center">
-            <span class="text-sm font-extrabold text-white">${s.bank}</span>
-            <span class="text-[10px] bg-blue-600/30 text-blue-400 px-2 py-0.5 rounded-full font-bold">운영 중</span>
-          </div>
-          <div class="my-4">
-            <p class="text-xs text-slate-400 font-medium">현재 대기</p>
-            <p class="text-3xl font-black text-amber-400 mt-1">${s.waiting}명</p>
-          </div>
-          <div class="border-t border-slate-700/60 pt-2 flex justify-between text-xs text-slate-400">
-            <span>완료 건수</span>
-            <span class="font-bold text-emerald-400">${s.completed}건</span>
-          </div>
-        `;
-        statGrid.appendChild(card);
-      });
+      document.getElementById('total-wait-sum').innerText = `${data.totalWaiting}명`;
 
       // 은행 목록 태그
       const bankTags = document.getElementById('bank-tags');
@@ -159,7 +154,7 @@
         tellerBankSelect.appendChild(opt);
       });
 
-      // 상담원 태그
+      // 창구 태그
       const tellerManageList = document.getElementById('teller-manage-list');
       tellerManageList.innerHTML = '';
       data.tellers.forEach(t => {
@@ -168,7 +163,91 @@
         chip.innerHTML = `${t.name} (${t.bank}) <button onclick="deleteTeller(${t.id})" class="text-rose-400 hover:text-rose-200 font-bold ml-1">×</button>`;
         tellerManageList.appendChild(chip);
       });
+
+      renderBankSections();
     });
+
+    // 은행별 섹션 및 부스 공석 렌더링
+    function renderBankSections() {
+      const container = document.getElementById('bank-sections');
+      container.innerHTML = '';
+
+      currentBanks.forEach(bankName => {
+        const bankTellers = currentTellers.filter(t => t.bank === bankName);
+        const bankStat = currentStats.find(s => s.bank === bankName);
+        const waitingCount = bankStat ? bankStat.waiting : 0;
+        const completedCount = bankStat ? bankStat.completed : 0;
+
+        // 공석(대기중) 수 계산
+        const emptyCount = bankTellers.filter(t => !currentStatusMap[String(t.id)] || !currentStatusMap[String(t.id)].ticketNo).length;
+
+        const section = document.createElement('div');
+        section.className = 'bg-slate-800/60 border border-slate-700/70 rounded-3xl p-5 shadow-lg';
+
+        let boothCardsHtml = '';
+        if (bankTellers.length === 0) {
+          boothCardsHtml = `<div class="col-span-full text-slate-500 text-xs py-3 text-center">등록된 상담 부스가 없습니다. 상단에서 창구를 생성해주세요.</div>`;
+        } else {
+          bankTellers.forEach(t => {
+            const tid = String(t.id);
+            const statusInfo = currentStatusMap[tid];
+            const isServing = statusInfo && statusInfo.ticketNo;
+            const isCalled = statusInfo && statusInfo.status === 'CALLED';
+            const isInProgress = statusInfo && statusInfo.status === 'IN_PROGRESS';
+
+            let cardBg = 'bg-slate-900/80 border-slate-700';
+            let badgeHtml = '<span class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[11px] font-bold px-2 py-0.5 rounded-full">🟢 빈자리 (호출 대기)</span>';
+            let numberHtml = '<span class="text-slate-600 text-3xl font-black">-</span>';
+
+            if (isCalled) {
+              cardBg = 'bg-amber-950/30 border-amber-500/80 shadow-lg shadow-amber-500/10';
+              badgeHtml = '<span class="bg-amber-500 text-slate-950 text-[11px] font-black px-2 py-0.5 rounded-full animate-pulse">📢 호출 중</span>';
+              numberHtml = `<span class="text-amber-400 text-3xl font-black">${statusInfo.ticketNo}번</span>`;
+            } else if (isInProgress) {
+              cardBg = 'bg-blue-950/30 border-blue-500/80 shadow-lg shadow-blue-500/10';
+              badgeHtml = '<span class="bg-blue-600 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">▶ 상담 진행 중</span>';
+              numberHtml = `<span class="text-blue-400 text-3xl font-black">${statusInfo.ticketNo}번</span>`;
+            }
+
+            boothCardsHtml += `
+              <div class="${cardBg} border rounded-2xl p-4 flex flex-col justify-between transition">
+                <div class="flex justify-between items-center mb-2">
+                  <span class="font-bold text-sm text-slate-200">${t.name}</span>
+                  ${badgeHtml}
+                </div>
+                <div class="my-2 text-center">
+                  <p class="text-[10px] text-slate-500 font-bold uppercase">현재 배정</p>
+                  <div class="mt-1">${numberHtml}</div>
+                </div>
+              </div>
+            `;
+          });
+        }
+
+        section.innerHTML = `
+          <div class="flex flex-wrap items-center justify-between gap-3 pb-3 mb-4 border-b border-slate-700/60">
+            <div class="flex items-center gap-3">
+              <span class="text-base font-extrabold text-white flex items-center gap-2">
+                🏛️ ${bankName}
+              </span>
+              <span class="bg-emerald-500/20 text-emerald-300 text-xs font-bold px-2.5 py-1 rounded-lg border border-emerald-500/30">
+                공석 부스: ${emptyCount} / ${bankTellers.length}개
+              </span>
+            </div>
+            <div class="flex items-center gap-3 text-xs">
+              <span class="text-slate-400">대기 <b class="text-amber-400 font-bold">${waitingCount}명</b></span>
+              <span class="text-slate-600">|</span>
+              <span class="text-slate-400">완료 <b class="text-emerald-400 font-bold">${completedCount}건</b></span>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+            ${boothCardsHtml}
+          </div>
+        `;
+
+        container.appendChild(section);
+      });
+    }
   </script>
 </body>
 </html>
