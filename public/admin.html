@@ -23,8 +23,8 @@
       </div>
 
       <div class="flex items-center gap-2.5">
-        <button onclick="testVoice()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5">
-          🔊 음성 안내 테스트 듣기
+        <button onclick="testLocalAudio()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5">
+          🔊 안내 음성 테스트 (내부 파일)
         </button>
         <button onclick="downloadCSV()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition">
           📊 통계 엑셀(CSV) 다운로드
@@ -53,7 +53,7 @@
             + 창구 1개 자동 생성
           </button>
         </div>
-        <p class="text-[11px] text-slate-500">이름을 적을 필요 없이 선택한 은행의 다음 창구 번호로 자동 생성됩니다.</p>
+        <p class="text-[11px] text-slate-500">선택한 은행의 다음 창구 번호로 자동 생성됩니다.</p>
       </div>
     </div>
   </div>
@@ -85,57 +85,22 @@
     let currentTellers = [];
     let currentStatusMap = {};
     let currentStats = [];
-    let audioCtx = null;
 
-    if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(e => {});
-
-    function unlockAudio() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-    }
-    document.addEventListener('touchstart', unlockAudio, { once: true });
-    document.addEventListener('click', unlockAudio, { once: true });
-
-    // 🔊 [해결] 기기 TTS를 거치지 않는 순수 MP3 오디오 재생
-    function playAudioGuide(text) {
-      unlockAudio();
-
-      // 1. 딩동 차임벨
-      try {
-        const now = audioCtx.currentTime;
-        const osc1 = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(659.25, now);
-        osc1.frequency.setValueAtTime(523.25, now + 0.25);
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.55);
-        osc1.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc1.start(now);
-        osc1.stop(now + 0.55);
-      } catch(e) {}
-
-      // 2. 오픈 MP3 음성 스트림 즉시 재생 (갤럭시/아이폰 100% 구동)
-      const audioUrl = `https://tts.baidu.com/text2audio?lan=kor&ie=UTF-8&spd=4&text=${encodeURIComponent(text)}`;
-      const audio = new Audio(audioUrl);
+    // 🔊 [100% 보장] 내부 MP3 오디오 재생
+    function playLocalAudio() {
+      const audio = new Audio('/call.mp3');
       audio.volume = 1.0;
-
-      setTimeout(() => {
-        audio.play().catch(e => {
-          // 백업 음성 엔진
-          const backupAudio = new Audio(`https://api.soundoftext.com/sounds/${encodeURIComponent(text)}`);
-          backupAudio.play().catch(() => {});
-        });
-      }, 350);
+      audio.play().catch(e => {
+        alert('화면을 한 번 터치한 후 다시 눌러주세요.');
+      });
     }
 
-    function testVoice() {
-      playAudioGuide("105번 고객님 우리은행 1번 창구로 오시기 바랍니다.");
+    function testLocalAudio() {
+      playLocalAudio();
     }
 
     socket.on('customer_called', (data) => {
-      playAudioGuide(`${data.ticketNo}번 고객님 ${data.counterName}로 오시기 바랍니다.`);
+      playLocalAudio();
     });
 
     function addNewBank() {
