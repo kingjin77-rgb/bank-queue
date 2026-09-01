@@ -33,7 +33,29 @@
     let audioUnlocked = false;
     let audioCtx = null;
 
-    // 모바일 브라우저 오디오 & 음성 잠금 해제
+    function toHanjaNumber(num) {
+      const digits = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
+      num = Number(num);
+      if (isNaN(num) || num === 0) return num;
+      if (num < 10) return digits[num];
+      if (num < 100) {
+        const ten = Math.floor(num / 10);
+        const one = num % 10;
+        return (ten === 1 ? '십' : digits[ten] + '십') + (one > 0 ? digits[one] : '');
+      }
+      if (num < 1000) {
+        const hundred = Math.floor(num / 100);
+        const rest = num % 100;
+        const ten = Math.floor(rest / 10);
+        const one = rest % 10;
+        let res = (hundred === 1 ? '백' : digits[hundred] + '백');
+        if (ten > 0) res += (ten === 1 ? '십' : digits[ten] + '십');
+        if (one > 0) res += digits[one];
+        return res;
+      }
+      return num;
+    }
+
     function unlockAudio() {
       if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -48,13 +70,11 @@
       }
     }
 
-    // 맑은 은행/공항 2단 차임벨 ("딩~동~")
     function playDingDong(onEnded) {
       unlockAudio();
       try {
         const now = audioCtx.currentTime;
 
-        // 1음 ("딩" - 높은 솔 / G5: 784Hz)
         const osc1 = audioCtx.createOscillator();
         const gain1 = audioCtx.createGain();
         osc1.type = 'sine';
@@ -66,7 +86,6 @@
         osc1.start(now);
         osc1.stop(now + 0.5);
 
-        // 2음 ("동" - 중간 도 / C5: 523.25Hz)
         const osc2 = audioCtx.createOscillator();
         const gain2 = audioCtx.createGain();
         osc2.type = 'sine';
@@ -78,21 +97,18 @@
         osc2.start(now + 0.28);
         osc2.stop(now + 0.9);
 
-        if (onEnded) {
-          setTimeout(onEnded, 700);
-        }
+        if (onEnded) setTimeout(onEnded, 700);
       } catch (e) {
         if (onEnded) onEnded();
       }
     }
 
-    // 한국어 음성 안내 (TTS)
     function speakText(text) {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const msg = new SpeechSynthesisUtterance(text);
         msg.lang = 'ko-KR';
-        msg.rate = 0.95;
+        msg.rate = 0.92;
         msg.volume = 1.0;
         window.speechSynthesis.speak(msg);
       }
@@ -255,6 +271,8 @@
 
       const ticket = JSON.parse(activeData);
       const myNumber = ticket.no;
+      const myNumberHanja = toHanjaNumber(myNumber);
+
       const myIndex = data.waiting.indexOf(myNumber);
       const waitCountEl = document.getElementById('waitAheadCount');
 
@@ -273,32 +291,31 @@
           }
         }
 
-        // 3번째 전 알림
         if (aheadCount === 2 && !preAlert3rdSent) {
           preAlert3rdSent = true;
           playDingDong(() => {
-            speakText(`${myNumber}번 고객님, 대기 순서 3번째 전입니다. 창구 근처로 이동해 주세요.`);
+            speakText(`${myNumberHanja} 번 고객님, 대기 순서 3번째 전입니다. 창구 근처로 이동해 주세요.`);
           });
           if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
           sendPushNotification(`[${bank}] 대기 3번째 전 안내`, `${myNumber}번 고객님, 창구 근처로 이동해 주세요.`);
         }
 
-        // 바로 직전(다음) 순서 알림
         if (aheadCount === 0 && !preAlertNextSent) {
           preAlertNextSent = true;
           playDingDong(() => {
-            speakText(`곧 ${myNumber}번 고객님 상담 순번입니다. 창구 바로 앞에서 대기해 주세요.`);
+            speakText(`곧 ${myNumberHanja} 번 고객님 상담 순번입니다. 창구 바로 앞에서 대기해 주세요.`);
           });
           if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
           sendPushNotification(`[${bank}] 곧 고객님 상담 순번입니다!`, `${myNumber}번 고객님, 창구 바로 앞에서 대기해주세요.`);
         }
       }
 
-      // 창구에서 호출했을 때
       const calledDesk = data.desks.find(d => d.current === myNumber);
       if (calledDesk) {
+        const deskNameHanja = calledDesk.name.replace(/(\d+)/g, (m, p) => toHanjaNumber(p) + ' ');
+
         playDingDong(() => {
-          speakText(`${bank} ${calledDesk.name}, ${myNumber}번 고객님 창구로 와주시기 바랍니다.`);
+          speakText(`${bank} ${deskNameHanja}, ${myNumberHanja} 번 고객님 창구로 와주시기 바랍니다.`);
         });
         if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500]);
         sendPushNotification(`[${bank}] 창구 방문 안내`, `${myNumber}번 고객님, ${bank} ${calledDesk.name}로 오십시오!`);

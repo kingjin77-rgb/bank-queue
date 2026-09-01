@@ -72,6 +72,29 @@
     let state = {};
     let audioCtx = null;
 
+    function toHanjaNumber(num) {
+      const digits = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
+      num = Number(num);
+      if (isNaN(num) || num === 0) return num;
+      if (num < 10) return digits[num];
+      if (num < 100) {
+        const ten = Math.floor(num / 10);
+        const one = num % 10;
+        return (ten === 1 ? '십' : digits[ten] + '십') + (one > 0 ? digits[one] : '');
+      }
+      if (num < 1000) {
+        const hundred = Math.floor(num / 100);
+        const rest = num % 100;
+        const ten = Math.floor(rest / 10);
+        const one = rest % 10;
+        let res = (hundred === 1 ? '백' : digits[hundred] + '백');
+        if (ten > 0) res += (ten === 1 ? '십' : digits[ten] + '십');
+        if (one > 0) res += digits[one];
+        return res;
+      }
+      return num;
+    }
+
     function unlockAudio() {
       if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -118,7 +141,7 @@
         window.speechSynthesis.cancel();
         const msg = new SpeechSynthesisUtterance(text);
         msg.lang = 'ko-KR';
-        msg.rate = 0.95;
+        msg.rate = 0.92;
         window.speechSynthesis.speak(msg);
       }
     }
@@ -134,14 +157,17 @@
     });
 
     socket.on('voice_call', ({ bank, deskName, ticketNo }) => {
+      const deskNameHanja = deskName.replace(/(\d+)/g, (m, p) => toHanjaNumber(p) + ' ');
+      const ticketHanja = toHanjaNumber(ticketNo);
+
       playDingDong(() => {
-        speak(`${bank} ${deskName}, ${ticketNo}번 고객님 창구로 와주시기 바랍니다.`);
+        speak(`${bank} ${deskNameHanja}, ${ticketHanja} 번 고객님 창구로 와주시기 바랍니다.`);
       });
     });
 
     function testVoice() {
       playDingDong(() => {
-        speak("음성 안내 시스템이 정상 작동 중입니다.");
+        speak("우리은행 일 번 창구, 일 번 고객님 창구로 와주시기 바랍니다.");
       });
     }
 

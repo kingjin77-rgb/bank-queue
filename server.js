@@ -9,7 +9,7 @@ const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 4개 은행 및 독립 창구(책상) 데이터
+// 4개 금융기관 및 창구별 독립 데이터 구조
 const queues = {
   "우리은행": {
     nextNumber: 1,
@@ -51,7 +51,7 @@ io.on('connection', (socket) => {
     socket.emit('init_state', queues);
   });
 
-  // 발권
+  // 발권 (고객 자동 발권 & 관리자 대리 발권)
   socket.on('issue_ticket', ({ bank }, cb) => {
     if (!queues[bank]) return cb && cb({ success: false });
     const ticketNo = queues[bank].nextNumber++;
@@ -71,7 +71,7 @@ io.on('connection', (socket) => {
     if (cb) cb({ success: true });
   });
 
-  // 미루기
+  // 순번 미루기
   socket.on('delay_ticket', ({ bank, ticketNo }, cb) => {
     if (!queues[bank]) return cb && cb({ success: false });
     const idx = queues[bank].waiting.indexOf(ticketNo);
@@ -103,7 +103,7 @@ io.on('connection', (socket) => {
     if (cb) cb({ success: true, ticketNo: nextNum });
   });
 
-  // 창구 상담 상태 변경
+  // 창구 상태 변경
   socket.on('update_desk_status', ({ bank, deskId, status }, cb) => {
     if (!queues[bank]) return cb && cb({ success: false });
     const desk = queues[bank].desks.find(d => d.id === Number(deskId));
@@ -118,7 +118,7 @@ io.on('connection', (socket) => {
     if (cb) cb({ success: true });
   });
 
-  // 관리자: 창구 인원 증감
+  // 관리자: 창구(책상) 인원 증감 (+1 / -1)
   socket.on('adjust_desk_count', ({ bank, change }, cb) => {
     if (!queues[bank]) return cb && cb({ success: false });
     const currentDesks = queues[bank].desks;
@@ -137,7 +137,7 @@ io.on('connection', (socket) => {
     if (cb) cb({ success: true });
   });
 
-  // 관리자: 은행 추가
+  // 관리자: 신규 은행 추가
   socket.on('add_bank', ({ newBank }, cb) => {
     if (!newBank || queues[newBank]) return cb && cb({ success: false, message: '중복되거나 잘못된 이름입니다.' });
     queues[newBank] = {
@@ -149,7 +149,7 @@ io.on('connection', (socket) => {
     if (cb) cb({ success: true });
   });
 
-  // 관리자: 개별 리셋
+  // 관리자: 개별 은행 리셋
   socket.on('reset_queue', ({ bank }, cb) => {
     if (!queues[bank]) return cb && cb({ success: false });
     queues[bank].nextNumber = 1;
@@ -159,7 +159,7 @@ io.on('connection', (socket) => {
     if (cb) cb({ success: true });
   });
 
-  // 관리자: 전체 리셋
+  // 관리자: 전체 은행 일괄 리셋
   socket.on('reset_all_queues', (cb) => {
     Object.keys(queues).forEach(b => {
       queues[b].nextNumber = 1;
