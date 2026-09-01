@@ -14,7 +14,12 @@
 </head>
 <body class="min-h-screen flex flex-col justify-center items-center p-4">
   <div class="w-full max-w-sm">
-    <div id="app" class="toss-card p-6 text-center"></div>
+    <div id="app" class="toss-card p-6 text-center">
+      <div class="py-12">
+        <div class="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p class="text-sm font-bold text-gray-600">번호표를 발권하고 있습니다...</p>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -23,17 +28,15 @@
     const rawBank = params.get('bank');
     const bank = rawBank ? decodeURIComponent(rawBank).trim() : null;
 
-    let preAlert3rdSent = false;  // 3번째 순서 알림 여부 플래그
-    let preAlertNextSent = false; // 바로 다음 순서 알림 여부 플래그
+    let preAlert3rdSent = false;
+    let preAlertNextSent = false;
 
-    // 브라우저 알림 권한 요청
     function requestNotificationPermission() {
       if ("Notification" in window && Notification.permission !== "granted") {
         Notification.requestPermission();
       }
     }
 
-    // 소리(비프음) 및 진동 발생 함수
     function triggerSoundAndVibrate(type = 'call') {
       if (navigator.vibrate) {
         if (type === 'call') navigator.vibrate([500, 200, 500, 200, 500]);
@@ -47,10 +50,10 @@
         const gain = audioCtx.createGain();
         osc.type = 'sine';
 
-        let freq = 587.33; // 3번째
+        let freq = 587.33;
         let dur = 0.4;
-        if (type === 'next') { freq = 740.00; dur = 0.6; } // 직전
-        if (type === 'call') { freq = 880.00; dur = 0.8; } // 호출
+        if (type === 'next') { freq = 740.00; dur = 0.6; }
+        if (type === 'call') { freq = 880.00; dur = 0.8; }
 
         osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
         gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
@@ -63,7 +66,6 @@
       }
     }
 
-    // 백그라운드 푸시 알림
     function sendPushNotification(title, body) {
       if ("Notification" in window && Notification.permission === "granted") {
         new Notification(title, {
@@ -74,8 +76,40 @@
     }
 
     window.addEventListener('DOMContentLoaded', () => {
-      render();
+      // 은행 정보가 있으면 접속 즉시 자동 발권 로직 실행
+      if (bank) {
+        autoProcessTicket();
+      } else {
+        render();
+      }
     });
+
+    // 접속 시 자동 발권 처리 함수
+    function autoProcessTicket() {
+      requestNotificationPermission();
+      const activeData = localStorage.getItem(`ticket_${bank}`);
+      const isCompleted = localStorage.getItem(`ticket_completed_${bank}`);
+
+      // 이미 발권된 상태거나 방금 완료된 상태면 재발권하지 않고 화면만 표시
+      if (activeData || isCompleted) {
+        render();
+        return;
+      }
+
+      // 스마트태그 접촉 시 버튼 누름 없이 즉시 1회 자동 발권
+      socket.emit('issue_ticket', { bank }, (res) => {
+        if (res.success) {
+          localStorage.removeItem(`ticket_completed_${bank}`);
+          localStorage.setItem(`ticket_${bank}`, JSON.stringify({ no: res.ticketNo, delay: 0 }));
+          preAlert3rdSent = false;
+          preAlertNextSent = false;
+          render();
+        } else {
+          alert('발권 오류: ' + (res.message || '다시 시도해주세요.'));
+          render();
+        }
+      });
+    }
 
     function render() {
       const app = document.getElementById('app');
@@ -83,7 +117,7 @@
       if (!bank) {
         app.innerHTML = `
           <h2 class="text-2xl font-bold mb-2">상담 은행 선택</h2>
-          <p class="text-sm text-gray-500 mb-6">대기표를 발급받을 은행을 선택해주세요.</p>
+          <p class="text-sm text-gray-500 mb-6">스마트태그 또는 은행을 선택해주세요.</p>
           <div class="space-y-3">
             <button onclick="selectBank('우리은행')" class="w-full py-4 bg-blue-50 text-blue-600 font-bold rounded-2xl text-lg hover:bg-blue-100 transition">우리은행</button>
             <button onclick="selectBank('신한은행')" class="w-full py-4 bg-blue-50 text-blue-600 font-bold rounded-2xl text-lg hover:bg-blue-100 transition">신한은행</button>
@@ -97,7 +131,7 @@
       const activeData = localStorage.getItem(`ticket_${bank}`);
       const isCompleted = localStorage.getItem(`ticket_completed_${bank}`);
 
-      // 상담 완료 안내 화면
+      // 상담 완료 화면
       if (isCompleted) {
         app.innerHTML = `
           <div class="py-4">
@@ -123,18 +157,8 @@
         return;
       }
 
-      // 발권 전 화면
-      if (!activeData) {
-        app.innerHTML = `
-          <span class="inline-block px-3 py-1 bg-blue-50 text-blue-600 font-bold rounded-full text-xs mb-3">${bank}</span>
-          <h1 class="text-2xl font-bold mb-2">스마트 번호표 발급</h1>
-          <p class="text-sm text-gray-500 mb-8">화면을 닫아도 순서가 되면 알림을 보내드립니다.</p>
-          <button onclick="issueTicket()" class="w-full py-5 bg-blue-600 active:bg-blue-700 text-white font-bold text-xl rounded-2xl shadow-lg transition">
-            번호표 발급받기
-          </button>
-        `;
-      } else {
-        // 발권 완료 후 대기 화면
+      // 발권 완료 상태 (자동 발권 직후 이 화면이 바로 노출됨)
+      if (activeData) {
         const ticket = JSON.parse(activeData);
         app.innerHTML = `
           <span class="inline-block px-3 py-1 bg-blue-50 text-blue-600 font-bold rounded-full text-xs mb-3">${bank}</span>
@@ -158,21 +182,6 @@
 
     function selectBank(name) {
       window.location.search = `?bank=${encodeURIComponent(name)}`;
-    }
-
-    function issueTicket() {
-      requestNotificationPermission();
-      socket.emit('issue_ticket', { bank }, (res) => {
-        if (res.success) {
-          localStorage.removeItem(`ticket_completed_${bank}`);
-          localStorage.setItem(`ticket_${bank}`, JSON.stringify({ no: res.ticketNo, delay: 0 }));
-          preAlert3rdSent = false;
-          preAlertNextSent = false;
-          render();
-        } else {
-          alert('발권 오류');
-        }
-      });
     }
 
     function delayTicket(ticketNo) {
@@ -202,10 +211,9 @@
 
     function restart() {
       localStorage.removeItem(`ticket_completed_${bank}`);
-      render();
+      autoProcessTicket();
     }
 
-    // 대기열 및 호출 실시간 수신 핸들러
     socket.on('queue_update', ({ bank: b, data }) => {
       if (b !== bank) return;
 
@@ -221,7 +229,6 @@
       if (myIndex > -1) {
         const aheadCount = myIndex;
 
-        // 1. 순번 상태별 텍스트 업데이트
         if (waitCountEl) {
           if (aheadCount === 0) {
             waitCountEl.innerText = '🔔 곧 고객님 순서입니다! 창구 앞으로 이동해주세요.';
@@ -235,15 +242,13 @@
           }
         }
 
-        // 2. 알림 1단계: 3번째 순서 진입 시 (aheadCount === 2)
         if (aheadCount === 2 && !preAlert3rdSent) {
           preAlert3rdSent = true;
           triggerSoundAndVibrate('3rd');
           sendPushNotification(`[${bank}] 대기 3번째 전 안내`, `${myNumber}번 고객님, 대기 순서가 3번째 전입니다. 창구 근처로 이동해 주세요.`);
-          alert(`[${bank}] ${myNumber}번 고객님! 대기 순서 3번째 전입니다. 슬슬 창구 근처로 이동해주세요.`);
+          alert(`[${bank}] ${myNumber}번 고객님! 대기 순서 3번째 전입니다. 창구 근처로 이동해주세요.`);
         }
 
-        // 3. 알림 2단계: 바로 직전 다음 순서 진입 시 (aheadCount === 0)
         if (aheadCount === 0 && !preAlertNextSent) {
           preAlertNextSent = true;
           triggerSoundAndVibrate('next');
@@ -252,7 +257,6 @@
         }
       }
 
-      // 4. 알림 3단계: 상담사가 내 번호를 호출했을 때
       const calledDesk = data.desks.find(d => d.current === myNumber);
       if (calledDesk) {
         triggerSoundAndVibrate('call');
@@ -271,7 +275,6 @@
         `;
       }
 
-      // 5. 상담 완료 처리 (대기열 및 진행 창구에서 완전히 소진된 경우)
       if (myIndex === -1 && !calledDesk) {
         const isStillServing = data.desks.some(d => d.current === myNumber);
         if (!isStillServing && localStorage.getItem(`ticket_${bank}`)) {
