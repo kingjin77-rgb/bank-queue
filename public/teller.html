@@ -83,6 +83,35 @@
       }
     }
 
+    function convertNumberToKorean(numStr) {
+      const digits = {'0': '영', '1': '일', '2': '이', '3': '삼', '4': '사', '5': '오', '6': '육', '7': '칠', '8': '팔', '9': '구'};
+      const num = parseInt(numStr);
+      if (isNaN(num)) return numStr;
+
+      if (num < 10) {
+        return digits[num] || numStr;
+      } else if (num < 100) {
+        let tens = Math.floor(num / 10);
+        let units = num % 10;
+        let res = '';
+        if (tens > 0) res += (tens > 1 ? digits[tens] : '') + '십';
+        if (units > 0) res += digits[units];
+        return res;
+      } else if (num < 1000) {
+        let hundreds = Math.floor(num / 100);
+        let remainder = num % 100;
+        let res = (hundreds > 1 ? digits[hundreds] : '') + '백';
+        if (remainder > 0) {
+          let tens = Math.floor(remainder / 10);
+          let units = remainder % 10;
+          if (tens > 0) res += (tens > 1 ? digits[tens] : '') + '십';
+          if (units > 0) res += digits[units];
+        }
+        return res;
+      }
+      return numStr;
+    }
+
     function playChime() {
       return new Promise((resolve) => {
         if (isMuted) { resolve(); return; }
@@ -112,10 +141,13 @@
       playChime().then(() => {
         if ('speechSynthesis' in window) {
           window.speechSynthesis.cancel();
-          const text = `${ticketNo}번 고객님, ${bank} ${counterName}로 오시기 바랍니다.`;
+          const koreanTicket = convertNumberToKorean(String(ticketNo));
+          const cleanCounter = counterName.replace(/[^0-9]/g, '');
+          const koreanCounter = cleanCounter ? convertNumberToKorean(cleanCounter) : '';
+          const text = `${koreanTicket}번 고객님, ${bank} ${koreanCounter ? koreanCounter + '번 ' : ''}창구로 오시기 바랍니다.`;
           const utterance = new SpeechSynthesisUtterance(text);
           utterance.lang = 'ko-KR';
-          utterance.rate = 0.95;
+          utterance.rate = 0.90;
           window.speechSynthesis.speak(utterance);
         }
       });

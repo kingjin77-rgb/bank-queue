@@ -13,7 +13,6 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 4개 기관 초기 설정
 let banks = ['우리은행', '신한은행', '국민은행', '푸본현대생명'];
 let counters = [
   { id: 'C1', name: '우리은행 1번 창구', bank: '우리은행' },
