@@ -15,7 +15,6 @@
 <body class="min-h-screen p-4 sm:p-6">
   <div class="max-w-7xl mx-auto space-y-6">
     
-    <!-- 상단 헤더 & 컨트롤 -->
     <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
       <div>
         <h1 class="text-2xl font-black text-gray-900 flex items-center gap-2">
@@ -33,7 +32,7 @@
       </div>
     </div>
 
-    <!-- 1. 현장 대리 발권 (스마트폰 미소지자용) -->
+    <!-- 1. 현장 대리 발권 데스크 -->
     <div class="toss-card p-6 border border-gray-100">
       <div class="mb-3">
         <h2 class="text-lg font-bold text-gray-800">📋 현장 대리 발권 데스크</h2>
@@ -42,12 +41,10 @@
       <div id="proxyGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
     </div>
 
-    <!-- 2. 은행별 실시간 모니터 (창구별 책상 박스 + 실시간 대기자 리스트) -->
-    <div id="bankContainer" class="space-y-6">
-      <!-- 동적 렌더링 -->
-    </div>
+    <!-- 2. 은행별 실시간 모니터 (창구별 책상 박스 + 대기자 리스트) -->
+    <div id="bankContainer" class="space-y-6"></div>
 
-    <!-- 3. 추가 관리 설정 (은행 추가 및 개별 리셋) -->
+    <!-- 3. 추가 설정 (은행 추가 및 개별 리셋) -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div class="toss-card p-6 border border-gray-100">
         <h3 class="font-bold text-gray-800 mb-1">➕ 신규 은행 창구 추가</h3>
@@ -105,7 +102,6 @@
     function render() {
       const banks = Object.keys(state);
 
-      // 1. 대리 발권 버튼
       document.getElementById('proxyGrid').innerHTML = banks.map(b => `
         <button onclick="proxyIssue('${b}')" class="py-4 px-3 bg-blue-50/70 hover:bg-blue-100 active:scale-95 text-blue-700 font-bold rounded-2xl border border-blue-100 text-sm flex flex-col items-center justify-center gap-1 transition">
           <span class="text-base">${b}</span>
@@ -113,7 +109,6 @@
         </button>
       `).join('');
 
-      // 2. 은행별 섹션 렌더링
       const container = document.getElementById('bankContainer');
       container.innerHTML = banks.map(b => {
         const item = state[b];
@@ -121,7 +116,6 @@
 
         return `
           <div class="toss-card p-6 border border-gray-100">
-            <!-- 은행 헤더 및 창구 증감 버튼 -->
             <div class="flex flex-col sm:flex-row justify-between sm:items-center pb-4 mb-4 border-b border-gray-100 gap-3">
               <div class="flex items-center gap-3">
                 <span class="text-xl font-black text-gray-900">${b}</span>
@@ -139,7 +133,6 @@
               </div>
             </div>
 
-            <!-- 상담사별 책상 박스들 (Grid) -->
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-5">
               ${item.desks.map(desk => {
                 let badgeClass = 'bg-gray-100 text-gray-600';
@@ -160,7 +153,6 @@
               }).join('')}
             </div>
 
-            <!-- 실시간 대기 고객 리스트 -->
             <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
               <div class="text-xs font-bold text-gray-500 mb-2 flex items-center gap-1">
                 <span>📋 실시간 대기 고객 명단</span>
@@ -178,7 +170,6 @@
         `;
       }).join('');
 
-      // 3. 리셋 셀렉트
       document.getElementById('resetBankSelect').innerHTML = banks.map(b => `<option value="${b}">${b}</option>`).join('');
     }
 

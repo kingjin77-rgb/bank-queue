@@ -61,9 +61,7 @@
         gain.connect(audioCtx.destination);
         osc.start();
         osc.stop(audioCtx.currentTime + dur);
-      } catch (e) {
-        console.log("Audio play error", e);
-      }
+      } catch (e) {}
     }
 
     function sendPushNotification(title, body) {
@@ -76,7 +74,6 @@
     }
 
     window.addEventListener('DOMContentLoaded', () => {
-      // 은행 정보가 있으면 접속 즉시 자동 발권 로직 실행
       if (bank) {
         autoProcessTicket();
       } else {
@@ -84,22 +81,18 @@
       }
     });
 
-    // 접속 시 자동 발권 처리 함수
     function autoProcessTicket() {
       requestNotificationPermission();
       const activeData = localStorage.getItem(`ticket_${bank}`);
-      const isCompleted = localStorage.getItem(`ticket_completed_${bank}`);
 
-      // 이미 발권된 상태거나 방금 완료된 상태면 재발권하지 않고 화면만 표시
-      if (activeData || isCompleted) {
+      if (activeData) {
         render();
         return;
       }
 
-      // 스마트태그 접촉 시 버튼 누름 없이 즉시 1회 자동 발권
+      localStorage.removeItem(`ticket_completed_${bank}`);
       socket.emit('issue_ticket', { bank }, (res) => {
         if (res.success) {
-          localStorage.removeItem(`ticket_completed_${bank}`);
           localStorage.setItem(`ticket_${bank}`, JSON.stringify({ no: res.ticketNo, delay: 0 }));
           preAlert3rdSent = false;
           preAlertNextSent = false;
@@ -131,7 +124,6 @@
       const activeData = localStorage.getItem(`ticket_${bank}`);
       const isCompleted = localStorage.getItem(`ticket_completed_${bank}`);
 
-      // 상담 완료 화면
       if (isCompleted) {
         app.innerHTML = `
           <div class="py-4">
@@ -149,15 +141,14 @@
               </a>
             </div>
 
-            <button onclick="restart()" class="w-full py-3 bg-gray-100 active:bg-gray-200 text-gray-700 font-bold rounded-xl text-sm">
-              처음 화면으로
+            <button onclick="reIssue()" class="w-full py-3 bg-blue-50 text-blue-600 font-bold rounded-xl text-sm">
+              번호표 다시 발권하기
             </button>
           </div>
         `;
         return;
       }
 
-      // 발권 완료 상태 (자동 발권 직후 이 화면이 바로 노출됨)
       if (activeData) {
         const ticket = JSON.parse(activeData);
         app.innerHTML = `
@@ -201,15 +192,17 @@
     }
 
     function cancelTicket(ticketNo) {
-      if (confirm('대기표를 즉시 취소하시겠습니까?')) {
+      if (confirm('대기표를 취소하시겠습니까?')) {
         socket.emit('cancel_ticket', { bank, ticketNo }, () => {
           localStorage.removeItem(`ticket_${bank}`);
-          render();
+          localStorage.removeItem(`ticket_completed_${bank}`);
+          alert('대기표가 성공적으로 취소되었습니다.');
+          window.location.href = window.location.pathname;
         });
       }
     }
 
-    function restart() {
+    function reIssue() {
       localStorage.removeItem(`ticket_completed_${bank}`);
       autoProcessTicket();
     }
@@ -222,13 +215,11 @@
 
       const ticket = JSON.parse(activeData);
       const myNumber = ticket.no;
-
       const myIndex = data.waiting.indexOf(myNumber);
       const waitCountEl = document.getElementById('waitAheadCount');
 
       if (myIndex > -1) {
         const aheadCount = myIndex;
-
         if (waitCountEl) {
           if (aheadCount === 0) {
             waitCountEl.innerText = '🔔 곧 고객님 순서입니다! 창구 앞으로 이동해주세요.';
@@ -245,14 +236,14 @@
         if (aheadCount === 2 && !preAlert3rdSent) {
           preAlert3rdSent = true;
           triggerSoundAndVibrate('3rd');
-          sendPushNotification(`[${bank}] 대기 3번째 전 안내`, `${myNumber}번 고객님, 대기 순서가 3번째 전입니다. 창구 근처로 이동해 주세요.`);
+          sendPushNotification(`[${bank}] 대기 3번째 전 안내`, `${myNumber}번 고객님, 대기 순서가 3번째 전입니다.`);
           alert(`[${bank}] ${myNumber}번 고객님! 대기 순서 3번째 전입니다. 창구 근처로 이동해주세요.`);
         }
 
         if (aheadCount === 0 && !preAlertNextSent) {
           preAlertNextSent = true;
           triggerSoundAndVibrate('next');
-          sendPushNotification(`[${bank}] 곧 고객님 상담 순번입니다!`, `${myNumber}번 고객님, 바로 다음 순서입니다. 창구 바로 앞에서 대기해주세요.`);
+          sendPushNotification(`[${bank}] 곧 고객님 상담 순번입니다!`, `${myNumber}번 고객님, 바로 다음 순서입니다.`);
           alert(`[${bank}] ${myNumber}번 고객님! 곧 고객님 상담 순번입니다. 창구 바로 앞에서 대기해주세요.`);
         }
       }
