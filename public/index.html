@@ -1,375 +1,119 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>스마트 은행 대기 시스템</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
-    <style>
-        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
-        body { font-family: 'Pretendard', sans-serif; background-color: #f4f5f7; color: #191f28; }
-        .toss-card { background: #ffffff; border-radius: 24px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04); }
-        .toss-btn { transition: all 0.2s ease; }
-        .toss-btn:active { transform: scale(0.98); }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>스마트 대기표</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    body { font-family: 'Pretendard', sans-serif; background-color: #f2f4f6; color: #191f28; }
+  </style>
 </head>
-<body class="min-h-screen flex flex-col justify-between">
-    <!-- Header -->
-    <header class="w-full bg-white border-b border-gray-100 py-4 px-6 sticky top-0 z-50">
-        <div class="max-w-6xl mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-bold tracking-tight text-blue-600 flex items-center gap-2">
-                🏦 스마트 대기 솔루션
-            </h1>
-            <div id="nav-status" class="text-sm font-medium text-gray-500"></div>
-        </div>
-    </header>
+<body class="min-h-screen flex flex-col justify-center items-center p-4">
+  <div class="w-full max-w-sm bg-white rounded-3xl p-6 shadow-sm border border-gray-100 text-center" id="card">
+    <!-- 동적 렌더링 -->
+  </div>
 
-    <!-- Main Container -->
-    <main class="max-w-4xl mx-auto w-full p-4 sm:p-6 my-auto flex-1 flex flex-col justify-center">
-        <div id="app-view" class="w-full">
-            <!-- 동적 렌더링 영역 -->
-        </div>
-    </main>
+  <script>
+    const socket = io();
+    
+    // URL에서 은행명 정확히 추출 및 한글 디코딩
+    const params = new URLSearchParams(window.location.search);
+    const rawBank = params.get('bank');
+    const bank = rawBank ? decodeURIComponent(rawBank).trim() : null;
 
-    <!-- Footer -->
-    <footer class="w-full text-center py-6 text-xs text-gray-400">
-        &copy; Smart Bank Queue System. All rights reserved.
-    </footer>
+    function render() {
+      const card = document.getElementById('card');
 
-    <script>
-        const socket = io();
-        let currentUser = null; 
-        const banks = ["우리은행", "신한은행", "국민은행", "푸본현대생명"];
+      // 파라미터가 없을 때는 4개 은행 선택 버튼 노출
+      if (!bank) {
+        card.innerHTML = `
+          <h1 class="text-2xl font-bold mb-3">은행을 선택해주세요</h1>
+          <p class="text-sm text-gray-500 mb-6">대기표를 발급받을 창구를 선택하세요.</p>
+          <div class="space-y-3">
+            <button onclick="goToBank('우리은행')" class="w-full py-4 bg-blue-50 text-blue-600 font-bold rounded-2xl text-lg hover:bg-blue-100">우리은행</button>
+            <button onclick="goToBank('신한은행')" class="w-full py-4 bg-blue-50 text-blue-600 font-bold rounded-2xl text-lg hover:bg-blue-100">신한은행</button>
+            <button onclick="goToBank('국민은행')" class="w-full py-4 bg-blue-50 text-blue-600 font-bold rounded-2xl text-lg hover:bg-blue-100">국민은행</button>
+            <button onclick="goToBank('푸본현대생명')" class="w-full py-4 bg-blue-50 text-blue-600 font-bold rounded-2xl text-lg hover:bg-blue-100">푸본현대생명</button>
+          </div>
+        `;
+        return;
+      }
 
-        window.addEventListener('DOMContentLoaded', () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            const customerBank = urlParams.get('bank');
-            
-            // 전단지 QR 링크로 접속한 경우 바로 고객용 화면 출력
-            if (customerBank) {
-                renderCustomerView(decodeURIComponent(customerBank));
-            } else {
-                renderHome();
-            }
+      // 해당 은행의 발권 상태 확인
+      const saved = localStorage.getItem(`ticket_${bank}`);
+
+      if (!saved) {
+        card.innerHTML = `
+          <div class="inline-block px-3 py-1 bg-blue-50 text-blue-600 font-bold rounded-full text-xs mb-3">${bank}</div>
+          <h1 class="text-2xl font-bold mb-2">모바일 번호표 발급</h1>
+          <p class="text-sm text-gray-500 mb-6">스마트폰으로 간편하게 순서를 대기하세요.</p>
+          <button onclick="issue()" class="w-full py-4 bg-blue-600 active:bg-blue-700 text-white font-bold rounded-2xl text-lg shadow-md">
+            번호표 발급받기
+          </button>
+        `;
+      } else {
+        const ticket = JSON.parse(saved);
+        card.innerHTML = `
+          <div class="inline-block px-3 py-1 bg-blue-50 text-blue-600 font-bold rounded-full text-xs mb-3">${bank}</div>
+          <p class="text-sm text-gray-400">내 대기 번호</p>
+          <div class="text-6xl font-black text-blue-600 my-4">${ticket.no}번</div>
+          
+          <div class="flex gap-2 mt-6">
+            <button onclick="delay(${ticket.no})" ${ticket.delay >= 3 ? 'disabled class="flex-1 py-3 bg-gray-100 text-gray-400 font-bold rounded-xl text-sm cursor-not-allowed"' : 'class="flex-1 py-3 bg-amber-50 active:bg-amber-100 text-amber-700 font-bold rounded-xl text-sm"'}>
+              미루기 (${ticket.delay}/3)
+            </button>
+            <button onclick="cancel(${ticket.no})" class="flex-1 py-3 bg-red-50 active:bg-red-100 text-red-600 font-bold rounded-xl text-sm">
+              취소하기
+            </button>
+          </div>
+        `;
+      }
+    }
+
+    function goToBank(name) {
+      window.location.search = `?bank=${encodeURIComponent(name)}`;
+    }
+
+    function issue() {
+      socket.emit('issue_ticket', { bank }, (res) => {
+        if (res.success) {
+          localStorage.setItem(`ticket_${bank}`, JSON.stringify({ no: res.ticketNo, delay: 0 }));
+          render();
+        } else {
+          alert('발권 오류가 발생했습니다.');
+        }
+      });
+    }
+
+    function delay(ticketNo) {
+      let ticket = JSON.parse(localStorage.getItem(`ticket_${bank}`));
+      if (ticket.delay >= 3) return alert('순번 미루기는 최대 3회까지 가능합니다.');
+      
+      socket.emit('delay_ticket', { bank, ticketNo }, (res) => {
+        if (res.success) {
+          ticket.delay++;
+          localStorage.setItem(`ticket_${bank}`, JSON.stringify(ticket));
+          render();
+          alert('순번이 맨 뒤로 이동되었습니다.');
+        } else {
+          alert('순번 미루기 실패');
+        }
+      });
+    }
+
+    function cancel(ticketNo) {
+      if (confirm('대기표를 취소하시겠습니까?')) {
+        socket.emit('cancel_ticket', { bank, ticketNo }, () => {
+          localStorage.removeItem(`ticket_${bank}`);
+          render();
         });
+      }
+    }
 
-        // 홈 화면 (처음 접속 시)
-        function renderHome() {
-            const view = document.getElementById('app-view');
-            view.innerHTML = `
-                <div class="toss-card p-6 sm:p-10 text-center">
-                    <h2 class="text-2xl sm:text-3xl font-bold mb-3">스마트 대기 시스템</h2>
-                    <p class="text-gray-500 mb-8 text-sm sm:text-base">상담사 창구 또는 관리자 모드를 선택하세요.</p>
-                    
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-                        ${banks.map(b => `
-                            <button onclick="renderCustomerView('${b}')" class="toss-btn p-5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-2xl font-bold text-lg flex items-center justify-between border border-blue-100">
-                                <span>${b} 고객 화면 체험</span>
-                                <span class="text-xl">→</span>
-                            </button>
-                        `).join('')}
-                    </div>
-
-                    <div class="border-t border-gray-100 pt-6 flex justify-center gap-4">
-                        <button onclick="renderLogin('counselor')" class="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl text-sm toss-btn">상담사 앱</button>
-                        <button onclick="renderAdminDashboard()" class="px-6 py-3 bg-gray-900 hover:bg-black text-white font-semibold rounded-xl text-sm toss-btn">관리자 모드</button>
-                    </div>
-                </div>
-            `;
-            document.getElementById('nav-status').innerHTML = '';
-        }
-
-        // 1. 고객용 화면 (전단지 링크 호환 및 1회발권, 즉시취소, 3회순번미루기)
-        function renderCustomerView(bank) {
-            currentUser = { role: 'customer', bank };
-            const view = document.getElementById('app-view');
-            view.innerHTML = `
-                <div class="toss-card p-6 sm:p-10 text-center">
-                    <span class="inline-block px-3 py-1 bg-blue-50 text-blue-600 text-xs font-bold rounded-full mb-3">${bank}</span>
-                    <h2 class="text-2xl sm:text-3xl font-bold mb-2">실시간 번호표 발급</h2>
-                    <p class="text-gray-500 mb-8 text-sm">기다림 없이 스마트폰으로 간편하게 대기하세요.</p>
-                    
-                    <div id="ticket-status-box" class="mb-8">
-                        <button onclick="issueTicket('${bank}')" class="w-full py-5 bg-blue-600 hover:bg-blue-700 text-white text-xl font-bold rounded-2xl shadow-lg shadow-blue-500/30 toss-btn">
-                            번호표 즉시 발급받기
-                        </button>
-                    </div>
-
-                    <button onclick="renderHome()" class="text-gray-400 hover:text-gray-600 text-sm font-medium">← 처음으로 돌아가기</button>
-                </div>
-            `;
-            document.getElementById('nav-status').innerHTML = `${bank} 고객용`;
-            
-            const activeTicket = localStorage.getItem(`ticket_${bank}`);
-            if (activeTicket) {
-                showActiveTicket(bank, JSON.parse(activeTicket));
-            }
-        }
-
-        function issueTicket(bank) {
-            const activeTicket = localStorage.getItem(`ticket_${bank}`);
-            if (activeTicket) {
-                showActiveTicket(bank, JSON.parse(activeTicket));
-                return;
-            }
-
-            socket.emit('issue_ticket', { bank }, (res) => {
-                if (res.success) {
-                    const ticketData = { ticketNo: res.ticketNo, delayCount: 0 };
-                    localStorage.setItem(`ticket_${bank}`, JSON.stringify(ticketData));
-                    showActiveTicket(bank, ticketData);
-                } else {
-                    alert('발권 실패: ' + res.message);
-                }
-            });
-        }
-
-        function showActiveTicket(bank, ticketData) {
-            const box = document.getElementById('ticket-status-box');
-            box.innerHTML = `
-                <div class="bg-gray-50 border border-gray-200 rounded-2xl p-6 mb-6 text-center">
-                    <p class="text-sm text-gray-500 mb-1">나의 대기 번호</p>
-                    <div class="text-5xl font-black text-blue-600 mb-4">${ticketData.ticketNo}번</div>
-                    <div class="flex gap-3 justify-center">
-                        <button onclick="delayTicket('${bank}', ${ticketData.ticketNo})" id="delay-btn" class="flex-1 py-3 bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold rounded-xl text-sm toss-btn">
-                            순번 미루기 (${ticketData.delayCount}/3)
-                        </button>
-                        <button onclick="cancelTicket('${bank}')" class="flex-1 py-3 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-xl text-sm toss-btn">
-                            즉시 취소하기
-                        </button>
-                    </div>
-                </div>
-            `;
-            if (ticketData.delayCount >= 3) {
-                const delayBtn = document.getElementById('delay-btn');
-                if (delayBtn) {
-                    delayBtn.disabled = true;
-                    delayBtn.classList.add('opacity-50', 'cursor-not-allowed');
-                }
-            }
-        }
-
-        function cancelTicket(bank) {
-            if (confirm('대기표를 취소하시겠습니까?')) {
-                localStorage.removeItem(`ticket_${bank}`);
-                renderCustomerView(bank);
-            }
-        }
-
-        function delayTicket(bank, ticketNo) {
-            let data = JSON.parse(localStorage.getItem(`ticket_${bank}`) || '{}');
-            if (data.delayCount >= 3) {
-                alert('순번 미루기는 최대 3회까지만 가능합니다.');
-                return;
-            }
-            socket.emit('delay_ticket', { bank, ticketNo }, (res) => {
-                if (res.success) {
-                    data.delayCount = (data.delayCount || 0) + 1;
-                    localStorage.setItem(`ticket_${bank}`, JSON.stringify(data));
-                    showActiveTicket(bank, data);
-                    alert('순번이 연기되었습니다.');
-                } else {
-                    alert('미루기 실패: ' + res.message);
-                }
-            });
-        }
-
-        // 2. 상담사 로그인 및 앱 화면 (음성 호출 기능 TTS 포함)
-        function renderLogin() {
-            const view = document.getElementById('app-view');
-            view.innerHTML = `
-                <div class="toss-card p-6 sm:p-10 max-w-md mx-auto">
-                    <h2 class="text-2xl font-bold mb-2 text-center">상담사 창구 접속</h2>
-                    <p class="text-gray-500 mb-6 text-center text-sm">정보를 선택해주세요.</p>
-                    
-                    <div class="space-y-4 mb-6">
-                        <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">은행 선택</label>
-                            <select id="login-bank" class="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl font-semibold">
-                                ${banks.map(b => `<option value="${b}">${b}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-gray-500 mb-1">상담사 이름</label>
-                            <input type="text" id="login-name" placeholder="이름을 입력하세요" class="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl font-semibold">
-                        </div>
-                    </div>
-
-                    <button onclick="handleLogin()" class="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg toss-btn mb-3">
-                        접속하기
-                    </button>
-                    <button onclick="renderHome()" class="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold rounded-xl text-sm toss-btn">
-                        돌아가기
-                    </button>
-                </div>
-            `;
-        }
-
-        function handleLogin() {
-            const bank = document.getElementById('login-bank').value;
-            const name = document.getElementById('login-name').value.trim();
-            if (!name) {
-                alert('상담사 이름을 입력해주세요.');
-                return;
-            }
-            currentUser = { role: 'counselor', bank, name };
-            renderCounselorDashboard(bank, name);
-        }
-
-        function renderCounselorDashboard(bank, name) {
-            const view = document.getElementById('app-view');
-            view.innerHTML = `
-                <div class="toss-card p-6 sm:p-8">
-                    <div class="flex justify-between items-center mb-6 pb-4 border-b border-gray-100">
-                        <div>
-                            <span class="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">${bank}</span>
-                            <h2 class="text-xl font-bold mt-1">${name} 상담사님</h2>
-                        </div>
-                        <button onclick="renderHome()" class="px-4 py-2 bg-gray-100 text-gray-600 text-sm font-bold rounded-xl">로그아웃</button>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                        <div class="bg-blue-50/50 border border-blue-100 rounded-2xl p-6 text-center">
-                            <p class="text-sm font-semibold text-gray-500 mb-2">현재 응대 중인 번호</p>
-                            <div id="current-serving" class="text-6xl font-black text-blue-600 mb-6">없음</div>
-                            <button onclick="nextCustomer('${bank}', '${name}')" class="w-full py-5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg rounded-2xl shadow-lg toss-btn">
-                                🔊 다음 고객 호출하기 (음성 안내)
-                            </button>
-                        </div>
-
-                        <div class="bg-gray-50 border border-gray-200 rounded-2xl p-6 flex flex-col justify-between">
-                            <div>
-                                <h3 class="font-bold text-gray-700 mb-3">대기 중인 고객 명단</h3>
-                                <div id="waiting-list" class="space-y-2 max-h-48 overflow-y-auto">
-                                    <p class="text-sm text-gray-400 text-center py-6">대기 중인 고객이 없습니다.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            document.getElementById('nav-status').innerHTML = `${bank} | ${name}`;
-            socket.emit('get_queue_status', { bank });
-        }
-
-        function nextCustomer(bank, staffName) {
-            socket.emit('call_next', { bank, staffName }, (res) => {
-                if (!res.success) {
-                    alert(res.message);
-                } else {
-                    // 음성 호출(TTS) 실행
-                    playVoiceCall(res.nextNum, bank);
-                }
-            });
-        }
-
-        // 웹 브라우저 음성 합성(TTS)을 이용한 호출 목소리 출력
-        function playVoiceCall(ticketNo, bankName) {
-            if ('speechSynthesis' in window) {
-                const text = `${bankName}, ${ticketNo}번 고객님, 창구로 와주세요.`;
-                const utterance = new SpeechSynthesisUtterance(text);
-                utterance.lang = 'ko-KR';
-                utterance.rate = 1.0;
-                window.speechSynthesis.speak(utterance);
-            }
-        }
-
-        // 3. 관리자 모드 (상담사 추가 및 관리 기능)
-        function renderAdminDashboard() {
-            currentUser = { role: 'admin' };
-            const view = document.getElementById('app-view');
-            view.innerHTML = `
-                <div class="toss-card p-6 sm:p-8">
-                    <div class="flex justify-between items-center mb-6 pb-4 border-b border-gray-100">
-                        <h2 class="text-2xl font-bold">시스템 관리자 모드</h2>
-                        <button onclick="renderHome()" class="px-4 py-2 bg-gray-100 text-gray-600 text-sm font-bold rounded-xl">돌아가기</button>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="bg-gray-50 border border-gray-200 rounded-2xl p-6">
-                            <h3 class="font-bold text-lg mb-4">은행별 상담사 추가</h3>
-                            <div class="space-y-4">
-                                <div>
-                                    <label class="block text-xs font-bold text-gray-500 mb-1">대상 은행</label>
-                                    <select id="admin-target-bank" class="w-full p-3 bg-white border border-gray-200 rounded-xl font-semibold">
-                                        ${banks.map(b => `<option value="${b}">${b}</option>`).join('')}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-gray-500 mb-1">추가할 상담사 이름</label>
-                                    <div class="flex gap-2">
-                                        <input type="text" id="new-staff-name" placeholder="상담사 이름 입력" class="flex-1 p-3 bg-white border border-gray-200 rounded-xl font-semibold">
-                                        <button onclick="addStaff()" class="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm toss-btn">추가</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="bg-gray-50 border border-gray-200 rounded-2xl p-6">
-                            <h3 class="font-bold text-lg mb-4">등록된 상담사 현황</h3>
-                            <div id="staff-list-container" class="space-y-3 max-h-60 overflow-y-auto">
-                                <p class="text-sm text-gray-400">데이터를 불러오는 중...</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            document.getElementById('nav-status').innerHTML = `관리자 모드`;
-            socket.emit('get_queue_status', { bank: "우리은행" });
-        }
-
-        function addStaff() {
-            const bank = document.getElementById('admin-target-bank').value;
-            const staffName = document.getElementById('new-staff-name').value.trim();
-            if (!staffName) {
-                alert('상담사 이름을 입력해주세요.');
-                return;
-            }
-            socket.emit('add_staff', { bank, staffName }, (res) => {
-                if (res.success) {
-                    document.getElementById('new-staff-name').value = '';
-                    alert(`${bank}에 '${staffName}' 상담사가 추가되었습니다.`);
-                    socket.emit('get_queue_status', { bank });
-                }
-            });
-        }
-
-        // Socket 이벤트 수신 핸들러 (실시간 반영)
-        socket.on('queue_update', (data) => {
-            // 1. 상담사 화면 업데이트
-            if (currentUser && currentUser.role === 'counselor' && currentUser.bank === data.bank) {
-                const waitingListEl = document.getElementById('waiting-list');
-                const servingEl = document.getElementById('current-serving');
-                
-                if (waitingListEl) {
-                    if (data.waiting && data.waiting.length > 0) {
-                        waitingListEl.innerHTML = data.waiting.map(num => `
-                            <div class="p-3 bg-white rounded-xl border border-gray-200 font-bold text-gray-700 flex justify-between items-center">
-                                <span>대기 번호 ${num}번</span>
-                            </div>
-                        `).join('');
-                    } else {
-                        waitingListEl.innerHTML = `<p class="text-sm text-gray-400 text-center py-6">대기 중인 고객이 없습니다.</p>`;
-                    }
-                }
-                if (servingEl && data.currentServing !== undefined) {
-                    servingEl.innerText = data.currentServing > 0 ? `${data.currentServing}번` : '없음';
-                }
-            }
-
-            // 2. 관리자 화면 상담사 현황 업데이트
-            const container = document.getElementById('staff-list-container');
-            if (container && currentUser && currentUser.role === 'admin') {
-                // 전체 은행 현황을 간이로 표시
-                container.innerHTML = `
-                    <div class="bg-white p-3 rounded-xl border border-gray-100 mb-2">
-                        <span class="font-bold text-blue-600 text-sm">${data.bank} 상담사</span>: 
-                        <span class="text-gray-600 text-sm">${data.staff ? data.staff.join(', ') : '없음'}</span>
-                    </div>
-                `;
-            }
-        });
-    </script>
+    render();
+  </script>
 </body>
 </html>

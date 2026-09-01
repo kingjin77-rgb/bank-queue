@@ -1,227 +1,80 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>창구 상담사 관리</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>상담사 호출기</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <script src="/socket.io/socket.io.js"></script>
-  <style> body { font-family: "Pretendard Variable", Pretendard, sans-serif; word-break: keep-all; } </style>
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    body { font-family: 'Pretendard', sans-serif; background-color: #f2f4f6; color: #191f28; }
+  </style>
 </head>
-<body class="bg-slate-900 text-white min-h-screen p-6">
-  <div class="max-w-2xl mx-auto">
-    <header class="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
-      <div>
-        <h1 class="text-xl font-black text-blue-400">상담 창구 컨트롤러</h1>
-        <p class="text-xs text-slate-400 mt-0.5">내 창구를 선택하고 대기 고객을 호출하세요.</p>
-      </div>
-      <div class="flex items-center gap-2">
-        <button id="mute-btn" onclick="toggleMute()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold rounded-xl transition flex items-center gap-1.5">
-          <span id="mute-icon">🔊</span> <span id="mute-text">음성 켜짐</span>
-        </button>
-        <select id="counter-select" onchange="changeCounter()" class="bg-slate-800 border border-slate-700 text-white text-xs font-bold rounded-xl px-3 py-2 outline-none focus:border-blue-500">
-          <option value="">창구를 선택하세요</option>
-        </select>
-      </div>
-    </header>
+<body class="min-h-screen p-4 flex flex-col justify-center items-center">
+  <div class="w-full max-w-md bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+    <div class="flex justify-between items-center mb-6 pb-4 border-b border-gray-100">
+      <select id="bankSelect" onchange="changeBank()" class="font-bold text-xl text-blue-600 bg-transparent outline-none">
+        <option value="우리은행">우리은행</option>
+        <option value="신한은행">신한은행</option>
+        <option value="국민은행">국민은행</option>
+        <option value="푸본현대생명">푸본현대생명</option>
+      </select>
+      <div id="waitCount" class="text-sm font-semibold text-gray-500">대기: 0명</div>
+    </div>
 
-    <div id="teller-panel" class="hidden space-y-6">
-      <div class="bg-slate-800 border border-slate-700 rounded-3xl p-6 shadow-xl text-center">
-        <div class="text-xs font-bold text-slate-400 mb-1" id="current-counter-title">-</div>
-        <div class="my-4">
-          <span class="text-xs text-slate-400">현재 호출 번호</span>
-          <div class="text-6xl font-black text-amber-400 my-2" id="current-calling-no">---</div>
-          <div class="text-xs text-slate-500" id="current-calling-status">호출 대기 중</div>
-        </div>
-        <div class="grid grid-cols-2 gap-3 mt-6">
-          <button onclick="callNext()" class="py-4 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-black text-base rounded-2xl shadow-lg transition">📢 다음 고객 호출</button>
-          <button onclick="recallCurrent()" class="py-4 bg-slate-700 hover:bg-slate-600 active:scale-95 text-white font-bold text-sm rounded-2xl transition">🔁 재호출</button>
-        </div>
-        <button onclick="completeService()" class="w-full mt-3 py-3 bg-emerald-600/80 hover:bg-emerald-600 active:scale-95 text-white font-bold text-xs rounded-2xl transition">✅ 상담 완료 처리</button>
-      </div>
+    <div class="bg-blue-50 rounded-2xl p-6 text-center mb-6">
+      <div class="text-xs font-bold text-gray-500 mb-1">현재 응대 번호</div>
+      <div id="servingNo" class="text-6xl font-black text-blue-600 my-2">-</div>
+    </div>
 
-      <div class="bg-slate-800/60 border border-slate-700/80 rounded-3xl p-5">
-        <div class="flex justify-between items-center mb-3">
-          <h2 class="text-sm font-black text-white">대기 고객 목록</h2>
-          <span class="text-xs font-bold text-amber-400" id="wait-count-badge">0명 대기</span>
-        </div>
-        <div id="wait-list-container" class="space-y-2 max-h-60 overflow-y-auto">
-          <div class="text-xs text-slate-500 text-center py-4">대기 중인 고객이 없습니다.</div>
-        </div>
+    <button onclick="callNext()" class="w-full py-6 bg-blue-600 active:bg-blue-700 text-white font-black text-2xl rounded-2xl shadow-lg mb-6">
+      다음 고객 호출
+    </button>
+
+    <div>
+      <div class="text-xs font-bold text-gray-400 mb-2">대기 목록</div>
+      <div id="waitingList" class="flex flex-wrap gap-2 text-sm text-gray-600 min-h-[30px]">
+        대기 고객 없음
       </div>
     </div>
   </div>
 
   <script>
     const socket = io();
-    let currentCounterId = null;
-    let globalState = null;
-    let isMuted = false;
-    let audioCtx = null;
+    let currentBank = document.getElementById('bankSelect').value;
 
-    function unlockAudio() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-    }
-    document.addEventListener('touchstart', unlockAudio, { passive: true });
-    document.addEventListener('click', unlockAudio, { passive: true });
-
-    function toggleMute() {
-      isMuted = !isMuted;
-      const btn = document.getElementById('mute-btn');
-      const icon = document.getElementById('mute-icon');
-      const text = document.getElementById('mute-text');
-      if (isMuted) {
-        icon.innerText = '🔇';
-        text.innerText = '음소거됨';
-        btn.className = 'px-3 py-2 bg-rose-950/60 hover:bg-rose-900 border border-rose-500/50 text-rose-300 text-xs font-bold rounded-xl transition flex items-center gap-1.5';
-      } else {
-        icon.innerText = '🔊';
-        text.innerText = '음성 켜짐';
-        btn.className = 'px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold rounded-xl transition flex items-center gap-1.5';
-      }
+    function changeBank() {
+      currentBank = document.getElementById('bankSelect').value;
+      socket.emit('get_all_state');
     }
 
-    function convertNumberToKorean(numStr) {
-      const digits = {'0': '영', '1': '일', '2': '이', '3': '삼', '4': '사', '5': '오', '6': '육', '7': '칠', '8': '팔', '9': '구'};
-      const num = parseInt(numStr);
-      if (isNaN(num)) return numStr;
-
-      if (num < 10) {
-        return digits[num] || numStr;
-      } else if (num < 100) {
-        let tens = Math.floor(num / 10);
-        let units = num % 10;
-        let res = '';
-        if (tens > 0) res += (tens > 1 ? digits[tens] : '') + '십';
-        if (units > 0) res += digits[units];
-        return res;
-      } else if (num < 1000) {
-        let hundreds = Math.floor(num / 100);
-        let remainder = num % 100;
-        let res = (hundreds > 1 ? digits[hundreds] : '') + '백';
-        if (remainder > 0) {
-          let tens = Math.floor(remainder / 10);
-          let units = remainder % 10;
-          if (tens > 0) res += (tens > 1 ? digits[tens] : '') + '십';
-          if (units > 0) res += digits[units];
-        }
-        return res;
-      }
-      return numStr;
-    }
-
-    function playChime() {
-      return new Promise((resolve) => {
-        if (isMuted) { resolve(); return; }
-        unlockAudio();
-        const ctx = audioCtx;
-        const now = ctx.currentTime;
-        const chimeFrequencies = [523.25, 659.25, 783.99, 1046.50];
-        chimeFrequencies.forEach((freq, idx) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(freq, now + idx * 0.12);
-          gain.gain.setValueAtTime(0, now + idx * 0.12);
-          gain.gain.linearRampToValueAtTime(0.3, now + idx * 0.12 + 0.02);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.12 + 0.4);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start(now + idx * 0.12);
-          osc.stop(now + idx * 0.12 + 0.45);
-        });
-        setTimeout(resolve, 600);
+    function callNext() {
+      socket.emit('call_next', { bank: currentBank }, (res) => {
+        if (!res.success) alert(res.message);
       });
     }
 
-    function announceCustomer(ticketNo, bank, counterName) {
-      if (isMuted) return;
-      playChime().then(() => {
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
-          const koreanTicket = convertNumberToKorean(String(ticketNo));
-          // 창구 이름에 포함된 숫자만 한글로 변환 (bank를 중복으로 붙이지 않음)
-          const spokenCounter = counterName.replace(/\d+/g, (match) => convertNumberToKorean(match));
-          const text = `${koreanTicket}번 고객님, ${spokenCounter}로 오시기 바랍니다.`;
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.lang = 'ko-KR';
-          utterance.rate = 0.90;
-          window.speechSynthesis.speak(utterance);
-        }
-      });
-    }
-
-    socket.on('state_update', (data) => {
-      globalState = data;
-      renderCounterSelect(data.counters);
-      renderTellerView();
+    socket.on('init_state', (queues) => {
+      updateUI(queues[currentBank]);
     });
 
-    socket.on('customer_called', (data) => {
-      announceCustomer(data.ticketNo, data.bank, data.counterName);
+    socket.on('queue_update', ({ bank, data }) => {
+      if (bank === currentBank) updateUI(data);
     });
 
-    function renderCounterSelect(counters) {
-      const select = document.getElementById('counter-select');
-      const savedVal = select.value;
-      select.innerHTML = '<option value="">창구를 선택하세요</option>';
-      counters.forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c.id;
-        opt.innerText = `${c.name} (${c.bank})`;
-        select.appendChild(opt);
-      });
-      if (savedVal) select.value = savedVal;
-    }
-
-    function changeCounter() {
-      currentCounterId = document.getElementById('counter-select').value;
-      const panel = document.getElementById('teller-panel');
-      if (currentCounterId) {
-        panel.classList.remove('hidden');
-        renderTellerView();
+    function updateUI(data) {
+      if (!data) return;
+      document.getElementById('servingNo').innerText = data.current > 0 ? `${data.current}번` : '-';
+      document.getElementById('waitCount').innerText = `대기: ${data.waiting.length}명`;
+      
+      const listEl = document.getElementById('waitingList');
+      if (data.waiting.length > 0) {
+        listEl.innerHTML = data.waiting.map(n => `<span class="px-3 py-1 bg-gray-100 rounded-lg font-bold">${n}번</span>`).join('');
       } else {
-        panel.classList.add('hidden');
+        listEl.innerHTML = '대기 고객 없음';
       }
     }
-
-    function renderTellerView() {
-      if (!currentCounterId || !globalState) return;
-      const counter = globalState.counters.find(c => c.id === currentCounterId);
-      if (!counter) return;
-
-      document.getElementById('current-counter-title').innerText = `${counter.name} (${counter.bank})`;
-      const callingTicket = globalState.queue.find(q => q.bank === counter.bank && q.counterName === counter.name && q.status === 'CALLING');
-      if (callingTicket) {
-        document.getElementById('current-calling-no').innerText = `${callingTicket.ticketNo}번`;
-        document.getElementById('current-calling-status').innerText = '상담 진행 중';
-      } else {
-        document.getElementById('current-calling-no').innerText = '---';
-        document.getElementById('current-calling-status').innerText = '대기 중';
-      }
-
-      const waitList = globalState.queue.filter(q => q.bank === counter.bank && q.status === 'WAITING');
-      document.getElementById('wait-count-badge').innerText = `${waitList.length}명 대기`;
-      const listContainer = document.getElementById('wait-list-container');
-      listContainer.innerHTML = '';
-
-      if (waitList.length === 0) {
-        listContainer.innerHTML = '<div class="text-xs text-slate-500 text-center py-4">대기 중인 고객이 없습니다.</div>';
-      } else {
-        waitList.forEach((t, idx) => {
-          const item = document.createElement('div');
-          item.className = 'flex justify-between items-center p-3 bg-slate-900/60 rounded-xl border border-slate-700/40 text-xs';
-          item.innerHTML = `<span class="font-bold text-white">${idx + 1}순위: ${t.ticketNo}번</span><span class="text-slate-400">${new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>`;
-          listContainer.appendChild(item);
-        });
-      }
-    }
-
-    function callNext() { if (currentCounterId) socket.emit('call_next', { counterId: currentCounterId }); }
-    function recallCurrent() { if (currentCounterId) socket.emit('recall_customer', { counterId: currentCounterId }); }
-    function completeService() { if (currentCounterId) socket.emit('complete_service', { counterId: currentCounterId }); }
   </script>
 </body>
 </html>
