@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>통합 관리자 모니터</title>
+  <title>통합 관리자 관제 모니터</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="/socket.io/socket.io.js"></script>
   <style>
@@ -15,15 +15,15 @@
 <body class="min-h-screen p-4 sm:p-6">
   <div class="max-w-7xl mx-auto space-y-6">
     
-    <!-- 상단 헤더 & 전체 리셋 & 음성 테스트 -->
+    <!-- 상단 헤더 & 컨트롤 -->
     <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
       <div>
         <h1 class="text-2xl font-black text-gray-900 flex items-center gap-2">
-          🏦 대기 시스템 통합 관제 모니터
+          🏦 실시간 은행 대기 관제 시스템
         </h1>
-        <p class="text-xs text-gray-500 mt-1">실시간 대기열 동기화, 대리 발권, 출근 상담사 인원 관리</p>
+        <p class="text-xs text-gray-500 mt-1">창구별 실시간 진행현황, 고객 대기목록, 원클릭 대리발권</p>
       </div>
-      <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+      <div class="flex flex-wrap items-center gap-2">
         <button onclick="testVoice()" class="px-4 py-2.5 bg-blue-50 active:bg-blue-100 text-blue-600 font-bold rounded-xl text-sm border border-blue-100 transition">
           🔊 음성 테스트
         </button>
@@ -33,75 +33,62 @@
       </div>
     </div>
 
-    <!-- 1. 현장 대리 발권 데스크 (원클릭 발권) -->
+    <!-- 1. 현장 대리 발권 (스마트폰 미소지자용) -->
     <div class="toss-card p-6 border border-gray-100">
-      <div class="mb-4">
-        <h2 class="text-lg font-bold text-gray-800">📋 현장 대리 발권 (스마트폰 미소지자용)</h2>
-        <p class="text-xs text-gray-400">버튼을 클릭하면 즉시 해당 은행의 번호표가 실시간 발권됩니다.</p>
+      <div class="mb-3">
+        <h2 class="text-lg font-bold text-gray-800">📋 현장 대리 발권 데스크</h2>
+        <p class="text-xs text-gray-400">클릭 즉시 번호표가 발행되며 전체 화면에 실시간 등록됩니다.</p>
       </div>
-      <div id="proxyIssueGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <!-- 동적 렌더링 -->
-      </div>
+      <div id="proxyGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
     </div>
 
-    <!-- 2. 은행별 실시간 전광판 & 출근 상담사 인원수 증감 -->
-    <div>
-      <h2 class="text-lg font-bold text-gray-800 mb-3 px-1">📊 실시간 창구 모니터 & 상담사 인원 배치</h2>
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="boardGrid">
-        <!-- 동적 렌더링 -->
-      </div>
+    <!-- 2. 은행별 실시간 모니터 (창구별 책상 박스 + 실시간 대기자 리스트) -->
+    <div id="bankContainer" class="space-y-6">
+      <!-- 동적 렌더링 -->
     </div>
 
-    <!-- 3. 추가 설정 (신규 은행 추가 & 개별 리셋) -->
+    <!-- 3. 추가 관리 설정 (은행 추가 및 개별 리셋) -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      
-      <!-- 신규 은행 추가 -->
       <div class="toss-card p-6 border border-gray-100">
         <h3 class="font-bold text-gray-800 mb-1">➕ 신규 은행 창구 추가</h3>
-        <p class="text-xs text-gray-400 mb-3">새로운 금융기관 창구를 즉시 개설합니다.</p>
+        <p class="text-xs text-gray-400 mb-3">새 금융기관이나 창구를 개설합니다.</p>
         <div class="flex gap-2">
           <input type="text" id="newBankName" placeholder="은행명 입력" class="flex-1 p-3 bg-gray-50 rounded-xl text-sm border border-gray-200 font-semibold outline-none focus:border-blue-500">
           <button onclick="addNewBank()" class="px-5 py-3 bg-gray-900 text-white font-bold rounded-xl text-sm hover:bg-black">추가</button>
         </div>
       </div>
 
-      <!-- 개별 은행 리셋 -->
       <div class="toss-card p-6 border border-gray-100">
         <h3 class="font-bold text-gray-800 mb-1">🔄 개별 은행 번호 리셋</h3>
-        <p class="text-xs text-gray-400 mb-3">선택한 특정 은행만 1번부터 다시 시작하도록 초기화합니다.</p>
+        <p class="text-xs text-gray-400 mb-3">해당 은행만 1번으로 초기화합니다.</p>
         <div class="flex gap-2">
-          <select id="resetTargetBank" class="flex-1 p-3 bg-gray-50 rounded-xl text-sm font-bold border border-gray-200 outline-none">
-            <!-- 동적 은행 목록 -->
-          </select>
-          <button onclick="resetSingleBank()" class="px-4 py-3 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded-xl text-sm border border-rose-200">
-            선택 은행 리셋
-          </button>
+          <select id="resetBankSelect" class="flex-1 p-3 bg-gray-50 rounded-xl text-sm font-bold border border-gray-200 outline-none"></select>
+          <button onclick="resetSingleBank()" class="px-4 py-3 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded-xl text-sm border border-rose-200">선택 리셋</button>
         </div>
       </div>
-
     </div>
 
   </div>
 
   <script>
     const socket = io();
-    let globalState = {};
+    let state = {};
 
-    socket.on('init_state', (queues) => {
-      globalState = queues;
-      renderAll();
+    socket.on('init_state', (data) => {
+      state = data;
+      render();
     });
 
     socket.on('queue_update', ({ bank, data }) => {
-      globalState[bank] = data;
-      renderAll();
+      state[bank] = data;
+      render();
     });
 
-    socket.on('voice_call', ({ bank, ticketNo }) => {
-      speakMessage(`${bank}, ${ticketNo}번 고객님, 창구로 와주시기 바랍니다.`);
+    socket.on('voice_call', ({ bank, deskName, ticketNo }) => {
+      speak(`${bank} ${deskName}, ${ticketNo}번 고객님 창구로 와주세요.`);
     });
 
-    function speakMessage(text) {
+    function speak(text) {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const msg = new SpeechSynthesisUtterance(text);
@@ -112,74 +99,95 @@
     }
 
     function testVoice() {
-      speakMessage("음성 호출 안내 시스템이 정상 작동 중입니다.");
+      speak("음성 안내 시스템 정상 가동 중입니다.");
     }
 
-    function renderAll() {
-      const banks = Object.keys(globalState);
+    function render() {
+      const banks = Object.keys(state);
 
       // 1. 대리 발권 버튼
-      const proxyGrid = document.getElementById('proxyIssueGrid');
-      proxyGrid.innerHTML = banks.map(b => `
-        <button onclick="proxyIssue('${b}')" class="py-4 px-3 bg-blue-50/70 active:bg-blue-100 text-blue-700 font-bold rounded-2xl border border-blue-100 text-sm flex flex-col items-center justify-center gap-1 transition active:scale-95 shadow-sm">
+      document.getElementById('proxyGrid').innerHTML = banks.map(b => `
+        <button onclick="proxyIssue('${b}')" class="py-4 px-3 bg-blue-50/70 hover:bg-blue-100 active:scale-95 text-blue-700 font-bold rounded-2xl border border-blue-100 text-sm flex flex-col items-center justify-center gap-1 transition">
           <span class="text-base">${b}</span>
-          <span class="text-xs text-blue-500 font-normal">대리 발권 +</span>
+          <span class="text-xs text-blue-500 font-normal">즉시 발권 +</span>
         </button>
       `).join('');
 
-      // 2. 실시간 모니터 & 인원 증감
-      const boardGrid = document.getElementById('boardGrid');
-      boardGrid.innerHTML = banks.map(b => {
-        const item = globalState[b];
-        const status = item.status || '대기중';
-        const staffCount = item.staffCount || 1;
-
-        let statusBadge = 'bg-gray-100 text-gray-700';
-        if (status === '상담중') statusBadge = 'bg-emerald-100 text-emerald-700';
-        if (status === '호출중') statusBadge = 'bg-blue-100 text-blue-700';
-        if (status === '부재중') statusBadge = 'bg-rose-100 text-rose-600';
+      // 2. 은행별 섹션 렌더링
+      const container = document.getElementById('bankContainer');
+      container.innerHTML = banks.map(b => {
+        const item = state[b];
+        const waitList = item.waiting;
 
         return `
-          <div class="toss-card p-6 border border-gray-100 text-center flex flex-col justify-between">
-            <div>
-              <div class="flex justify-between items-center mb-2">
-                <span class="text-base font-bold text-blue-600">${b}</span>
-                <span class="text-[11px] font-bold px-2 py-0.5 rounded-full ${statusBadge}">${status}</span>
+          <div class="toss-card p-6 border border-gray-100">
+            <!-- 은행 헤더 및 창구 증감 버튼 -->
+            <div class="flex flex-col sm:flex-row justify-between sm:items-center pb-4 mb-4 border-b border-gray-100 gap-3">
+              <div class="flex items-center gap-3">
+                <span class="text-xl font-black text-gray-900">${b}</span>
+                <span class="px-3 py-1 bg-blue-50 text-blue-600 font-bold rounded-full text-xs">
+                  총 대기: ${waitList.length}명
+                </span>
               </div>
-              <div class="text-xs text-gray-400 mt-2">현재 호출 번호</div>
-              <div class="text-5xl font-black text-gray-900 my-2">${item.current > 0 ? item.current + '번' : '-'}</div>
-              <div class="text-xs font-semibold text-gray-500">대기 인원: <span class="text-blue-600 font-bold">${item.waiting.length}명</span></div>
-            </div>
-            
-            <!-- 상담사 인원수 +/- 컨트롤러 -->
-            <div class="mt-4 pt-3 border-t border-gray-100">
-              <div class="flex items-center justify-between bg-gray-50 p-2 rounded-xl">
-                <span class="text-xs font-bold text-gray-600">상담사 배치</span>
-                <div class="flex items-center gap-2">
-                  <button onclick="adjustStaff('${b}', -1)" class="w-7 h-7 bg-white border border-gray-200 rounded-lg text-gray-700 font-black text-sm flex items-center justify-center active:bg-gray-100">-</button>
-                  <span class="text-sm font-black text-blue-600 min-w-[24px] text-center">${staffCount}명</span>
-                  <button onclick="adjustStaff('${b}', 1)" class="w-7 h-7 bg-white border border-gray-200 rounded-lg text-gray-700 font-black text-sm flex items-center justify-center active:bg-gray-100">+</button>
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-gray-500">창구(상담사) 인원:</span>
+                <div class="flex items-center bg-gray-50 border border-gray-200 rounded-xl p-1 gap-2">
+                  <button onclick="adjustDesk('${b}', -1)" class="w-7 h-7 bg-white rounded-lg font-bold text-gray-700 active:bg-gray-200 shadow-sm">-</button>
+                  <span class="font-black text-sm text-blue-600 min-w-[20px] text-center">${item.desks.length}명</span>
+                  <button onclick="adjustDesk('${b}', 1)" class="w-7 h-7 bg-white rounded-lg font-bold text-gray-700 active:bg-gray-200 shadow-sm">+</button>
                 </div>
               </div>
             </div>
+
+            <!-- 상담사별 책상 박스들 (Grid) -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-5">
+              ${item.desks.map(desk => {
+                let badgeClass = 'bg-gray-100 text-gray-600';
+                if (desk.status === '상담중') badgeClass = 'bg-emerald-100 text-emerald-700 font-bold';
+                if (desk.status === '호출중') badgeClass = 'bg-blue-100 text-blue-700 font-bold';
+                if (desk.status === '부재중') badgeClass = 'bg-rose-100 text-rose-600 font-bold';
+
+                return `
+                  <div class="bg-gray-50/80 border border-gray-200/80 rounded-2xl p-4 text-center">
+                    <div class="flex justify-between items-center mb-2">
+                      <span class="text-xs font-bold text-gray-700">${desk.name}</span>
+                      <span class="text-[11px] px-2 py-0.5 rounded-full ${badgeClass}">${desk.status}</span>
+                    </div>
+                    <div class="text-[11px] text-gray-400">현재 고객 번호</div>
+                    <div class="text-3xl font-black text-gray-900 my-1">${desk.current > 0 ? desk.current + '번' : '-'}</div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+
+            <!-- 실시간 대기 고객 리스트 -->
+            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+              <div class="text-xs font-bold text-gray-500 mb-2 flex items-center gap-1">
+                <span>📋 실시간 대기 고객 명단</span>
+                <span class="text-gray-400">(${waitList.length}명 대기 중)</span>
+              </div>
+              <div class="flex flex-wrap gap-2 text-sm">
+                ${waitList.length > 0 
+                  ? waitList.map((num, i) => `<span class="px-3 py-1.5 bg-white border border-gray-200 font-black text-gray-800 rounded-xl shadow-xs"><span class="text-gray-400 text-xs mr-1">${i+1}.</span>${num}번</span>`).join('') 
+                  : '<span class="text-xs text-gray-400 py-1">현재 대기 중인 고객이 없습니다.</span>'
+                }
+              </div>
+            </div>
+
           </div>
         `;
       }).join('');
 
       // 3. 리셋 셀렉트
-      document.getElementById('resetTargetBank').innerHTML = banks.map(b => `<option value="${b}">${b}</option>`).join('');
+      document.getElementById('resetBankSelect').innerHTML = banks.map(b => `<option value="${b}">${b}</option>`).join('');
     }
 
     function proxyIssue(bank) {
-      socket.emit('issue_ticket', { bank }, (res) => {
-        if (res.success) {
-          // alert 제거하여 즉각 연속 발권 가능
-        }
-      });
+      socket.emit('issue_ticket', { bank });
     }
 
-    function adjustStaff(bank, change) {
-      socket.emit('adjust_staff_count', { bank, change }, (res) => {
+    function adjustDesk(bank, change) {
+      socket.emit('adjust_desk_count', { bank, change }, (res) => {
         if (!res.success && res.message) alert(res.message);
       });
     }
@@ -190,22 +198,20 @@
       socket.emit('add_bank', { newBank: name }, (res) => {
         if (res.success) {
           document.getElementById('newBankName').value = '';
-        } else {
-          alert(res.message);
-        }
+        } else alert(res.message);
       });
     }
 
     function resetSingleBank() {
-      const bank = document.getElementById('resetTargetBank').value;
-      if (confirm(`[${bank}]의 대기열을 초기화(1번부터 시작)하시겠습니까?`)) {
-        socket.emit('reset_queue', { bank }, () => {});
+      const bank = document.getElementById('resetBankSelect').value;
+      if (confirm(`[${bank}] 번호표를 1번으로 리셋하시겠습니까?`)) {
+        socket.emit('reset_queue', { bank });
       }
     }
 
     function resetAll() {
-      if (confirm('🚨 모든 은행의 대기 번호표를 전부 1번으로 일괄 초기화하시겠습니까?')) {
-        socket.emit('reset_all_queues', () => {});
+      if (confirm('🚨 모든 은행의 번호표를 1번으로 전부 일괄 리셋하시겠습니까?')) {
+        socket.emit('reset_all_queues');
       }
     }
   </script>
