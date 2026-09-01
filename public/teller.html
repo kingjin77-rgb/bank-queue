@@ -9,10 +9,11 @@
   <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
     body { font-family: 'Pretendard', sans-serif; background-color: #f2f4f6; color: #191f28; }
+    .toss-card { background: #ffffff; border-radius: 24px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04); }
   </style>
 </head>
 <body class="min-h-screen p-4 flex flex-col justify-center items-center">
-  <div class="w-full max-w-md bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+  <div class="w-full max-w-md toss-card p-6 border border-gray-100">
     <div class="flex justify-between items-center mb-6 pb-4 border-b border-gray-100">
       <select id="bankSelect" onchange="changeBank()" class="font-bold text-xl text-blue-600 bg-transparent outline-none">
         <option value="우리은행">우리은행</option>
@@ -28,7 +29,7 @@
       <div id="servingNo" class="text-6xl font-black text-blue-600 my-2">-</div>
     </div>
 
-    <button onclick="callNext()" class="w-full py-6 bg-blue-600 active:bg-blue-700 text-white font-black text-2xl rounded-2xl shadow-lg mb-6">
+    <button onclick="callNext()" class="w-full py-6 bg-blue-600 active:bg-blue-700 text-white font-black text-2xl rounded-2xl shadow-lg mb-6 transition">
       다음 고객 호출
     </button>
 

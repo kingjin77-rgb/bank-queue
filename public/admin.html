@@ -9,6 +9,7 @@
   <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
     body { font-family: 'Pretendard', sans-serif; background-color: #f2f4f6; color: #191f28; }
+    .toss-card { background: #ffffff; border-radius: 24px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04); }
   </style>
 </head>
 <body class="min-h-screen p-6">
@@ -20,8 +21,8 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8" id="boardGrid"></div>
 
-    <div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-      <h2 class="text-lg font-bold mb-4">대기열 리셋 (필요시 사용)</h2>
+    <div class="toss-card p-6 border border-gray-100">
+      <h2 class="text-lg font-bold mb-4">대기열 초기화 (필요시 사용)</h2>
       <div class="flex flex-wrap gap-4 items-center">
         <select id="targetBank" class="p-3 bg-gray-50 rounded-xl font-bold border border-gray-200">
           <option value="우리은행">우리은행</option>
@@ -29,7 +30,7 @@
           <option value="국민은행">국민은행</option>
           <option value="푸본현대생명">푸본현대생명</option>
         </select>
-        <button onclick="resetQueue()" class="px-5 py-3 bg-red-50 text-red-600 font-bold rounded-xl">해당 은행 번호 초기화 (1번부터)</button>
+        <button onclick="resetQueue()" class="px-5 py-3 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 transition">해당 은행 번호 초기화 (1번부터)</button>
       </div>
     </div>
   </div>
@@ -48,7 +49,6 @@
       renderBoard();
     });
 
-    // 음성 호출 실행
     socket.on('voice_call', ({ bank, ticketNo }) => {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
@@ -65,7 +65,7 @@
       grid.innerHTML = Object.keys(state).map(bank => {
         const item = state[bank];
         return `
-          <div class="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 text-center">
+          <div class="toss-card p-6 border border-gray-100 text-center">
             <div class="text-sm font-bold text-blue-600 mb-2">${bank}</div>
             <div class="text-xs text-gray-400">현재 호출 번호</div>
             <div class="text-5xl font-black text-gray-900 my-3">${item.current > 0 ? item.current + '번' : '-'}</div>

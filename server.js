@@ -9,7 +9,7 @@ const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 4개 은행 대기열 데이터
+// 4개 은행 독립 큐 관리
 const queues = {
   "우리은행": { current: 0, nextNumber: 1, waiting: [] },
   "신한은행": { current: 0, nextNumber: 1, waiting: [] },
@@ -18,7 +18,6 @@ const queues = {
 };
 
 io.on('connection', (socket) => {
-  // 초기 데이터 전달
   socket.emit('init_state', queues);
 
   socket.on('get_all_state', () => {
@@ -27,7 +26,7 @@ io.on('connection', (socket) => {
 
   // 1. 발권
   socket.on('issue_ticket', ({ bank }, cb) => {
-    if (!queues[bank]) return cb({ success: false });
+    if (!queues[bank]) return cb({ success: false, message: '존재하지 않는 은행' });
     const ticketNo = queues[bank].nextNumber++;
     queues[bank].waiting.push(ticketNo);
     io.emit('queue_update', { bank, data: queues[bank] });
@@ -45,7 +44,7 @@ io.on('connection', (socket) => {
     cb({ success: true });
   });
 
-  // 3. 미루기
+  // 3. 순번 미루기 (대기열 맨 뒤로 이동)
   socket.on('delay_ticket', ({ bank, ticketNo }, cb) => {
     if (!queues[bank]) return cb({ success: false });
     const idx = queues[bank].waiting.indexOf(ticketNo);
@@ -59,11 +58,11 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 4. 호출
+  // 4. 상담사 호출 (음성 연동 이벤트 트리거)
   socket.on('call_next', ({ bank }, cb) => {
     if (!queues[bank]) return cb({ success: false });
     if (queues[bank].waiting.length === 0) {
-      return cb({ success: false, message: '대기 고객이 없습니다.' });
+      return cb({ success: false, message: '대기 중인 고객이 없습니다.' });
     }
     const nextNum = queues[bank].waiting.shift();
     queues[bank].current = nextNum;
