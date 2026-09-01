@@ -51,7 +51,7 @@
       </div>
     </div>
 
-    <!-- 대기자 명단 -->
+    <!-- 대기자 명단 (실시간 즉각 표시) -->
     <div>
       <div class="text-xs font-bold text-gray-400 mb-2">대기 번호 명단</div>
       <div id="waitingList" class="flex flex-wrap gap-2 text-sm text-gray-600 min-h-[32px]">
@@ -72,9 +72,12 @@
       updateUI();
     });
 
+    // 실시간 브로드캐스트 즉시 수신 처리
     socket.on('queue_update', ({ bank, data }) => {
       globalState[bank] = data;
-      if (bank === currentBank) updateUI();
+      if (bank === currentBank) {
+        updateUI();
+      }
     });
 
     function initBankSelect() {
