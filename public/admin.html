@@ -12,7 +12,7 @@
     .toss-card { background: #ffffff; border-radius: 24px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04); }
   </style>
 </head>
-<body class="min-h-screen p-4 sm:p-6">
+<body class="min-h-screen p-4 sm:p-6" onclick="unlockAudio()">
   <div class="max-w-7xl mx-auto space-y-6">
     
     <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
@@ -41,10 +41,10 @@
       <div id="proxyGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
     </div>
 
-    <!-- 2. 은행별 실시간 모니터 (창구별 책상 박스 + 대기자 리스트) -->
+    <!-- 2. 은행별 실시간 모니터 -->
     <div id="bankContainer" class="space-y-6"></div>
 
-    <!-- 3. 추가 설정 (은행 추가 및 개별 리셋) -->
+    <!-- 3. 추가 설정 -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div class="toss-card p-6 border border-gray-100">
         <h3 class="font-bold text-gray-800 mb-1">➕ 신규 은행 창구 추가</h3>
@@ -70,6 +70,58 @@
   <script>
     const socket = io();
     let state = {};
+    let audioCtx = null;
+
+    function unlockAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function playDingDong(onEnded) {
+      unlockAudio();
+      try {
+        const now = audioCtx.currentTime;
+        const osc1 = audioCtx.createOscillator();
+        const gain1 = audioCtx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(784, now);
+        gain1.gain.setValueAtTime(0.3, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+        osc1.connect(gain1);
+        gain1.connect(audioCtx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.5);
+
+        const osc2 = audioCtx.createOscillator();
+        const gain2 = audioCtx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(523.25, now + 0.28);
+        gain2.gain.setValueAtTime(0.35, now + 0.28);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+        osc2.connect(gain2);
+        gain2.connect(audioCtx.destination);
+        osc2.start(now + 0.28);
+        osc2.stop(now + 0.9);
+
+        if (onEnded) setTimeout(onEnded, 700);
+      } catch (e) {
+        if (onEnded) onEnded();
+      }
+    }
+
+    function speak(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const msg = new SpeechSynthesisUtterance(text);
+        msg.lang = 'ko-KR';
+        msg.rate = 0.95;
+        window.speechSynthesis.speak(msg);
+      }
+    }
 
     socket.on('init_state', (data) => {
       state = data;
@@ -82,21 +134,15 @@
     });
 
     socket.on('voice_call', ({ bank, deskName, ticketNo }) => {
-      speak(`${bank} ${deskName}, ${ticketNo}번 고객님 창구로 와주세요.`);
+      playDingDong(() => {
+        speak(`${bank} ${deskName}, ${ticketNo}번 고객님 창구로 와주시기 바랍니다.`);
+      });
     });
 
-    function speak(text) {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const msg = new SpeechSynthesisUtterance(text);
-        msg.lang = 'ko-KR';
-        msg.rate = 0.95;
-        window.speechSynthesis.speak(msg);
-      }
-    }
-
     function testVoice() {
-      speak("음성 안내 시스템 정상 가동 중입니다.");
+      playDingDong(() => {
+        speak("음성 안내 시스템이 정상 작동 중입니다.");
+      });
     }
 
     function render() {

@@ -12,7 +12,7 @@
     .toss-card { background: #ffffff; border-radius: 24px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04); }
   </style>
 </head>
-<body class="min-h-screen flex flex-col justify-center items-center p-4">
+<body class="min-h-screen flex flex-col justify-center items-center p-4" onclick="unlockAudio()">
   <div class="w-full max-w-sm">
     <div id="app" class="toss-card p-6 text-center">
       <div class="py-12">
@@ -30,38 +30,78 @@
 
     let preAlert3rdSent = false;
     let preAlertNextSent = false;
+    let audioUnlocked = false;
+    let audioCtx = null;
+
+    // 모바일 브라우저 오디오 & 음성 잠금 해제
+    function unlockAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      if ('speechSynthesis' in window && !audioUnlocked) {
+        const dummy = new SpeechSynthesisUtterance('');
+        window.speechSynthesis.speak(dummy);
+        audioUnlocked = true;
+      }
+    }
+
+    // 맑은 은행/공항 2단 차임벨 ("딩~동~")
+    function playDingDong(onEnded) {
+      unlockAudio();
+      try {
+        const now = audioCtx.currentTime;
+
+        // 1음 ("딩" - 높은 솔 / G5: 784Hz)
+        const osc1 = audioCtx.createOscillator();
+        const gain1 = audioCtx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(784, now);
+        gain1.gain.setValueAtTime(0.3, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+        osc1.connect(gain1);
+        gain1.connect(audioCtx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.5);
+
+        // 2음 ("동" - 중간 도 / C5: 523.25Hz)
+        const osc2 = audioCtx.createOscillator();
+        const gain2 = audioCtx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(523.25, now + 0.28);
+        gain2.gain.setValueAtTime(0.35, now + 0.28);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+        osc2.connect(gain2);
+        gain2.connect(audioCtx.destination);
+        osc2.start(now + 0.28);
+        osc2.stop(now + 0.9);
+
+        if (onEnded) {
+          setTimeout(onEnded, 700);
+        }
+      } catch (e) {
+        if (onEnded) onEnded();
+      }
+    }
+
+    // 한국어 음성 안내 (TTS)
+    function speakText(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const msg = new SpeechSynthesisUtterance(text);
+        msg.lang = 'ko-KR';
+        msg.rate = 0.95;
+        msg.volume = 1.0;
+        window.speechSynthesis.speak(msg);
+      }
+    }
 
     function requestNotificationPermission() {
       if ("Notification" in window && Notification.permission !== "granted") {
         Notification.requestPermission();
       }
-    }
-
-    function triggerSoundAndVibrate(type = 'call') {
-      if (navigator.vibrate) {
-        if (type === 'call') navigator.vibrate([500, 200, 500, 200, 500]);
-        else if (type === 'next') navigator.vibrate([300, 150, 300]);
-        else navigator.vibrate([200, 100, 200]);
-      }
-
-      try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'sine';
-
-        let freq = 587.33;
-        let dur = 0.4;
-        if (type === 'next') { freq = 740.00; dur = 0.6; }
-        if (type === 'call') { freq = 880.00; dur = 0.8; }
-
-        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + dur);
-      } catch (e) {}
     }
 
     function sendPushNotification(title, body) {
@@ -233,24 +273,34 @@
           }
         }
 
+        // 3번째 전 알림
         if (aheadCount === 2 && !preAlert3rdSent) {
           preAlert3rdSent = true;
-          triggerSoundAndVibrate('3rd');
-          sendPushNotification(`[${bank}] 대기 3번째 전 안내`, `${myNumber}번 고객님, 대기 순서가 3번째 전입니다.`);
-          alert(`[${bank}] ${myNumber}번 고객님! 대기 순서 3번째 전입니다. 창구 근처로 이동해주세요.`);
+          playDingDong(() => {
+            speakText(`${myNumber}번 고객님, 대기 순서 3번째 전입니다. 창구 근처로 이동해 주세요.`);
+          });
+          if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+          sendPushNotification(`[${bank}] 대기 3번째 전 안내`, `${myNumber}번 고객님, 창구 근처로 이동해 주세요.`);
         }
 
+        // 바로 직전(다음) 순서 알림
         if (aheadCount === 0 && !preAlertNextSent) {
           preAlertNextSent = true;
-          triggerSoundAndVibrate('next');
-          sendPushNotification(`[${bank}] 곧 고객님 상담 순번입니다!`, `${myNumber}번 고객님, 바로 다음 순서입니다.`);
-          alert(`[${bank}] ${myNumber}번 고객님! 곧 고객님 상담 순번입니다. 창구 바로 앞에서 대기해주세요.`);
+          playDingDong(() => {
+            speakText(`곧 ${myNumber}번 고객님 상담 순번입니다. 창구 바로 앞에서 대기해 주세요.`);
+          });
+          if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
+          sendPushNotification(`[${bank}] 곧 고객님 상담 순번입니다!`, `${myNumber}번 고객님, 창구 바로 앞에서 대기해주세요.`);
         }
       }
 
+      // 창구에서 호출했을 때
       const calledDesk = data.desks.find(d => d.current === myNumber);
       if (calledDesk) {
-        triggerSoundAndVibrate('call');
+        playDingDong(() => {
+          speakText(`${bank} ${calledDesk.name}, ${myNumber}번 고객님 창구로 와주시기 바랍니다.`);
+        });
+        if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500]);
         sendPushNotification(`[${bank}] 창구 방문 안내`, `${myNumber}번 고객님, ${bank} ${calledDesk.name}로 오십시오!`);
         
         document.getElementById('app').innerHTML = `
