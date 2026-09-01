@@ -142,9 +142,9 @@
         if ('speechSynthesis' in window) {
           window.speechSynthesis.cancel();
           const koreanTicket = convertNumberToKorean(String(ticketNo));
-          const cleanCounter = counterName.replace(/[^0-9]/g, '');
-          const koreanCounter = cleanCounter ? convertNumberToKorean(cleanCounter) : '';
-          const text = `${koreanTicket}번 고객님, ${bank} ${koreanCounter ? koreanCounter + '번 ' : ''}창구로 오시기 바랍니다.`;
+          // 창구 이름에 포함된 숫자만 한글로 변환 (bank를 중복으로 붙이지 않음)
+          const spokenCounter = counterName.replace(/\d+/g, (match) => convertNumberToKorean(match));
+          const text = `${koreanTicket}번 고객님, ${spokenCounter}로 오시기 바랍니다.`;
           const utterance = new SpeechSynthesisUtterance(text);
           utterance.lang = 'ko-KR';
           utterance.rate = 0.90;
