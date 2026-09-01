@@ -1,7 +1,7 @@
 {
   "name": "bank-queue-system",
   "version": "1.0.0",
-  "description": "실시간 스마트 대기 순번 시스템",
+  "description": "Smart Bank Queue Management System with Toss-style UI",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

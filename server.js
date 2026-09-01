@@ -5,131 +5,95 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: '*' }
-});
-
-const PORT = process.env.PORT || 3000;
+const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-let banks = ['우리은행', '신한은행', '국민은행', '푸본현대생명'];
-let counters = [
-  { id: 'C1', name: '우리은행 1번 창구', bank: '우리은행' },
-  { id: 'C2', name: '신한은행 1번 창구', bank: '신한은행' },
-  { id: 'C3', name: '국민은행 1번 창구', bank: '국민은행' },
-  { id: 'C4', name: '푸본현대생명 1번 창구', bank: '푸본현대생명' }
-];
-
-let queue = [];
-let ticketCounter = 100;
-
-function getStats() {
-  return banks.map(bank => ({
-    bank,
-    waiting: queue.filter(q => q.bank === bank && q.status === 'WAITING').length,
-    calling: queue.filter(q => q.bank === bank && q.status === 'CALLING').length,
-    completed: queue.filter(q => q.bank === bank && q.status === 'COMPLETED').length
-  }));
-}
-
-function broadcastState() {
-  io.emit('state_update', {
-    banks,
-    counters,
-    queue,
-    stats: getStats()
-  });
-}
+// 은행별 대기열 및 번호 관리
+const queues = {
+    "우리은행": { current: 0, nextNumber: 1, waiting: [] },
+    "신한은행": { current: 0, nextNumber: 1, waiting: [] },
+    "국민은행": { current: 0, nextNumber: 1, waiting: [] },
+    "푸본현대생명": { current: 0, nextNumber: 1, waiting: [] }
+};
 
 io.on('connection', (socket) => {
-  socket.emit('state_update', {
-    banks,
-    counters,
-    queue,
-    stats: getStats()
-  });
+    // 대기표 발급
+    socket.on('issue_ticket', (data, callback) => {
+        const bank = data.bank;
+        if (!queues[bank]) {
+            return callback({ success: false, message: '존재하지 않는 은행입니다.' });
+        }
+        
+        const ticketNo = queues[bank].nextNumber++;
+        queues[bank].waiting.push(ticketNo);
+        
+        callback({ success: true, ticketNo });
+        
+        // 실시간 갱신 브로드캐스트
+        io.emit('queue_update', {
+            bank,
+            currentServing: queues[bank].current,
+            waiting: queues[bank].waiting
+        });
+    });
 
-  socket.on('issue_ticket', ({ selectedBank }) => {
-    if (!banks.includes(selectedBank)) return;
-    ticketCounter += 1;
-    const newTicket = {
-      ticketNo: ticketCounter,
-      bank: selectedBank,
-      status: 'WAITING',
-      createdAt: new Date().toISOString(),
-      counterName: null
-    };
-    queue.push(newTicket);
-    socket.emit('ticket_issued', newTicket);
-    broadcastState();
-  });
+    // 순번 미루기 (대기열 맨 뒤로 이동)
+    socket.on('delay_ticket', (data, callback) => {
+        const { bank, ticketNo } = data;
+        if (!queues[bank]) return callback({ success: false });
 
-  socket.on('call_next', ({ counterId }) => {
-    const counter = counters.find(c => c.id === counterId);
-    if (!counter) return;
+        const index = queues[bank].waiting.indexOf(ticketNo);
+        if (index > -1) {
+            queues[bank].waiting.splice(index, 1);
+            queues[bank].waiting.push(ticketNo); // 맨 뒤로 재배치
+            
+            io.emit('queue_update', {
+                bank,
+                currentServing: queues[bank].current,
+                waiting: queues[bank].waiting
+            });
+            callback({ success: true });
+        } else {
+            callback({ success: false, message: '대기열 정보를 찾을 수 없습니다.' });
+        }
+    });
 
-    const targetTicket = queue.find(q => q.bank === counter.bank && q.status === 'WAITING');
-    if (targetTicket) {
-      targetTicket.status = 'CALLING';
-      targetTicket.counterName = counter.name;
+    // 상담사의 다음 고객 호출
+    socket.on('call_next', (data, callback) => {
+        const { bank } = data;
+        if (!queues[bank]) return callback({ success: false });
 
-      io.emit('customer_called', {
-        ticketNo: targetTicket.ticketNo,
-        bank: targetTicket.bank,
-        counterName: counter.name
-      });
-      broadcastState();
-    }
-  });
+        if (queues[bank].waiting.length === 0) {
+            return callback({ success: false, message: '대기 중인 고객이 없습니다.' });
+        }
 
-  socket.on('recall_customer', ({ counterId }) => {
-    const counter = counters.find(c => c.id === counterId);
-    if (!counter) return;
+        const nextNum = queues[bank].waiting.shift();
+        queues[bank].current = nextNum;
 
-    const callingTicket = queue.find(q => q.bank === counter.bank && q.counterName === counter.name && q.status === 'CALLING');
-    if (callingTicket) {
-      io.emit('customer_called', {
-        ticketNo: callingTicket.ticketNo,
-        bank: callingTicket.bank,
-        counterName: counter.name
-      });
-    }
-  });
+        io.emit('queue_update', {
+            bank,
+            currentServing: queues[bank].current,
+            waiting: queues[bank].waiting
+        });
 
-  socket.on('complete_service', ({ counterId }) => {
-    const counter = counters.find(c => c.id === counterId);
-    if (!counter) return;
+        callback({ success: true, nextNum });
+    });
 
-    const callingTicket = queue.find(q => q.bank === counter.bank && q.counterName === counter.name && q.status === 'CALLING');
-    if (callingTicket) {
-      callingTicket.status = 'COMPLETED';
-      broadcastState();
-    }
-  });
-
-  socket.on('add_bank', ({ bankName }) => {
-    if (bankName && !banks.includes(bankName)) {
-      banks.push(bankName);
-      const newCounterId = 'C_' + Date.now();
-      counters.push({ id: newCounterId, name: `${bankName} 1번 창구`, bank: bankName });
-      broadcastState();
-    }
-  });
-
-  socket.on('remove_bank', ({ bankName }) => {
-    banks = banks.filter(b => b !== bankName);
-    counters = counters.filter(c => c.bank !== bankName);
-    broadcastState();
-  });
-
-  socket.on('reset_system', () => {
-    queue = [];
-    ticketCounter = 100;
-    broadcastState();
-  });
+    // 현재 상태 동기화 요청
+    socket.on('get_queue_status', (data) => {
+        const bank = data.bank;
+        if (queues[bank]) {
+            socket.emit('queue_update', {
+                bank,
+                currentServing: queues[bank].current,
+                waiting: queues[bank].waiting
+            });
+        }
+    });
 });
 
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
