@@ -14,6 +14,7 @@
 </head>
 <body class="min-h-screen p-4 flex flex-col justify-center items-center">
   <div class="w-full max-w-md toss-card p-6 border border-gray-100">
+    <!-- 상단 은행 선택 및 대기 인원 -->
     <div class="flex justify-between items-center mb-6 pb-4 border-b border-gray-100">
       <select id="bankSelect" onchange="changeBank()" class="font-bold text-xl text-blue-600 bg-transparent outline-none">
         <option value="우리은행">우리은행</option>
@@ -24,15 +25,37 @@
       <div id="waitCount" class="text-sm font-semibold text-gray-500">대기: 0명</div>
     </div>
 
+    <!-- 현재 응대 번호 및 진행 상태 -->
     <div class="bg-blue-50 rounded-2xl p-6 text-center mb-6">
-      <div class="text-xs font-bold text-gray-500 mb-1">현재 응대 번호</div>
+      <div class="flex justify-center items-center gap-2 mb-1">
+        <span class="text-xs font-bold text-gray-500">현재 번호</span>
+        <span id="statusBadge" class="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-700">대기중</span>
+      </div>
       <div id="servingNo" class="text-6xl font-black text-blue-600 my-2">-</div>
     </div>
 
-    <button onclick="callNext()" class="w-full py-6 bg-blue-600 active:bg-blue-700 text-white font-black text-2xl rounded-2xl shadow-lg mb-6 transition">
-      다음 고객 호출
-    </button>
+    <!-- 상담 진행 제어 버튼 영역 (대형 버튼) -->
+    <div class="space-y-3 mb-6">
+      <!-- 호출 버튼 -->
+      <button onclick="callNext()" class="w-full py-5 bg-blue-600 active:bg-blue-700 text-white font-black text-xl rounded-2xl shadow-lg transition">
+        다음 고객 호출
+      </button>
 
+      <!-- 상태 변경 버튼 그룹 -->
+      <div class="grid grid-cols-3 gap-2">
+        <button onclick="setStatus('상담중')" class="py-4 bg-emerald-50 active:bg-emerald-100 text-emerald-700 font-bold rounded-xl text-base border border-emerald-200 transition">
+          상담시작
+        </button>
+        <button onclick="setStatus('상담완료')" class="py-4 bg-gray-100 active:bg-gray-200 text-gray-700 font-bold rounded-xl text-base border border-gray-200 transition">
+          상담종료
+        </button>
+        <button onclick="setStatus('부재중')" class="py-4 bg-rose-50 active:bg-rose-100 text-rose-600 font-bold rounded-xl text-base border border-rose-200 transition">
+          부재중
+        </button>
+      </div>
+    </div>
+
+    <!-- 대기자 목록 -->
     <div>
       <div class="text-xs font-bold text-gray-400 mb-2">대기 목록</div>
       <div id="waitingList" class="flex flex-wrap gap-2 text-sm text-gray-600 min-h-[30px]">
@@ -56,6 +79,12 @@
       });
     }
 
+    function setStatus(status) {
+      socket.emit('update_status', { bank: currentBank, status }, (res) => {
+        if (!res.success) alert(res.message);
+      });
+    }
+
     socket.on('init_state', (queues) => {
       updateUI(queues[currentBank]);
     });
@@ -69,6 +98,19 @@
       document.getElementById('servingNo').innerText = data.current > 0 ? `${data.current}번` : '-';
       document.getElementById('waitCount').innerText = `대기: ${data.waiting.length}명`;
       
+      const badge = document.getElementById('statusBadge');
+      badge.innerText = data.status || '대기중';
+      
+      if (data.status === '상담중') {
+        badge.className = 'text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700';
+      } else if (data.status === '부재중') {
+        badge.className = 'text-xs font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-600';
+      } else if (data.status === '호출중') {
+        badge.className = 'text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700';
+      } else {
+        badge.className = 'text-xs font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-700';
+      }
+
       const listEl = document.getElementById('waitingList');
       if (data.waiting.length > 0) {
         listEl.innerHTML = data.waiting.map(n => `<span class="px-3 py-1 bg-gray-100 rounded-lg font-bold">${n}번</span>`).join('');
