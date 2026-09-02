@@ -9,7 +9,6 @@ const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 4개 금융기관 및 창구별 독립 데이터 구조
 const queues = {
   "우리은행": {
     nextNumber: 1,
@@ -47,11 +46,6 @@ const queues = {
 io.on('connection', (socket) => {
   socket.emit('init_state', queues);
 
-  socket.on('get_all_state', () => {
-    socket.emit('init_state', queues);
-  });
-
-  // 발권 (고객 자동 발권 & 관리자 대리 발권)
   socket.on('issue_ticket', ({ bank }, cb) => {
     if (!queues[bank]) return cb && cb({ success: false });
     const ticketNo = queues[bank].nextNumber++;
@@ -60,7 +54,6 @@ io.on('connection', (socket) => {
     if (cb) cb({ success: true, ticketNo });
   });
 
-  // 취소
   socket.on('cancel_ticket', ({ bank, ticketNo }, cb) => {
     if (!queues[bank]) return;
     const idx = queues[bank].waiting.indexOf(ticketNo);
@@ -71,7 +64,6 @@ io.on('connection', (socket) => {
     if (cb) cb({ success: true });
   });
 
-  // 순번 미루기
   socket.on('delay_ticket', ({ bank, ticketNo }, cb) => {
     if (!queues[bank]) return cb && cb({ success: false });
     const idx = queues[bank].waiting.indexOf(ticketNo);
@@ -85,7 +77,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 창구별 고객 호출
+  // 다음 고객 신규 호출
   socket.on('call_next_desk', ({ bank, deskId }, cb) => {
     if (!queues[bank]) return cb && cb({ success: false });
     if (queues[bank].waiting.length === 0) {
@@ -103,14 +95,28 @@ io.on('connection', (socket) => {
     if (cb) cb({ success: true, ticketNo: nextNum });
   });
 
-  // 창구 상태 변경
+  // [신규] 현재 번호 다시 부르기 (재호출)
+  socket.on('recall_desk', ({ bank, deskId }, cb) => {
+    if (!queues[bank]) return cb && cb({ success: false });
+    const desk = queues[bank].desks.find(d => d.id === Number(deskId));
+    if (!desk || !desk.current) {
+      return cb && cb({ success: false, message: '호출할 고객이 없습니다.' });
+    }
+
+    desk.status = '호출중';
+    io.emit('queue_update', { bank, data: queues[bank] });
+    io.emit('voice_call', { bank, deskName: desk.name, ticketNo: desk.current });
+    if (cb) cb({ success: true, ticketNo: desk.current });
+  });
+
   socket.on('update_desk_status', ({ bank, deskId, status }, cb) => {
     if (!queues[bank]) return cb && cb({ success: false });
     const desk = queues[bank].desks.find(d => d.id === Number(deskId));
     if (!desk) return cb && cb({ success: false });
 
     desk.status = status;
-    if (status === '상담완료') {
+    // 상담완료나 부재중 처리 시 창구 번호를 비우고 대기 상태로 초기화
+    if (status === '상담완료' || status === '부재중') {
       desk.current = 0;
       desk.status = '대기중';
     }
@@ -118,7 +124,6 @@ io.on('connection', (socket) => {
     if (cb) cb({ success: true });
   });
 
-  // 관리자: 창구(책상) 인원 증감 (+1 / -1)
   socket.on('adjust_desk_count', ({ bank, change }, cb) => {
     if (!queues[bank]) return cb && cb({ success: false });
     const currentDesks = queues[bank].desks;
@@ -137,7 +142,6 @@ io.on('connection', (socket) => {
     if (cb) cb({ success: true });
   });
 
-  // 관리자: 신규 은행 추가
   socket.on('add_bank', ({ newBank }, cb) => {
     if (!newBank || queues[newBank]) return cb && cb({ success: false, message: '중복되거나 잘못된 이름입니다.' });
     queues[newBank] = {
@@ -149,7 +153,6 @@ io.on('connection', (socket) => {
     if (cb) cb({ success: true });
   });
 
-  // 관리자: 개별 은행 리셋
   socket.on('reset_queue', ({ bank }, cb) => {
     if (!queues[bank]) return cb && cb({ success: false });
     queues[bank].nextNumber = 1;
@@ -159,7 +162,6 @@ io.on('connection', (socket) => {
     if (cb) cb({ success: true });
   });
 
-  // 관리자: 전체 은행 일괄 리셋
   socket.on('reset_all_queues', (cb) => {
     Object.keys(queues).forEach(b => {
       queues[b].nextNumber = 1;
