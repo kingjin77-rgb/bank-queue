@@ -2,67 +2,64 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>통합 관리자 관제 모니터</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>스마트폰 관리자 호출 전광판</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
-    body { font-family: 'Pretendard', sans-serif; background-color: #f2f4f6; color: #191f28; }
-    .toss-card { background: #ffffff; border-radius: 24px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04); }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+    body { background-color: #f2f4f6; color: #191f28; padding: 12px; }
+    .wrap { max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+    .card { background: #ffffff; border-radius: 16px; padding: 16px; border: 1px solid #e5e8eb; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    
+    button { cursor: pointer; border: none; outline: none; border-radius: 12px; font-weight: bold; }
+    button:active { transform: scale(0.97); }
+    .btn-voice { width: 100%; padding: 14px; background: #3182f6; color: #fff; font-size: 16px; border-radius: 12px; margin-bottom: 8px; }
+    .btn-voice.on { background: #00874c; }
+    .btn-reset-all { width: 100%; padding: 10px; background: #feebeb; color: #f04452; font-size: 13px; border-radius: 10px; border: 1px solid #fca5a5; }
+
+    .proxy-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px; }
+    .btn-proxy { background: #e8f3ff; color: #1b64da; border: 1px solid #cbe2ff; padding: 12px 6px; border-radius: 12px; text-align: center; }
+
+    .bank-card { margin-top: 8px; border-top: 1px solid #f2f4f6; padding-top: 10px; }
+    .bank-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .bank-name { font-size: 16px; font-weight: 900; }
+    .badge-wait { background: #e8f3ff; color: #1b64da; font-size: 11px; padding: 3px 8px; border-radius: 20px; }
+
+    .desks-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .desk-box { background: #f9fafb; border: 1px solid #e5e8eb; border-radius: 10px; padding: 10px; text-align: center; }
+    .desk-title { font-size: 12px; color: #6b7684; display: flex; justify-content: space-between; }
+    .desk-num { font-size: 24px; font-weight: 900; color: #191f28; margin: 4px 0; }
+    .badge-status { font-size: 10px; padding: 1px 6px; border-radius: 10px; }
+    .s-호출중 { background: #e8f3ff; color: #1b64da; font-weight: bold; }
+    .s-상담중 { background: #e6f8f0; color: #00874c; font-weight: bold; }
+    .s-대기중 { background: #e5e8eb; color: #6b7684; }
+
+    .call-banner { background: #191f28; color: #fff; padding: 14px; border-radius: 14px; text-align: center; margin-bottom: 8px; }
   </style>
 </head>
-<body class="min-h-screen p-4 sm:p-6" onclick="unlockAudio()">
-  <div class="max-w-7xl mx-auto space-y-6">
-    
-    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-      <div>
-        <h1 class="text-2xl font-black text-gray-900 flex items-center gap-2">
-          🏦 실시간 은행 대기 관제 시스템
-        </h1>
-        <p class="text-xs text-gray-500 mt-1">창구별 실시간 진행현황, 고객 대기목록, 원클릭 대리발권</p>
+<body onclick="unlockAudio()">
+  <div class="wrap">
+
+    <div class="card" style="padding: 12px;">
+      <button id="voiceBtn" onclick="initVoice(event)" class="btn-voice">
+        🔊 음성 활성화 (터치 필수)
+      </button>
+      <div id="latestCall" class="call-banner" style="display: none;">
+        <div id="callText" style="font-size: 18px; font-weight: 900; color: #ffd15c;">-</div>
       </div>
-      <div class="flex flex-wrap items-center gap-2">
-        <button onclick="testVoice()" class="px-4 py-2.5 bg-blue-50 active:bg-blue-100 text-blue-600 font-bold rounded-xl text-sm border border-blue-100 transition">
-          🔊 음성 테스트
-        </button>
-        <button onclick="resetAll()" class="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-xl text-sm shadow-md transition">
-          ⚠️ 전체 은행 번호표 일괄 리셋
-        </button>
-      </div>
+      <button onclick="resetAllQueues()" class="btn-reset-all">
+        ⚠️ 전체 은행 번호 1번으로 리셋
+      </button>
     </div>
 
-    <!-- 1. 현장 대리 발권 데스크 -->
-    <div class="toss-card p-6 border border-gray-100">
-      <div class="mb-3">
-        <h2 class="text-lg font-bold text-gray-800">📋 현장 대리 발권 데스크</h2>
-        <p class="text-xs text-gray-400">클릭 즉시 번호표가 발행되며 전체 화면에 실시간 등록됩니다.</p>
-      </div>
-      <div id="proxyGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+    <div class="card">
+      <div style="font-size: 14px; font-weight: 800; color: #333d4b;">📋 현장 대리 발권 (스마트폰 미소지자)</div>
+      <div id="proxyContainer" class="proxy-grid"></div>
     </div>
 
-    <!-- 2. 은행별 실시간 모니터 -->
-    <div id="bankContainer" class="space-y-6"></div>
-
-    <!-- 3. 추가 설정 -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div class="toss-card p-6 border border-gray-100">
-        <h3 class="font-bold text-gray-800 mb-1">➕ 신규 은행 창구 추가</h3>
-        <p class="text-xs text-gray-400 mb-3">새 금융기관이나 창구를 개설합니다.</p>
-        <div class="flex gap-2">
-          <input type="text" id="newBankName" placeholder="은행명 입력" class="flex-1 p-3 bg-gray-50 rounded-xl text-sm border border-gray-200 font-semibold outline-none focus:border-blue-500">
-          <button onclick="addNewBank()" class="px-5 py-3 bg-gray-900 text-white font-bold rounded-xl text-sm hover:bg-black">추가</button>
-        </div>
-      </div>
-
-      <div class="toss-card p-6 border border-gray-100">
-        <h3 class="font-bold text-gray-800 mb-1">🔄 개별 은행 번호 리셋</h3>
-        <p class="text-xs text-gray-400 mb-3">해당 은행만 1번으로 초기화합니다.</p>
-        <div class="flex gap-2">
-          <select id="resetBankSelect" class="flex-1 p-3 bg-gray-50 rounded-xl text-sm font-bold border border-gray-200 outline-none"></select>
-          <button onclick="resetSingleBank()" class="px-4 py-3 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded-xl text-sm border border-rose-200">선택 리셋</button>
-        </div>
-      </div>
+    <div class="card">
+      <div style="font-size: 14px; font-weight: 800; color: #333d4b; margin-bottom: 6px;">🏦 실시간 은행별 창구 현황</div>
+      <div id="bankListContainer"></div>
     </div>
 
   </div>
@@ -72,208 +69,136 @@
     let state = {};
     let audioCtx = null;
 
-    function toHanjaNumber(num) {
+    function toHanja(raw) {
+      const num = parseInt(raw, 10);
+      if (isNaN(num) || num <= 0) return raw;
       const digits = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
-      num = Number(num);
-      if (isNaN(num) || num === 0) return num;
       if (num < 10) return digits[num];
       if (num < 100) {
-        const ten = Math.floor(num / 10);
-        const one = num % 10;
-        return (ten === 1 ? '십' : digits[ten] + '십') + (one > 0 ? digits[one] : '');
+        const t = Math.floor(num / 10), o = num % 10;
+        return (t === 1 ? '십' : digits[t] + '십') + (o > 0 ? digits[o] : '');
       }
       if (num < 1000) {
-        const hundred = Math.floor(num / 100);
-        const rest = num % 100;
-        const ten = Math.floor(rest / 10);
-        const one = rest % 10;
-        let res = (hundred === 1 ? '백' : digits[hundred] + '백');
-        if (ten > 0) res += (ten === 1 ? '십' : digits[ten] + '십');
-        if (one > 0) res += digits[one];
-        return res;
+        const h = Math.floor(num / 100), r = num % 100, t = Math.floor(r / 10), o = r % 10;
+        return (h === 1 ? '백' : digits[h] + '백') + (t > 0 ? (t === 1 ? '십' : digits[t] + '십') : '') + (o > 0 ? digits[o] : '');
       }
       return num;
     }
 
     function unlockAudio() {
-      if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      }
-      if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-      }
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
     }
 
-    function playDingDong(onEnded) {
+    function initVoice(e) {
+      if (e) e.stopPropagation();
+      unlockAudio();
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance('음성 시스템이 준비되었습니다.');
+        u.lang = 'ko-KR';
+        u.rate = 0.95;
+        window.speechSynthesis.speak(u);
+      }
+      playDingDong();
+      const btn = document.getElementById('voiceBtn');
+      btn.innerText = '● 음성 가동 중 (정상 작동)';
+      btn.className = 'btn-voice on';
+    }
+
+    function playDingDong(cb) {
       unlockAudio();
       try {
-        const now = audioCtx.currentTime;
-        const osc1 = audioCtx.createOscillator();
-        const gain1 = audioCtx.createGain();
-        osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(784, now);
-        gain1.gain.setValueAtTime(0.3, now);
-        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
-        osc1.connect(gain1);
-        gain1.connect(audioCtx.destination);
-        osc1.start(now);
-        osc1.stop(now + 0.5);
+        const t = audioCtx.currentTime;
+        const o1 = audioCtx.createOscillator(), g1 = audioCtx.createGain();
+        o1.type = 'sine';
+        o1.frequency.setValueAtTime(784, t);
+        g1.gain.setValueAtTime(0.3, t);
+        g1.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+        o1.connect(g1); g1.connect(audioCtx.destination);
+        o1.start(t); o1.stop(t + 0.4);
 
-        const osc2 = audioCtx.createOscillator();
-        const gain2 = audioCtx.createGain();
-        osc2.type = 'sine';
-        osc2.frequency.setValueAtTime(523.25, now + 0.28);
-        gain2.gain.setValueAtTime(0.35, now + 0.28);
-        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
-        osc2.connect(gain2);
-        gain2.connect(audioCtx.destination);
-        osc2.start(now + 0.28);
-        osc2.stop(now + 0.9);
+        const o2 = audioCtx.createOscillator(), g2 = audioCtx.createGain();
+        o2.type = 'sine';
+        o2.frequency.setValueAtTime(523.25, t + 0.25);
+        g2.gain.setValueAtTime(0.35, t + 0.25);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+        o2.connect(g2); g2.connect(audioCtx.destination);
+        o2.start(t + 0.25); o2.stop(t + 0.8);
 
-        if (onEnded) setTimeout(onEnded, 700);
-      } catch (e) {
-        if (onEnded) onEnded();
+        if (cb) setTimeout(cb, 600);
+      } catch (err) {
+        if (cb) cb();
       }
     }
 
     function speak(text) {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const msg = new SpeechSynthesisUtterance(text);
-        msg.lang = 'ko-KR';
-        msg.rate = 0.92;
-        window.speechSynthesis.speak(msg);
-      }
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'ko-KR';
+      u.rate = 0.92;
+      u.volume = 1.0;
+      window.speechSynthesis.speak(u);
     }
 
-    socket.on('init_state', (data) => {
-      state = data;
-      render();
-    });
-
-    socket.on('queue_update', ({ bank, data }) => {
-      state[bank] = data;
-      render();
-    });
+    socket.on('init_state', (data) => { state = data; render(); });
+    socket.on('queue_update', ({ bank, data }) => { state[bank] = data; render(); });
 
     socket.on('voice_call', ({ bank, deskName, ticketNo }) => {
-      const deskNameHanja = deskName.replace(/(\d+)/g, (m, p) => toHanjaNumber(p) + ' ');
-      const ticketHanja = toHanjaNumber(ticketNo);
+      const dNum = deskName.replace(/[^0-9]/g, '');
+      const dHanja = dNum ? toHanja(dNum) + ' 번 창구' : deskName;
+      const tHanja = toHanja(ticketNo) + ' 번 고객님';
 
+      const banner = document.getElementById('latestCall');
+      const textEl = document.getElementById('callText');
+      banner.style.display = 'block';
+      textEl.innerText = `${bank} ${deskName} ➔ ${ticketNo}번 고객님`;
+
+      const callSpeech = `${bank}, ${dHanja}, ${tHanja} 창구로 와주시기 바랍니다.`;
       playDingDong(() => {
-        speak(`${bank} ${deskNameHanja}, ${ticketHanja} 번 고객님 창구로 와주시기 바랍니다.`);
+        speak(callSpeech);
       });
     });
-
-    function testVoice() {
-      playDingDong(() => {
-        speak("우리은행 일 번 창구, 일 번 고객님 창구로 와주시기 바랍니다.");
-      });
-    }
 
     function render() {
       const banks = Object.keys(state);
 
-      document.getElementById('proxyGrid').innerHTML = banks.map(b => `
-        <button onclick="proxyIssue('${b}')" class="py-4 px-3 bg-blue-50/70 hover:bg-blue-100 active:scale-95 text-blue-700 font-bold rounded-2xl border border-blue-100 text-sm flex flex-col items-center justify-center gap-1 transition">
-          <span class="text-base">${b}</span>
-          <span class="text-xs text-blue-500 font-normal">즉시 발권 +</span>
+      document.getElementById('proxyContainer').innerHTML = banks.map(b => `
+        <button onclick="socket.emit('issue_ticket', { bank: '${b}' })" class="btn-proxy">
+          <div style="font-size: 14px; font-weight: 800;">${b}</div>
+          <div style="font-size: 11px; opacity: 0.7;">발권 +</div>
         </button>
       `).join('');
 
-      const container = document.getElementById('bankContainer');
-      container.innerHTML = banks.map(b => {
+      document.getElementById('bankListContainer').innerHTML = banks.map(b => {
         const item = state[b];
-        const waitList = item.waiting;
+        const waitCount = item.waiting ? item.waiting.length : 0;
 
         return `
-          <div class="toss-card p-6 border border-gray-100">
-            <div class="flex flex-col sm:flex-row justify-between sm:items-center pb-4 mb-4 border-b border-gray-100 gap-3">
-              <div class="flex items-center gap-3">
-                <span class="text-xl font-black text-gray-900">${b}</span>
-                <span class="px-3 py-1 bg-blue-50 text-blue-600 font-bold rounded-full text-xs">
-                  총 대기: ${waitList.length}명
-                </span>
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="text-xs font-bold text-gray-500">창구(상담사) 인원:</span>
-                <div class="flex items-center bg-gray-50 border border-gray-200 rounded-xl p-1 gap-2">
-                  <button onclick="adjustDesk('${b}', -1)" class="w-7 h-7 bg-white rounded-lg font-bold text-gray-700 active:bg-gray-200 shadow-sm">-</button>
-                  <span class="font-black text-sm text-blue-600 min-w-[20px] text-center">${item.desks.length}명</span>
-                  <button onclick="adjustDesk('${b}', 1)" class="w-7 h-7 bg-white rounded-lg font-bold text-gray-700 active:bg-gray-200 shadow-sm">+</button>
-                </div>
-              </div>
+          <div class="bank-card">
+            <div class="bank-header">
+              <span class="bank-name">${b}</span>
+              <span class="badge-wait">대기 ${waitCount}명</span>
             </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-5">
-              ${item.desks.map(desk => {
-                let badgeClass = 'bg-gray-100 text-gray-600';
-                if (desk.status === '상담중') badgeClass = 'bg-emerald-100 text-emerald-700 font-bold';
-                if (desk.status === '호출중') badgeClass = 'bg-blue-100 text-blue-700 font-bold';
-                if (desk.status === '부재중') badgeClass = 'bg-rose-100 text-rose-600 font-bold';
-
-                return `
-                  <div class="bg-gray-50/80 border border-gray-200/80 rounded-2xl p-4 text-center">
-                    <div class="flex justify-between items-center mb-2">
-                      <span class="text-xs font-bold text-gray-700">${desk.name}</span>
-                      <span class="text-[11px] px-2 py-0.5 rounded-full ${badgeClass}">${desk.status}</span>
-                    </div>
-                    <div class="text-[11px] text-gray-400">현재 고객 번호</div>
-                    <div class="text-3xl font-black text-gray-900 my-1">${desk.current > 0 ? desk.current + '번' : '-'}</div>
+            <div class="desks-grid">
+              ${item.desks.map(d => `
+                <div class="desk-box">
+                  <div class="desk-title">
+                    <span>${d.name}</span>
+                    <span class="badge-status s-${d.status}">${d.status}</span>
                   </div>
-                `;
-              }).join('')}
+                  <div class="desk-num">${d.current > 0 ? d.current + '번' : '-'}</div>
+                </div>
+              `).join('')}
             </div>
-
-            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-              <div class="text-xs font-bold text-gray-500 mb-2 flex items-center gap-1">
-                <span>📋 실시간 대기 고객 명단</span>
-                <span class="text-gray-400">(${waitList.length}명 대기 중)</span>
-              </div>
-              <div class="flex flex-wrap gap-2 text-sm">
-                ${waitList.length > 0 
-                  ? waitList.map((num, i) => `<span class="px-3 py-1.5 bg-white border border-gray-200 font-black text-gray-800 rounded-xl shadow-xs"><span class="text-gray-400 text-xs mr-1">${i+1}.</span>${num}번</span>`).join('') 
-                  : '<span class="text-xs text-gray-400 py-1">현재 대기 중인 고객이 없습니다.</span>'
-                }
-              </div>
-            </div>
-
           </div>
         `;
       }).join('');
-
-      document.getElementById('resetBankSelect').innerHTML = banks.map(b => `<option value="${b}">${b}</option>`).join('');
     }
 
-    function proxyIssue(bank) {
-      socket.emit('issue_ticket', { bank });
-    }
-
-    function adjustDesk(bank, change) {
-      socket.emit('adjust_desk_count', { bank, change }, (res) => {
-        if (!res.success && res.message) alert(res.message);
-      });
-    }
-
-    function addNewBank() {
-      const name = document.getElementById('newBankName').value.trim();
-      if (!name) return alert('은행명을 입력하세요.');
-      socket.emit('add_bank', { newBank: name }, (res) => {
-        if (res.success) {
-          document.getElementById('newBankName').value = '';
-        } else alert(res.message);
-      });
-    }
-
-    function resetSingleBank() {
-      const bank = document.getElementById('resetBankSelect').value;
-      if (confirm(`[${bank}] 번호표를 1번으로 리셋하시겠습니까?`)) {
-        socket.emit('reset_queue', { bank });
-      }
-    }
-
-    function resetAll() {
-      if (confirm('🚨 모든 은행의 번호표를 1번으로 전부 일괄 리셋하시겠습니까?')) {
+    function resetAllQueues() {
+      if (confirm('🚨 모든 은행의 번호표를 1번으로 리셋하시겠습니까?')) {
         socket.emit('reset_all_queues');
       }
     }

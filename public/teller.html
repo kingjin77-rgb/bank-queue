@@ -23,7 +23,6 @@
       <div id="waitCount" class="text-sm font-semibold text-gray-500">대기: 0명</div>
     </div>
 
-    <!-- 현재 상담/호출 현황 -->
     <div class="bg-blue-50/70 border border-blue-100 rounded-2xl p-5 text-center mb-5">
       <div class="flex justify-center items-center gap-2 mb-1">
         <span id="deskTitle" class="text-xs font-bold text-gray-500">1번 창구</span>
@@ -33,7 +32,6 @@
       <p id="servingGuide" class="text-xs text-gray-400">대기 중인 고객을 호출하세요.</p>
     </div>
 
-    <!-- 호출 컨트롤 패널 -->
     <div class="space-y-2.5 mb-5">
       <div class="flex gap-2">
         <button id="callBtn" onclick="callNext()" class="flex-[2] py-4 bg-blue-600 active:bg-blue-700 text-white font-black text-lg rounded-xl shadow-md transition active:scale-[0.98]">
@@ -57,7 +55,6 @@
       </div>
     </div>
 
-    <!-- 대기 번호 명단 -->
     <div>
       <div class="text-xs font-bold text-gray-400 mb-2">대기 번호 명단</div>
       <div id="waitingList" class="flex flex-wrap gap-1.5 text-sm text-gray-600 min-h-[32px]">
@@ -113,6 +110,8 @@
 
     function changeBank() {
       currentBank = document.getElementById('bankSelect').value;
+      const desks = (globalState[currentBank] && globalState[currentBank].desks) || [];
+      if (desks.length > 0) currentDeskId = desks[0].id;
       initDeskSelect();
       updateUI();
     }
@@ -122,40 +121,43 @@
       updateUI();
     }
 
-    // 신규 다음 고객 호출
     function callNext() {
-      const bankData = globalState[currentBank];
-      const desk = bankData && bankData.desks.find(d => d.id === currentDeskId);
+      const bName = document.getElementById('bankSelect').value;
+      const dId = Number(document.getElementById('deskSelect').value);
+      const bankData = globalState[bName];
+      const desk = bankData && bankData.desks.find(d => d.id === dId);
       
       if (desk && desk.status === '상담중') {
         alert('현재 상담 중입니다. 먼저 [상담종료]를 눌러주세요.');
         return;
       }
 
-      socket.emit('call_next_desk', { bank: currentBank, deskId: currentDeskId }, (res) => {
+      socket.emit('call_next_desk', { bank: bName, deskId: dId }, (res) => {
         if (!res.success && res.message) alert(res.message);
       });
     }
 
-    // 현재 고객 다시 호출 (재호출)
     function reCall() {
-      const bankData = globalState[currentBank];
-      const desk = bankData && bankData.desks.find(d => d.id === currentDeskId);
+      const bName = document.getElementById('bankSelect').value;
+      const dId = Number(document.getElementById('deskSelect').value);
+      const bankData = globalState[bName];
+      const desk = bankData && bankData.desks.find(d => d.id === dId);
 
       if (!desk || !desk.current) {
         alert('현재 호출된 고객이 없습니다. [다음 고객 호출]을 누르세요.');
         return;
       }
 
-      socket.emit('recall_desk', { bank: currentBank, deskId: currentDeskId }, (res) => {
+      socket.emit('recall_desk', { bank: bName, deskId: dId }, (res) => {
         if (!res.success && res.message) alert(res.message);
       });
     }
 
-    // 고객 부재 시 패스 처리
     function passAbsent() {
-      const bankData = globalState[currentBank];
-      const desk = bankData && bankData.desks.find(d => d.id === currentDeskId);
+      const bName = document.getElementById('bankSelect').value;
+      const dId = Number(document.getElementById('deskSelect').value);
+      const bankData = globalState[bName];
+      const desk = bankData && bankData.desks.find(d => d.id === dId);
 
       if (!desk || !desk.current) {
         alert('처리할 호출 고객이 없습니다.');
@@ -163,12 +165,14 @@
       }
 
       if (confirm(`${desk.current}번 고객을 부재중 처리하고 비우시겠습니까?`)) {
-        socket.emit('update_desk_status', { bank: currentBank, deskId: currentDeskId, status: '부재중' });
+        socket.emit('update_desk_status', { bank: bName, deskId: dId, status: '부재중' });
       }
     }
 
     function setStatus(status) {
-      socket.emit('update_desk_status', { bank: currentBank, deskId: currentDeskId, status });
+      const bName = document.getElementById('bankSelect').value;
+      const dId = Number(document.getElementById('deskSelect').value);
+      socket.emit('update_desk_status', { bank: bName, deskId: dId, status });
     }
 
     function updateUI() {

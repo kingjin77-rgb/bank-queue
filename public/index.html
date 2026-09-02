@@ -32,6 +32,7 @@
     let preAlertNextSent = false;
     let audioUnlocked = false;
     let audioCtx = null;
+    let hasProcessed = false;
 
     function toHanjaNumber(num) {
       const digits = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
@@ -74,7 +75,6 @@
       unlockAudio();
       try {
         const now = audioCtx.currentTime;
-
         const osc1 = audioCtx.createOscillator();
         const gain1 = audioCtx.createGain();
         osc1.type = 'sine';
@@ -129,10 +129,11 @@
       }
     }
 
-    window.addEventListener('DOMContentLoaded', () => {
-      if (bank) {
+    socket.on('connect', () => {
+      if (bank && !hasProcessed) {
+        hasProcessed = true;
         autoProcessTicket();
-      } else {
+      } else if (!bank) {
         render();
       }
     });
@@ -148,13 +149,13 @@
 
       localStorage.removeItem(`ticket_completed_${bank}`);
       socket.emit('issue_ticket', { bank }, (res) => {
-        if (res.success) {
+        if (res && res.success) {
           localStorage.setItem(`ticket_${bank}`, JSON.stringify({ no: res.ticketNo, delay: 0 }));
           preAlert3rdSent = false;
           preAlertNextSent = false;
           render();
         } else {
-          alert('발권 오류: ' + (res.message || '다시 시도해주세요.'));
+          alert('발권 오류: 서버 연결을 확인해주세요.');
           render();
         }
       });
