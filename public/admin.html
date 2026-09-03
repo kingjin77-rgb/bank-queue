@@ -5,111 +5,105 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>종합 관리자 관제 센터</title>
+  <title>종합 관제 센터 (전광판 & 음성 엔진)</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
-    body { background-color: #030712; color: #f9fafb; padding: 18px; -webkit-font-smoothing: antialiased; min-height: 100vh; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif; }
+    body { background-color: #030712; color: #f8fafc; padding: 18px; -webkit-font-smoothing: antialiased; min-height: 100vh; }
     .wrap { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
 
-    /* 헤더 */
-    .top-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; background: #111827; border: 2px solid #1f2937; border-radius: 24px; padding: 20px 26px; gap: 14px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-    .brand-title { font-size: 26px; font-weight: 900; color: #38bdf8; display: flex; align-items: center; gap: 10px; }
-    .auto-status { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800; background: #064e3b; color: #34d399; padding: 8px 16px; border-radius: 9999px; border: 1px solid #059669; }
-    .pulse-dot { width: 10px; height: 10px; border-radius: 50%; background: #34d399; animation: pulse 1.5s infinite; }
-    @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(1.3); } 100% { opacity: 1; transform: scale(1); } }
+    #audioUnlockLayer { position: fixed; inset: 0; background: rgba(3, 7, 18, 0.96); z-index: 99999; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 24px; text-align: center; }
+    .unlock-btn { background: #2563eb; color: #fff; font-size: 26px; font-weight: 900; padding: 26px 40px; border-radius: 24px; border: 3px solid #60a5fa; box-shadow: 0 0 50px rgba(37, 99, 235, 0.8); cursor: pointer; animation: pulseBtn 1.2s infinite alternate; }
+    @keyframes pulseBtn { from { transform: scale(1); } to { transform: scale(1.05); } }
 
-    /* 대형 호출 전광판 배너 */
-    .call-display { display: none; background: #000; border: 3px solid #eab308; border-radius: 24px; padding: 24px; text-align: center; box-shadow: 0 0 35px rgba(234, 179, 8, 0.35); }
-    .call-tag { font-size: 15px; font-weight: 900; color: #ca8a04; letter-spacing: 3px; }
-    .call-content { font-size: clamp(38px, 6vw, 68px); font-weight: 900; color: #fef08a; margin-top: 4px; text-shadow: 0 0 15px rgba(250, 204, 21, 0.6); }
+    .top-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; background: #0f172a; border: 2px solid #1e293b; border-radius: 24px; padding: 20px 26px; gap: 14px; }
+    .brand-title { font-size: 26px; font-weight: 900; color: #38bdf8; }
+    .system-status { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800; background: #064e3b; color: #34d399; padding: 8px 16px; border-radius: 9999px; border: 1px solid #059669; }
+    .pulse-dot { width: 10px; height: 10px; border-radius: 50%; background: #34d399; animation: pDot 1.5s infinite; }
+    @keyframes pDot { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(1.3); } 100% { opacity: 1; transform: scale(1); } }
 
-    /* 도식화 종합 대시보드 리포트 */
+    .call-board { display: none; background: #000; border: 4px solid #eab308; border-radius: 26px; padding: 24px; text-align: center; box-shadow: 0 0 40px rgba(234, 179, 8, 0.4); }
+    .call-board-tag { font-size: 16px; font-weight: 900; color: #ca8a04; letter-spacing: 3px; }
+    .call-board-num { font-size: clamp(42px, 7vw, 76px); font-weight: 900; color: #fef08a; margin-top: 6px; text-shadow: 0 0 20px rgba(250, 204, 21, 0.7); }
+
     .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-    .kpi-card { background: #111827; border: 2px solid #1f2937; border-radius: 20px; padding: 22px; text-align: center; }
-    .kpi-card.green { border-color: #059669; background: linear-gradient(180deg, #064e3b 0%, #111827 100%); }
-    .kpi-card.red { border-color: #dc2626; background: linear-gradient(180deg, #7f1d1d 0%, #111827 100%); }
-    .kpi-card.blue { border-color: #2563eb; background: linear-gradient(180deg, #1e3a8a 0%, #111827 100%); }
-    .kpi-label { font-size: 15px; font-weight: 800; color: #9ca3af; margin-bottom: 6px; }
+    .kpi-box { background: #0f172a; border: 2px solid #1e293b; border-radius: 20px; padding: 22px; text-align: center; }
+    .kpi-box.green { border-color: #059669; background: linear-gradient(180deg, #064e3b 0%, #0f172a 100%); }
+    .kpi-box.red { border-color: #dc2626; background: linear-gradient(180deg, #7f1d1d 0%, #0f172a 100%); }
+    .kpi-box.blue { border-color: #0284c7; background: linear-gradient(180deg, #0369a1 0%, #0f172a 100%); }
+    .kpi-title { font-size: 15px; font-weight: 800; color: #94a3b8; margin-bottom: 6px; }
     .kpi-val { font-size: 46px; font-weight: 900; color: #fff; }
 
-    /* 은행별 섹션 */
-    .bank-section { background: #111827; border: 2px solid #1f2937; border-radius: 24px; padding: 24px; display: flex; flex-direction: column; gap: 18px; }
-    .bank-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1f2937; padding-bottom: 16px; }
-    .bank-title { font-size: 26px; font-weight: 900; color: #ffffff; }
-    .bank-badges { display: flex; gap: 8px; align-items: center; }
-    .badge-completed { background: #065f46; color: #6ee7b7; font-size: 14px; font-weight: 800; padding: 6px 14px; border-radius: 12px; }
-    .badge-wait { background: #b91c1c; color: #fecaca; font-size: 14px; font-weight: 900; padding: 6px 14px; border-radius: 12px; }
+    .bank-block { background: #0f172a; border: 2px solid #1e293b; border-radius: 24px; padding: 24px; display: flex; flex-direction: column; gap: 18px; }
+    .bank-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1e293b; padding-bottom: 16px; }
+    .bank-name { font-size: 26px; font-weight: 900; color: #fff; }
+    .bank-controls { display: flex; align-items: center; gap: 12px; }
+    .btn-desk-mod { background: #1f2937; border: 2px solid #374151; color: #fff; width: 34px; height: 34px; font-size: 18px; font-weight: 900; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .btn-desk-mod:active { background: #2563eb; }
+    .desk-count-badge { font-size: 16px; font-weight: 900; color: #38bdf8; min-width: 24px; text-align: center; }
 
-    /* 창구 개별 박스 (도식화 블록) */
     .desk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
-    .desk-card { background: #030712; border: 2px solid #374151; border-radius: 18px; padding: 18px; text-align: center; transition: all 0.2s ease; position: relative; }
-    .desk-card.active { border-color: #38bdf8; box-shadow: 0 0 20px rgba(56, 189, 248, 0.25); }
-    .desk-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-    .desk-name { font-size: 16px; font-weight: 900; color: #94a3b8; }
-    .desk-status-pill { font-size: 12px; font-weight: 800; padding: 3px 8px; border-radius: 6px; }
-    .pill-상담중 { background: #065f46; color: #34d399; }
-    .pill-대기중 { background: #374151; color: #9ca3af; }
-    .desk-current-num { font-size: 52px; font-weight: 900; color: #facc15; margin: 4px 0; letter-spacing: -1px; }
-    .desk-perf { font-size: 13px; font-weight: 800; color: #38bdf8; background: #0f172a; padding: 6px; border-radius: 8px; border: 1px solid #1f2937; }
+    .desk-box { background: #030712; border: 2px solid #334155; border-radius: 18px; padding: 18px; text-align: center; }
+    .desk-box.active { border-color: #38bdf8; box-shadow: 0 0 20px rgba(56, 189, 248, 0.3); }
+    .desk-title { display: flex; justify-content: space-between; font-size: 16px; font-weight: 900; color: #94a3b8; }
+    .desk-num { font-size: 52px; font-weight: 900; color: #facc15; margin: 6px 0; }
+    .desk-foot { font-size: 13px; font-weight: 800; color: #38bdf8; background: #0f172a; padding: 6px; border-radius: 8px; }
 
-    /* 현장 원터치 대리 발권 데스크 */
-    .proxy-title { font-size: 18px; font-weight: 900; color: #fff; margin-bottom: 12px; }
     .proxy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
-    .btn-proxy-large { background: #1f2937; border: 2px solid #374151; color: #fff; padding: 20px 14px; border-radius: 16px; font-size: 18px; font-weight: 900; cursor: pointer; transition: all 0.15s; }
-    .btn-proxy-large:active { transform: scale(0.97); background: #2563eb; }
+    .btn-proxy { background: #1e293b; border: 2px solid #334155; color: #fff; padding: 18px; border-radius: 16px; font-size: 18px; font-weight: 900; cursor: pointer; }
+    .btn-proxy:active { transform: scale(0.98); background: #2563eb; }
 
-    /* 리셋 버튼 */
     .btn-reset-danger { width: 100%; background: #991b1b; color: #fff; border: none; padding: 16px; border-radius: 14px; font-size: 16px; font-weight: 900; cursor: pointer; }
-    .btn-reset-danger:active { background: #7f1d1d; }
   </style>
 </head>
 <body>
+
+  <div id="audioUnlockLayer">
+    <div style="font-size: 20px; font-weight: 900; color: #94a3b8; margin-bottom: 20px;">🔊 블루투스 앰프 / 스피커 연결 준비</div>
+    <button class="unlock-btn" onclick="startMasterAudioEngine()">
+      ⚡ 시스템 관제 엔진 가동 (터치 필수)
+    </button>
+    <div style="font-size: 14px; color: #64748b; margin-top: 16px;">터치 시 화면 꺼짐 차단 및 무중단 사운드 파이프라인이 활성화됩니다.</div>
+  </div>
+
   <div class="wrap">
 
     <div class="top-header">
-      <div class="brand-title">
-        <span>🏦 종합 관제 센터 (전광판·음성 자동화)</span>
-      </div>
-      <div class="auto-status">
+      <div class="brand-title">🏦 종합 관제 센터 (상황실 모니터)</div>
+      <div class="system-status">
         <div class="pulse-dot"></div>
-        <span id="audioStatusText">음성·네트워크 자동 연결됨</span>
+        <span id="engineStatusText">절전 차단 및 음성 엔진 대기</span>
       </div>
     </div>
 
-    <!-- 대형 호출 전광판 알림 -->
-    <div id="callDisplay" class="call-display">
-      <div class="call-tag">CURRENT CALLING</div>
-      <div id="callContent" class="call-content">-</div>
+    <div id="callBoard" class="call-board">
+      <div class="call-board-tag">NOW CALLING</div>
+      <div id="callBoardText" class="call-board-num">-</div>
     </div>
 
-    <!-- 1. 도식화 종합 실적 리포트 -->
     <div class="kpi-grid">
-      <div class="kpi-card green">
-        <div class="kpi-label">총 누적 상담완료</div>
-        <div id="grandCompleted" class="kpi-val">0건</div>
+      <div class="kpi-box green">
+        <div class="kpi-title">총 상담 완료</div>
+        <div id="kpiTotalDone" class="kpi-val">0건</div>
       </div>
-      <div class="kpi-card red">
-        <div class="kpi-label">현재 총 대기인원</div>
-        <div id="grandWaiting" class="kpi-val">0명</div>
+      <div class="kpi-box red">
+        <div class="kpi-title">현재 대기 인원</div>
+        <div id="kpiTotalWait" class="kpi-val">0명</div>
       </div>
-      <div class="kpi-card blue">
-        <div class="kpi-label">운영 중인 창구</div>
-        <div id="grandDesks" class="kpi-val">0개</div>
+      <div class="kpi-box blue">
+        <div class="kpi-title">운영 창구 수</div>
+        <div id="kpiTotalDesks" class="kpi-val">0개</div>
       </div>
     </div>
 
-    <!-- 2. 각 은행별 개별 박스 창구 현황 (도식화 전광판) -->
-    <div id="bankSectionContainer" style="display: flex; flex-direction: column; gap: 18px;"></div>
+    <div id="banksContainer" style="display: flex; flex-direction: column; gap: 18px;"></div>
 
-    <!-- 3. 대형 원터치 대리 발권 데스크 -->
-    <div class="bank-section">
-      <div class="proxy-title">📋 현장 대리 발권 데스크 (터치 즉시 1초 발권)</div>
-      <div id="proxyButtons" class="proxy-grid"></div>
+    <div class="bank-block">
+      <div style="font-size: 18px; font-weight: 900; color: #fff;">📋 현장 대리 발권 (원터치 1초 발권)</div>
+      <div id="proxyContainer" class="proxy-grid"></div>
     </div>
 
-    <!-- 4. 비상 번호표 리셋 -->
-    <div class="bank-section">
+    <div class="bank-block">
       <button onclick="resetAllQueues()" class="btn-reset-danger">
         ⚠️ 모든 은행 대기번호 및 실적 1번으로 초기화 (마감 전용)
       </button>
@@ -121,9 +115,8 @@
     const socket = io();
     let state = {};
     let audioCtx = null;
-    let silentAudio = null;
     let wakeLock = null;
-    let isAudioUnlocked = false;
+    let keepAliveOsc = null;
 
     function toHanja(raw) {
       const num = parseInt(raw, 10);
@@ -141,70 +134,67 @@
       return num;
     }
 
-    // 터치필수 버튼 제거: 페이지 어디든 한 번만 스치거나 터치해도 자동 언락
-    function autoUnlockAudio() {
-      if (isAudioUnlocked) return;
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
+    async function startMasterAudioEngine() {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
 
-      if (!silentAudio) {
-        silentAudio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
-        silentAudio.loop = true;
-        silentAudio.play().catch(() => {});
+        if (!keepAliveOsc) {
+          keepAliveOsc = audioCtx.createOscillator();
+          const gainNode = audioCtx.createGain();
+          keepAliveOsc.frequency.value = 15;
+          gainNode.gain.value = 0.001;
+          keepAliveOsc.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+          keepAliveOsc.start();
+        }
+
+        if ('wakeLock' in navigator) {
+          try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+        }
+
+        document.getElementById('audioUnlockLayer').style.display = 'none';
+        document.getElementById('engineStatusText').innerText = '절전 차단 & 블루투스 음성 100% 가동 중';
+        playBroadcastChime();
+      } catch (err) {
+        alert('오디오 활성화 오류: ' + err.message);
       }
-
-      if ('wakeLock' in navigator && !wakeLock) {
-        navigator.wakeLock.request('screen').then(lock => { wakeLock = lock; }).catch(() => {});
-      }
-
-      if ('speechSynthesis' in window) {
-        const dummy = new SpeechSynthesisUtterance('');
-        window.speechSynthesis.speak(dummy);
-      }
-
-      isAudioUnlocked = true;
-      document.getElementById('audioStatusText').innerText = '음성·절전방지 100% 가동 중';
     }
-
-    // 사용자 제스처 이벤트 전체에 자동 언락 등록
-    ['click', 'touchstart', 'touchend', 'pointerdown'].forEach(evt => {
-      window.addEventListener(evt, autoUnlockAudio, { once: true });
-    });
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
-        autoUnlockAudio();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
         socket.emit('get_all_state');
       }
     });
 
-    function playDingDong(cb) {
-      autoUnlockAudio();
+    function playBroadcastChime(callback) {
+      if (!audioCtx) return callback && callback();
       try {
         const t = audioCtx.currentTime;
         const o1 = audioCtx.createOscillator(), g1 = audioCtx.createGain();
         o1.type = 'sine'; o1.frequency.setValueAtTime(784, t);
-        g1.gain.setValueAtTime(0.45, t); g1.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+        g1.gain.setValueAtTime(0.6, t); g1.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
         o1.connect(g1); g1.connect(audioCtx.destination);
         o1.start(t); o1.stop(t + 0.45);
 
         const o2 = audioCtx.createOscillator(), g2 = audioCtx.createGain();
         o2.type = 'sine'; o2.frequency.setValueAtTime(523.25, t + 0.25);
-        g2.gain.setValueAtTime(0.5, t + 0.25); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.85);
+        g2.gain.setValueAtTime(0.65, t + 0.25); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.85);
         o2.connect(g2); g2.connect(audioCtx.destination);
         o2.start(t + 0.25); o2.stop(t + 0.85);
 
-        if (cb) setTimeout(cb, 750);
+        if (callback) setTimeout(callback, 800);
       } catch (e) {
-        if (cb) cb();
+        if (callback) callback();
       }
     }
 
-    function speak(text) {
+    function speakBroadcast(text) {
       if (!('speechSynthesis' in window)) return;
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance("... " + text);
-      u.lang = 'ko-KR'; u.rate = 0.92; u.volume = 1.0;
+      u.lang = 'ko-KR'; u.rate = 0.90; u.volume = 1.0;
       window.speechSynthesis.speak(u);
     }
 
@@ -216,67 +206,71 @@
       const dHanja = dNum ? toHanja(dNum) + ' 번 창구' : deskName;
       const tHanja = toHanja(ticketNo) + ' 번 고객님';
 
-      const banner = document.getElementById('callDisplay');
-      const textEl = document.getElementById('callContent');
+      const banner = document.getElementById('callBoard');
+      const textEl = document.getElementById('callBoardText');
       banner.style.display = 'block';
-      textEl.innerText = `${bank} ${deskName} ➔ ${ticketNo}번 고객님`;
+      textEl.innerText = `${bank} ${deskName} ➔ ${ticketNo}번`;
 
-      const callSpeech = `${bank}, ${dHanja}, ${tHanja} 창구로 와주시기 바랍니다.`;
-      playDingDong(() => { speak(callSpeech); });
+      const speech = `${bank}, ${dHanja}, ${tHanja} 창구로 와주시기 바랍니다.`;
+      playBroadcastChime(() => { speakBroadcast(speech); });
     });
+
+    function modifyDesk(bank, change) {
+      socket.emit('adjust_desk_count', { bank, change }, (res) => {
+        if (!res.success && res.message) alert(res.message);
+      });
+    }
 
     function render() {
       const banks = Object.keys(state);
-
-      let totalCompleted = 0;
-      let totalWaiting = 0;
-      let totalDesks = 0;
+      let totalDone = 0, totalWait = 0, totalDesks = 0;
 
       banks.forEach(b => {
         const item = state[b];
-        totalWaiting += (item.waiting ? item.waiting.length : 0);
+        totalWait += (item.waiting ? item.waiting.length : 0);
         totalDesks += item.desks.length;
-        item.desks.forEach(d => { totalCompleted += (d.completedCount || 0); });
+        item.desks.forEach(d => { totalDone += (d.completedCount || 0); });
       });
 
-      document.getElementById('grandCompleted').innerText = `${totalCompleted}건`;
-      document.getElementById('grandWaiting').innerText = `${totalWaiting}명`;
-      document.getElementById('grandDesks').innerText = `${totalDesks}개`;
+      document.getElementById('kpiTotalDone').innerText = `${totalDone}건`;
+      document.getElementById('kpiTotalWait').innerText = `${totalWait}명`;
+      document.getElementById('kpiTotalDesks').innerText = `${totalDesks}개`;
 
-      // 대리 발권 버튼
-      document.getElementById('proxyButtons').innerHTML = banks.map(b => `
-        <button onclick="socket.emit('issue_ticket', { bank: '${b}' })" class="btn-proxy-large">
+      document.getElementById('proxyContainer').innerHTML = banks.map(b => `
+        <button onclick="socket.emit('issue_ticket', { bank: '${b}' })" class="btn-proxy">
           ${b} 발권 +
         </button>
       `).join('');
 
-      // 은행별 창구 박스 도식화
-      const container = document.getElementById('bankSectionContainer');
+      const container = document.getElementById('banksContainer');
       container.innerHTML = banks.map(b => {
         const item = state[b];
         const waitCount = item.waiting ? item.waiting.length : 0;
         const bankDone = item.desks.reduce((acc, cur) => acc + (cur.completedCount || 0), 0);
 
         return `
-          <div class="bank-section">
+          <div class="bank-block">
             <div class="bank-header">
-              <div class="bank-title">${b}</div>
-              <div class="bank-badges">
-                <span class="badge-completed">완료: ${bankDone}건</span>
-                <span class="badge-wait">대기: ${waitCount}명</span>
+              <div class="bank-name">${b}</div>
+              <div class="bank-controls">
+                <span style="font-size: 13px; font-weight: 800; color: #94a3b8;">창구 설정:</span>
+                <button onclick="modifyDesk('${b}', -1)" class="btn-desk-mod">-</button>
+                <span class="desk-count-badge">${item.desks.length}</span>
+                <button onclick="modifyDesk('${b}', 1)" class="btn-desk-mod">+</button>
+                <span style="background:#065f46; color:#6ee7b7; font-size:14px; font-weight:900; padding:6px 14px; border-radius:12px; margin-left:8px;">완료: ${bankDone}건</span>
+                <span style="background:#991b1b; color:#fecaca; font-size:14px; font-weight:900; padding:6px 14px; border-radius:12px;">대기: ${waitCount}명</span>
               </div>
             </div>
 
             <div class="desk-grid">
               ${item.desks.map(d => `
-                <div class="desk-card ${d.status === '상담중' ? 'active' : ''}">
-                  <div class="desk-top">
-                    <span class="desk-name">${d.name}</span>
-                    <span class="desk-status-pill pill-${d.status}">${d.status}</span>
+                <div class="desk-box ${d.status === '상담중' ? 'active' : ''}">
+                  <div class="desk-title">
+                    <span>${d.name}</span>
+                    <span style="color: ${d.status === '상담중' ? '#34d399' : '#94a3b8'};">${d.status}</span>
                   </div>
-                  <div style="font-size: 11px; color: #64748b; font-weight: 700;">현재 호출 번호</div>
-                  <div class="desk-current-num">${d.current > 0 ? d.current + '번' : '-'}</div>
-                  <div class="desk-perf">완료 실적: <b style="color: #34d399;">${d.completedCount || 0}건</b></div>
+                  <div class="desk-num">${d.current > 0 ? d.current + '번' : '-'}</div>
+                  <div class="desk-foot">완료: ${d.completedCount || 0}건</div>
                 </div>
               `).join('')}
             </div>
@@ -286,7 +280,7 @@
     }
 
     function resetAllQueues() {
-      if (confirm('🚨 모든 은행의 대기번호와 상담 실적을 1번으로 초기화하시겠습니까?')) {
+      if (confirm('🚨 모든 은행의 대기번호와 실적을 1번으로 초기화하시겠습니까?')) {
         socket.emit('reset_all_queues');
       }
     }

@@ -6,21 +6,34 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>스마트 대기 순번표</title>
-  <script src="https://cdn.tailwindcss.com"></script>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
-    * { box-sizing: border-box; }
-    body { font-family: 'Pretendard', sans-serif; background-color: #f1f5f9; color: #0f172a; -webkit-font-smoothing: antialiased; }
-    .toss-card { background: #ffffff; border-radius: 32px; box-shadow: 0 12px 36px rgba(0, 0, 0, 0.08); }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif; }
+    body { background-color: #030712; color: #f8fafc; padding: 16px; -webkit-font-smoothing: antialiased; min-height: 100vh; display: flex; justify-content: center; align-items: center; }
+    .client-card { width: 100%; max-width: 520px; background: #0b0f19; border: 3px solid var(--theme-color, #38bdf8); border-radius: 32px; padding: 28px 22px; box-shadow: 0 0 35px var(--theme-glow, rgba(56, 189, 248, 0.25)); text-align: center; }
+
+    .bank-woori { --theme-color: #00a2ed; --theme-glow: rgba(0, 162, 237, 0.4); --btn-bg: #0067ac; }
+    .bank-shinhan { --theme-color: #38bdf8; --theme-glow: rgba(0, 70, 255, 0.4); --btn-bg: #0046ff; }
+    .bank-kb { --theme-color: #ffbc00; --theme-glow: rgba(255, 188, 0, 0.4); --btn-bg: #ffbc00; }
+    .bank-fubon { --theme-color: #38bdf8; --theme-glow: rgba(0, 132, 199, 0.4); --btn-bg: #0084c7; }
+
+    .brand-pill { display: inline-block; font-size: 16px; font-weight: 900; color: #fff; background: var(--btn-bg, #1e3a8a); padding: 6px 20px; border-radius: 9999px; border: 2px solid var(--theme-color, #38bdf8); margin-bottom: 16px; }
+    .led-board { background: #000; border: 3px solid var(--theme-color, #38bdf8); border-radius: 26px; padding: 28px 16px; margin: 18px 0; }
+    .led-num { font-size: clamp(84px, 18vw, 120px); font-weight: 900; color: var(--theme-color, #38bdf8); line-height: 1; text-shadow: 0 0 25px var(--theme-glow, rgba(56, 189, 248, 0.6)); }
+
+    .btn-group { display: flex; gap: 10px; margin-top: 14px; }
+    .btn-act { flex: 1; height: 65px; border-radius: 18px; font-size: 17px; font-weight: 900; cursor: pointer; border: 2px solid transparent; }
+    .btn-delay { background: #d97706; color: #fff; border-color: #f59e0b; }
+    .btn-cancel { background: #7f1d1d; color: #fecaca; border-color: #dc2626; }
+
+    .bank-select-btn { width: 100%; height: 75px; font-size: 22px; font-weight: 900; color: #fff; border-radius: 20px; border: 2px solid #374151; background: #111827; margin-bottom: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
   </style>
 </head>
-<body class="min-h-screen flex flex-col justify-center items-center p-4 md:p-8" onclick="initCustomerAudioAndWakeLock()">
-  <div class="w-full max-w-lg">
-    <div id="app" class="toss-card p-6 md:p-10 text-center border border-slate-200">
-      <div class="py-16">
-        <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-        <p class="text-lg font-black text-slate-700">번호표를 확인하는 중입니다...</p>
+<body onclick="ensureCustomerAudio()">
+  <div id="clientCard" class="client-card bank-woori">
+    <div id="app">
+      <div style="padding: 40px 0;">
+        <div style="font-size: 20px; font-weight: 900; color: #38bdf8;">대기 순번을 확인 중입니다...</div>
       </div>
     </div>
   </div>
@@ -32,12 +45,18 @@
     const rawParam = params.get('b') || params.get('bank');
     let bank = bankKeyMap[rawParam] || (rawParam ? decodeURIComponent(rawParam).trim() : null);
 
+    let audioCtx = null;
+    let wakeLock = null;
+    let keepAliveOsc = null;
     let preAlert3rdSent = false;
     let preAlertNextSent = false;
-    let audioCtx = null;
-    let silentAudio = null;
-    let wakeLock = null;
     let hasProcessed = false;
+
+    const cardEl = document.getElementById('clientCard');
+    if (bank === '우리은행') cardEl.className = 'client-card bank-woori';
+    else if (bank === '신한은행') cardEl.className = 'client-card bank-shinhan';
+    else if (bank === '국민은행') cardEl.className = 'client-card bank-kb';
+    else if (bank === '푸본현대생명') cardEl.className = 'client-card bank-fubon';
 
     function toHanja(raw) {
       const num = parseInt(raw, 10);
@@ -55,44 +74,51 @@
       return num;
     }
 
-    // 고객 폰 슬립모드 방지 (WakeLock + Silent Audio Hack)
-    function initCustomerAudioAndWakeLock() {
+    // 고객 폰 슬립 차단
+    async function ensureCustomerAudio() {
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
 
-      if (!silentAudio) {
-        silentAudio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
-        silentAudio.loop = true;
-        silentAudio.play().catch(() => {});
+      if (!keepAliveOsc) {
+        keepAliveOsc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        keepAliveOsc.frequency.value = 15;
+        g.gain.value = 0.001;
+        keepAliveOsc.connect(g);
+        g.connect(audioCtx.destination);
+        keepAliveOsc.start();
       }
 
       if ('wakeLock' in navigator && !wakeLock) {
-        navigator.wakeLock.request('screen').then(lock => { wakeLock = lock; }).catch(() => {});
+        try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
       }
     }
 
+    ['click', 'touchstart', 'touchend'].forEach(evt => window.addEventListener(evt, ensureCustomerAudio, { once: true }));
+
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
-        initCustomerAudioAndWakeLock();
+        ensureCustomerAudio();
         socket.emit('get_all_state');
       }
     });
 
+    // 딩동 차임벨
     function playDingDong(cb) {
-      initCustomerAudioAndWakeLock();
+      ensureCustomerAudio();
       try {
-        const now = audioCtx.currentTime;
+        const t = audioCtx.currentTime;
         const o1 = audioCtx.createOscillator(), g1 = audioCtx.createGain();
-        o1.type = 'sine'; o1.frequency.setValueAtTime(784, now);
-        g1.gain.setValueAtTime(0.4, now); g1.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+        o1.type = 'sine'; o1.frequency.setValueAtTime(784, t);
+        g1.gain.setValueAtTime(0.5, t); g1.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
         o1.connect(g1); g1.connect(audioCtx.destination);
-        o1.start(now); o1.stop(now + 0.5);
+        o1.start(t); o1.stop(t + 0.45);
 
         const o2 = audioCtx.createOscillator(), g2 = audioCtx.createGain();
-        o2.type = 'sine'; o2.frequency.setValueAtTime(523.25, now + 0.28);
-        g2.gain.setValueAtTime(0.45, now + 0.28); g2.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+        o2.type = 'sine'; o2.frequency.setValueAtTime(523.25, t + 0.25);
+        g2.gain.setValueAtTime(0.55, t + 0.25); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.85);
         o2.connect(g2); g2.connect(audioCtx.destination);
-        o2.start(now + 0.28); o2.stop(now + 0.9);
+        o2.start(t + 0.25); o2.stop(t + 0.85);
 
         if (cb) setTimeout(cb, 750);
       } catch (e) {
@@ -100,13 +126,12 @@
       }
     }
 
-    function speakText(text) {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const msg = new SpeechSynthesisUtterance("... " + text);
-        msg.lang = 'ko-KR'; msg.rate = 0.92; msg.volume = 1.0;
-        window.speechSynthesis.speak(msg);
-      }
+    function speakCustomer(text) {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance("... " + text);
+      u.lang = 'ko-KR'; u.rate = 0.92; u.volume = 1.0;
+      window.speechSynthesis.speak(u);
     }
 
     socket.on('connect', () => {
@@ -153,13 +178,13 @@
 
       if (!bank) {
         app.innerHTML = `
-          <h2 class="text-3xl font-black mb-3">상담 기관 선택</h2>
-          <p class="text-sm text-slate-500 mb-8 font-semibold">상담을 원하시는 금융기관을 터치하세요.</p>
-          <div class="space-y-4">
-            <button onclick="selectBank('woori')" class="w-full py-5 bg-blue-50 text-blue-600 font-black rounded-2xl text-xl hover:bg-blue-100 transition shadow-sm">우리은행</button>
-            <button onclick="selectBank('shinhan')" class="w-full py-5 bg-blue-50 text-blue-600 font-black rounded-2xl text-xl hover:bg-blue-100 transition shadow-sm">신한은행</button>
-            <button onclick="selectBank('kb')" class="w-full py-5 bg-blue-50 text-blue-600 font-black rounded-2xl text-xl hover:bg-blue-100 transition shadow-sm">국민은행</button>
-            <button onclick="selectBank('fubon')" class="w-full py-5 bg-blue-50 text-blue-600 font-black rounded-2xl text-xl hover:bg-blue-100 transition shadow-sm">푸본현대생명</button>
+          <h2 style="font-size: 26px; font-weight: 900; margin-bottom: 8px;">상담 기관 선택</h2>
+          <p style="font-size: 14px; color: #94a3b8; margin-bottom: 24px;">원하시는 금융기관을 터치하세요.</p>
+          <div>
+            <button onclick="selectBank('woori')" class="bank-select-btn" style="border-color: #00a2ed;">🏦 우리은행</button>
+            <button onclick="selectBank('shinhan')" class="bank-select-btn" style="border-color: #0046ff;">🏦 신한은행</button>
+            <button onclick="selectBank('kb')" class="bank-select-btn" style="border-color: #ffbc00; color: #ffd15c;">🏦 국민은행</button>
+            <button onclick="selectBank('fubon')" class="bank-select-btn" style="border-color: #0084c7;">🏦 푸본현대생명</button>
           </div>
         `;
         return;
@@ -171,37 +196,26 @@
       if (finishedStatus) {
         const isAbsent = (finishedStatus === '부재중');
         app.innerHTML = `
-          <div class="py-4">
-            <div class="w-16 h-16 ${isAbsent ? 'bg-rose-50 text-rose-500' : 'bg-emerald-50 text-emerald-500'} rounded-full flex items-center justify-center text-3xl mx-auto mb-4 font-black">
-              ${isAbsent ? '✕' : '✓'}
-            </div>
-            <h2 class="text-3xl font-black text-slate-900 mb-2">
+          <div style="padding: 10px 0;">
+            <div style="font-size: 50px; margin-bottom: 8px;">${isAbsent ? '✕' : '✓'}</div>
+            <h2 style="font-size: 28px; font-weight: 900; margin-bottom: 6px;">
               ${isAbsent ? '대기표가 취소되었습니다' : '상담이 완료되었습니다'}
             </h2>
-            <p class="text-sm text-slate-500 mb-6 font-medium">
-              ${isAbsent ? '호출 시 부재로 인해 번호표가 자동 소멸되었습니다.' : `[${bank}] 상담이 정상적으로 마감되었습니다.`}
+            <p style="font-size: 14px; color: #94a3b8; margin-bottom: 24px;">
+              ${isAbsent ? '호출 시 부재로 인해 번호표가 자동 소멸되었습니다.' : `[${bank}] 상담이 정상 종료되었습니다.`}
             </p>
 
-            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-6 text-left">
-              <span class="text-sm font-black text-blue-600 block mb-3">➕ 다른 금융기관 추가 상담 신청</span>
-              <div class="grid grid-cols-2 gap-2.5">
-                <button onclick="selectBank('woori')" class="py-3 bg-white border border-slate-300 rounded-xl font-black text-sm text-slate-800 shadow-sm active:bg-blue-50">우리은행</button>
-                <button onclick="selectBank('shinhan')" class="py-3 bg-white border border-slate-300 rounded-xl font-black text-sm text-slate-800 shadow-sm active:bg-blue-50">신한은행</button>
-                <button onclick="selectBank('kb')" class="py-3 bg-white border border-slate-300 rounded-xl font-black text-sm text-slate-800 shadow-sm active:bg-blue-50">국민은행</button>
-                <button onclick="selectBank('fubon')" class="py-3 bg-white border border-slate-300 rounded-xl font-black text-sm text-slate-800 shadow-sm active:bg-blue-50">푸본현대생명</button>
+            <div style="background: #000; border: 2px solid #1f2937; border-radius: 20px; padding: 18px; margin-bottom: 20px; text-align: left;">
+              <span style="font-size: 15px; font-weight: 900; color: var(--theme-color, #38bdf8); display: block; margin-bottom: 12px;">➕ 다른 금융기관 추가 상담 신청</span>
+              <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                <button onclick="selectBank('woori')" style="height: 52px; background:#111827; border:2px solid #00a2ed; color:#fff; font-weight:900; border-radius:14px;">우리은행</button>
+                <button onclick="selectBank('shinhan')" style="height: 52px; background:#111827; border:2px solid #0046ff; color:#fff; font-weight:900; border-radius:14px;">신한은행</button>
+                <button onclick="selectBank('kb')" style="height: 52px; background:#111827; border:2px solid #ffbc00; color:#ffd15c; font-weight:900; border-radius:14px;">국민은행</button>
+                <button onclick="selectBank('fubon')" style="height: 52px; background:#111827; border:2px solid #0084c7; color:#fff; font-weight:900; border-radius:14px;">푸본현대생명</button>
               </div>
             </div>
 
-            <div class="bg-blue-50/80 border border-blue-200 rounded-2xl p-5 mb-5 text-left">
-              <span class="text-[11px] font-black text-blue-600 bg-white px-2.5 py-0.5 rounded border border-blue-200">법률 & 등기 전담</span>
-              <h3 class="text-base font-black text-slate-900 mt-1 mb-1">법무법인 제이엘</h3>
-              <p class="text-xs text-slate-600 mb-3 leading-relaxed">분양전환 및 소유권이전등기, 브릿지 대출 관련 전담 법률 지원</p>
-              <a href="tel:1899-4252" class="w-full py-3.5 bg-blue-600 active:bg-blue-700 text-white font-black rounded-xl flex items-center justify-center gap-2 shadow-sm text-sm">
-                📞 법률상담 직통: 1899-4252
-              </a>
-            </div>
-
-            <button onclick="reIssue()" class="w-full py-4 bg-slate-100 active:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm">
+            <button onclick="reIssue()" style="width: 100%; height: 60px; background: #1f2937; color: #fff; font-size: 17px; font-weight: 900; border-radius: 16px; border: 1px solid #374151;">
               ${bank} 새 번호표 다시 뽑기
             </button>
           </div>
@@ -212,18 +226,18 @@
       if (activeData) {
         const ticket = JSON.parse(activeData);
         app.innerHTML = `
-          <span class="inline-block px-4 py-1.5 bg-blue-50 text-blue-600 font-black rounded-full text-sm mb-4">${bank}</span>
-          <div class="bg-slate-50 border-2 border-slate-200 rounded-3xl p-6 md:p-8 mb-6">
-            <p class="text-base font-bold text-slate-500 mb-1">고객님의 대기 번호</p>
-            <div class="text-7xl md:text-8xl font-black text-blue-600 my-2 tracking-tight">${ticket.no}번</div>
-            <div id="waitAheadCount" class="text-sm text-blue-600 font-black mt-2">대기 순서를 확인하고 있습니다...</div>
+          <span class="brand-pill">${bank}</span>
+          <div class="led-board">
+            <p style="font-size: 16px; font-weight: 800; color: #94a3b8; margin-bottom: 4px;">고객님의 대기 번호</p>
+            <div class="led-num">${ticket.no}번</div>
+            <div id="waitAheadCount" style="font-size: 16px; font-weight: 900; color: var(--theme-color, #38bdf8); margin-top: 8px;">대기 순서를 조회하고 있습니다...</div>
           </div>
           
-          <div class="flex gap-3">
-            <button onclick="delayTicket(${ticket.no})" id="delay-btn" ${ticket.delay >= 3 ? 'disabled class="flex-1 py-4 bg-slate-100 text-slate-400 font-bold rounded-2xl text-base cursor-not-allowed"' : 'class="flex-1 py-4 bg-amber-50 active:bg-amber-100 text-amber-700 font-bold rounded-2xl text-base border border-amber-200"'}>
+          <div class="btn-group">
+            <button onclick="delayTicket(${ticket.no})" id="delay-btn" ${ticket.delay >= 3 ? 'disabled style="opacity: 0.4;"' : ''} class="btn-act btn-delay">
               순번 미루기 (${ticket.delay}/3)
             </button>
-            <button onclick="cancelTicket(${ticket.no})" class="flex-1 py-4 bg-rose-50 active:bg-rose-100 text-rose-600 font-bold rounded-2xl text-base border border-rose-200">
+            <button onclick="cancelTicket(${ticket.no})" class="btn-act btn-cancel">
               대기 취소
             </button>
           </div>
@@ -282,56 +296,56 @@
         const aheadCount = myIndex;
         if (waitCountEl) {
           if (aheadCount === 0) {
-            waitCountEl.innerText = '🔔 곧 고객님 차례입니다! 창구 바로 앞으로 이동하세요.';
-            waitCountEl.className = 'text-base text-rose-600 font-black mt-2 animate-pulse';
+            waitCountEl.innerText = '🔔 곧 고객님 순서입니다! 창구 바로 앞으로 이동하세요.';
+            waitCountEl.style.color = '#ef4444';
           } else if (aheadCount <= 2) {
             waitCountEl.innerText = `⚠️ 대기 순서 3번째 전입니다 (앞에 ${aheadCount}명 대기)`;
-            waitCountEl.className = 'text-sm text-amber-600 font-black mt-2';
+            waitCountEl.style.color = '#f59e0b';
           } else {
             waitCountEl.innerText = `내 앞에 ${aheadCount}명 대기 중`;
-            waitCountEl.className = 'text-sm text-blue-600 font-black mt-2';
+            waitCountEl.style.color = 'var(--theme-color, #38bdf8)';
           }
         }
 
-        // 3번째 전 사전안내
+        // 3번째 전 사전안내 (딩동 + TTS)
         if (aheadCount === 2 && !preAlert3rdSent) {
           preAlert3rdSent = true;
           playDingDong(() => {
-            speakText(`${myNumberHanja} 번 고객님, 대기 순서 3번째 전입니다. 창구 근처로 이동해 주세요.`);
+            speakCustomer(`${myNumberHanja} 번 고객님, 대기 순서 3번째 전입니다. 창구 근처로 이동해 주세요.`);
           });
           if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
         }
 
-        // 바로 직전 안내
+        // 직전 사전안내 (딩동 + TTS)
         if (aheadCount === 0 && !preAlertNextSent) {
           preAlertNextSent = true;
           playDingDong(() => {
-            speakText(`곧 ${myNumberHanja} 번 고객님 상담 순번입니다. 창구 바로 앞에서 대기해 주세요.`);
+            speakCustomer(`곧 ${myNumberHanja} 번 고객님 상담 순번입니다. 창구 바로 앞에서 대기해 주세요.`);
           });
           if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
         }
       }
 
-      // 창구에서 호출 시
+      // 최종 창구 호출 수신 시
       const calledDesk = data.desks.find(d => d.current === myNumber);
       if (calledDesk) {
         const dNum = calledDesk.name.replace(/[^0-9]/g, '');
         const dHanja = dNum ? toHanja(dNum) + ' 번 창구' : calledDesk.name;
 
         playDingDong(() => {
-          speakText(`${bank} ${dHanja}, ${myNumberHanja} 번 고객님 창구로 와주시기 바랍니다.`);
+          speakCustomer(`${bank} ${dHanja}, ${myNumberHanja} 번 고객님 창구로 와주시기 바랍니다.`);
         });
         if (navigator.vibrate) navigator.vibrate([600, 200, 600, 200, 600]);
         
         document.getElementById('app').innerHTML = `
-          <div class="py-4">
-            <span class="inline-block px-4 py-1.5 bg-rose-100 text-rose-600 font-black rounded-full text-sm mb-3 animate-pulse">● 지금 호출 중입니다</span>
-            <div class="text-7xl font-black text-blue-600 my-2">${myNumber}번</div>
-            <div class="bg-blue-50 border-3 border-blue-500 rounded-3xl p-6 my-5">
-              <p class="text-sm font-bold text-slate-500">${bank}</p>
-              <h2 class="text-3xl font-black text-blue-700 mt-1">${calledDesk.name}로 오십시오!</h2>
+          <div style="padding: 10px 0;">
+            <span style="display:inline-block; font-size:16px; font-weight:900; background:#991b1b; color:#fff; padding:6px 20px; border-radius:30px; margin-bottom:14px; border:2px solid #ef4444;">● 지금 호출 중입니다</span>
+            <div class="led-num" style="color: #ef4444; text-shadow: 0 0 30px rgba(239,68,68,0.7);">${myNumber}번</div>
+            <div style="background:#000; border:3px solid var(--theme-color, #38bdf8); border-radius:24px; padding:22px; margin:20px 0;">
+              <p style="font-size:15px; color:#94a3b8; font-weight:800;">${bank}</p>
+              <h2 style="font-size:32px; font-weight:900; color:#fff; margin-top:4px;">${calledDesk.name}로 오십시오!</h2>
             </div>
-            <p class="text-sm text-slate-500 font-bold">담당 상담사가 창구에서 기다리고 있습니다.</p>
+            <p style="font-size:16px; font-weight:800; color:#94a3b8;">담당 상담사가 창구에서 기다리고 있습니다.</p>
           </div>
         `;
       }

@@ -12,7 +12,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const DB_FILE = path.join(__dirname, 'database.json');
 
-// 기본 데이터 구조
 const defaultQueues = {
   "우리은행": {
     nextNumber: 1,
@@ -49,7 +48,6 @@ const defaultQueues = {
 
 let queues = defaultQueues;
 
-// 서버 재시작 시 데이터 복구 (초기화 방지)
 if (fs.existsSync(DB_FILE)) {
   try {
     queues = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
@@ -140,6 +138,7 @@ io.on('connection', (socket) => {
     if (cb) cb({ success: true, ticketNo: desk.current });
   });
 
+  // 창구이동 (1번 창구 비움 & 2번 창구 상담중 전환 & 실시간 브로드캐스트)
   socket.on('transfer_desk', ({ bank, fromDeskId, toDeskId }, cb) => {
     if (!queues[bank]) return cb && cb({ success: false, message: '은행 오류' });
     const fromDesk = queues[bank].desks.find(d => d.id === Number(fromDeskId));
@@ -191,6 +190,7 @@ io.on('connection', (socket) => {
     if (cb) cb({ success: true });
   });
 
+  // 창구 수 증감 (+ / - 실시간 반영)
   socket.on('adjust_desk_count', ({ bank, change }, cb) => {
     if (!queues[bank]) return cb && cb({ success: false });
     const currentDesks = queues[bank].desks;

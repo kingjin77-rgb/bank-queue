@@ -5,75 +5,88 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="mobile-web-app-capable" content="yes">
-  <title>상담사 호출 단말기</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>상담사 관제 단말기</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
-    * { box-sizing: border-box; }
-    body { font-family: 'Pretendard', sans-serif; background-color: #f1f5f9; color: #0f172a; -webkit-font-smoothing: antialiased; }
-    .app-card { background: #ffffff; border-radius: 28px; box-shadow: 0 10px 30px rgba(0,0,0,0.06); }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif; }
+    body { background-color: #030712; color: #f8fafc; padding: 14px; -webkit-font-smoothing: antialiased; min-height: 100vh; display: flex; justify-content: center; align-items: center; }
+    .control-panel { width: 100%; max-width: 760px; background: #0b0f19; border: 3px solid var(--bank-main, #38bdf8); border-radius: 28px; padding: 22px; box-shadow: 0 0 35px var(--bank-glow, rgba(56, 189, 248, 0.25)); display: flex; flex-direction: column; gap: 16px; }
+
+    .theme-woori { --bank-main: #0067ac; --bank-accent: #00a2ed; --bank-glow: rgba(0, 162, 237, 0.4); --bank-badge: #004270; }
+    .theme-shinhan { --bank-main: #0046ff; --bank-accent: #38bdf8; --bank-glow: rgba(0, 70, 255, 0.4); --bank-badge: #002280; }
+    .theme-kb { --bank-main: #ffbc00; --bank-accent: #ffd15c; --bank-glow: rgba(255, 188, 0, 0.4); --bank-badge: #785a00; }
+    .theme-fubon { --bank-main: #0084c7; --bank-accent: #38bdf8; --bank-glow: rgba(0, 132, 199, 0.4); --bank-badge: #004e75; }
+
+    .emergency-board { display: none; background: #000; border: 4px solid #ef4444; border-radius: 22px; padding: 20px; text-align: center; box-shadow: 0 0 40px rgba(239, 68, 68, 0.8); animation: alertPulse 1s infinite alternate; }
+    @keyframes alertPulse { from { border-color: #ef4444; box-shadow: 0 0 40px rgba(239, 68, 68, 0.9); } to { border-color: #fca5a5; box-shadow: 0 0 10px rgba(239, 68, 68, 0.3); } }
+    .emergency-title { font-size: 14px; font-weight: 900; color: #fca5a5; letter-spacing: 2px; }
+    .emergency-text { font-size: clamp(30px, 5vw, 44px); font-weight: 900; color: #ffffff; margin-top: 4px; }
+
+    .top-bar { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1f2937; padding-bottom: 14px; }
+    .bank-name-badge { font-size: 22px; font-weight: 900; color: #fff; background: var(--bank-badge, #1f2937); border: 2px solid var(--bank-accent, #38bdf8); padding: 8px 18px; border-radius: 14px; }
+    .desk-picker { font-size: 18px; font-weight: 900; background: #111827; color: #fff; border: 2px solid #374151; padding: 8px 14px; border-radius: 14px; outline: none; }
+    .wait-badge-giant { font-size: 18px; font-weight: 900; color: #fecaca; background: #991b1b; padding: 6px 16px; border-radius: 12px; border: 1px solid #ef4444; }
+
+    .main-screen { background: #000; border: 3px solid var(--bank-accent, #38bdf8); border-radius: 24px; padding: 24px 16px; text-align: center; }
+    .status-pill { display: inline-block; font-size: 14px; font-weight: 900; padding: 4px 14px; border-radius: 30px; margin-top: 6px; }
+    .pill-상담중 { background: #064e3b; color: #34d399; border: 1px solid #059669; }
+    .pill-대기중 { background: #1f2937; color: #9ca3af; border: 1px solid #374151; }
+    .big-num { font-size: clamp(80px, 15vw, 130px); font-weight: 900; color: var(--bank-accent, #38bdf8); line-height: 1; margin: 16px 0; text-shadow: 0 0 25px var(--bank-glow, rgba(56, 189, 248, 0.6)); }
+
+    button { cursor: pointer; border: none; outline: none; border-radius: 18px; font-weight: 900; transition: transform 0.1s ease; }
+    button:active { transform: scale(0.97); }
+    .btn-call-giant { width: 100%; height: 86px; background: var(--bank-main, #2563eb); color: #fff; font-size: 28px; border: 2px solid var(--bank-accent, #38bdf8); }
+    .btn-call-giant:disabled { background: #1f2937; border-color: #374151; color: #64748b; }
+
+    .sub-grid { display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr; gap: 10px; }
+    .btn-act { height: 65px; font-size: 17px; border: 2px solid transparent; }
+    .btn-recall { background: #d97706; color: #fff; border-color: #f59e0b; }
+    .btn-finish { background: #0f172a; color: #f8fafc; border-color: #475569; }
+    .btn-absent { background: #7f1d1d; color: #fecaca; border-color: #dc2626; }
+    .btn-trans { background: #581c87; color: #f3e8ff; border-color: #9333ea; }
+    .btn-act:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .wait-box { background: #030712; border: 2px solid #1f2937; border-radius: 20px; padding: 16px; }
+    .wait-list { display: flex; flex-wrap: wrap; gap: 8px; max-height: 100px; overflow-y: auto; margin-top: 10px; }
+    .wait-chip { background: #111827; border: 2px solid #374151; color: #fff; font-size: 16px; font-weight: 900; padding: 6px 14px; border-radius: 12px; }
   </style>
 </head>
-<body class="min-h-screen p-4 md:p-8 flex flex-col justify-center items-center" onclick="initAudioAndWakeLock()">
-  <div class="w-full max-w-xl app-card p-6 md:p-8 border border-slate-200">
-    
-    <div id="newWaitingBanner" class="hidden mb-5 p-4 bg-rose-600 text-white rounded-2xl text-center shadow-lg border-2 border-rose-300">
-      <div class="text-xs font-bold opacity-90">NEW CUSTOMER</div>
-      <div id="bannerText" class="text-xl font-black mt-1">🔔 대기 고객 접수됨!</div>
+<body onclick="ensureAudioActive()">
+  <div id="panelRoot" class="control-panel theme-woori">
+
+    <div id="emergencyBoard" class="emergency-board">
+      <div class="emergency-title">🚨 NEW CUSTOMER WAITING</div>
+      <div id="emergencyText" class="emergency-text">🔔 신규 대기 접수! (대기 0명)</div>
     </div>
 
-    <div class="flex justify-between items-center mb-6 pb-4 border-b border-slate-200">
-      <div class="flex gap-2 items-center">
-        <span id="bankFixedBadge" class="hidden text-xl font-black px-4 py-2 bg-blue-50 text-blue-600 rounded-2xl"></span>
-        <select id="bankSelect" onchange="onBankChanged()" class="font-black text-2xl text-blue-600 bg-transparent outline-none cursor-pointer"></select>
-        <select id="deskSelect" onchange="onDeskChanged()" class="font-bold text-base text-slate-700 bg-slate-100 px-3 py-2 rounded-xl outline-none cursor-pointer"></select>
+    <div class="top-bar">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span id="bankNameDisplay" class="bank-name-badge">우리은행</span>
+        <select id="deskSelect" onchange="onDeskChanged()" class="desk-picker"></select>
       </div>
-      <div id="waitCountBadge" class="text-base font-black text-rose-600 bg-rose-50 px-3.5 py-1.5 rounded-full border border-rose-200">
-        대기: 0명
-      </div>
+      <span id="waitBadge" class="wait-badge-giant">대기: 0명</span>
     </div>
 
-    <div class="bg-blue-50/70 border-2 border-blue-200 rounded-3xl p-6 text-center mb-6">
-      <div class="flex justify-center items-center gap-2 mb-2">
-        <span id="deskTitle" class="text-sm font-bold text-slate-500">1번 창구</span>
-        <span id="statusBadge" class="text-sm font-black px-3 py-0.5 rounded-full bg-slate-200 text-slate-700">대기중</span>
-      </div>
-      <div id="servingNo" class="text-7xl md:text-8xl font-black text-blue-600 my-2 tracking-tight">-</div>
-      <p id="servingGuide" class="text-sm font-semibold text-slate-500 mt-2">고객을 호출하면 즉시 [상담중]으로 자동 전환됩니다.</p>
+    <div class="main-screen">
+      <div style="font-size: 16px; font-weight: 900; color: #94a3b8;" id="deskTitleDisplay">창구 관제 화면</div>
+      <span id="statusPill" class="status-pill pill-대기중">대기중</span>
+      <div id="servingNum" class="big-num">-</div>
+      <div style="font-size: 14px; color: #94a3b8; font-weight: 700;">호출 시 즉시 자동으로 [상담중] 전환됩니다.</div>
     </div>
 
-    <div class="space-y-3 mb-6">
-      <div class="flex gap-3">
-        <button id="callBtn" onclick="callNext()" class="flex-[2] py-5 bg-blue-600 active:bg-blue-700 text-white font-black text-xl rounded-2xl shadow-lg transition disabled:bg-slate-200 disabled:text-slate-400">
-          다음 고객 호출
-        </button>
-        <button id="recallBtn" onclick="reCall()" class="flex-1 py-5 bg-amber-500 active:bg-amber-600 text-white font-black text-lg rounded-2xl shadow-lg transition disabled:bg-slate-200 disabled:text-slate-400">
-          📢 재호출
-        </button>
-      </div>
+    <button id="callBtn" onclick="callNext()" class="btn-call-giant">다음 고객 호출</button>
 
-      <div class="grid grid-cols-3 gap-2.5">
-        <button id="finishBtn" onclick="finishServing()" class="py-4 bg-slate-900 active:bg-black text-white font-bold rounded-2xl text-base shadow-sm disabled:opacity-40">
-          상담종료
-        </button>
-        <button id="absentBtn" onclick="passAbsent()" class="py-4 bg-rose-50 active:bg-rose-100 text-rose-600 font-bold rounded-2xl text-base border border-rose-200 disabled:opacity-40">
-          부재(패스)
-        </button>
-        <button id="transferBtn" onclick="openTransferModal()" class="py-4 bg-purple-50 active:bg-purple-100 text-purple-700 font-bold rounded-2xl text-base border border-purple-200 disabled:opacity-40">
-          창구이동 ➔
-        </button>
-      </div>
+    <div class="sub-grid">
+      <button id="recallBtn" onclick="reCall()" class="btn-act btn-recall">📢 재호출</button>
+      <button id="finishBtn" onclick="finishServing()" class="btn-act btn-finish">상담종료</button>
+      <button id="absentBtn" onclick="passAbsent()" class="btn-act btn-absent">부재(패스)</button>
+      <button id="transferBtn" onclick="openTransferModal()" class="btn-act btn-trans">창구이동 ➔</button>
     </div>
 
-    <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200">
-      <div class="flex justify-between items-center mb-2">
-        <span class="text-xs font-bold text-slate-500">📋 실시간 대기 고객</span>
-        <span id="waitingCountText" class="text-xs font-bold text-blue-600">0명</span>
-      </div>
-      <div id="waitingList" class="flex flex-wrap gap-2 min-h-[38px] items-center">
-        <span class="text-xs text-slate-400">대기 중인 고객이 없습니다.</span>
+    <div class="wait-box">
+      <div style="font-size: 15px; font-weight: 800; color: #94a3b8;">📋 실시간 대기 고객 명단</div>
+      <div id="waitingFlowList" class="wait-list">
+        <span style="font-size: 14px; color: #64748b;">대기 고객이 없습니다.</span>
       </div>
     </div>
 
@@ -82,44 +95,93 @@
   <script>
     const socket = io();
     const urlParams = new URLSearchParams(window.location.search);
-    
     const bankKeyMap = { 'woori': '우리은행', 'shinhan': '신한은행', 'kb': '국민은행', 'fubon': '푸본현대생명' };
-    const rawParam = urlParams.get('b') || urlParams.get('bank');
-    const lockedBank = bankKeyMap[rawParam] || rawParam;
-    const lockedDesk = urlParams.get('desk') || urlParams.get('d');
+    const rawParam = urlParams.get('b') || urlParams.get('bank') || 'woori';
+    const currentBank = bankKeyMap[rawParam] || rawParam;
+    let currentDeskId = Number(urlParams.get('desk') || urlParams.get('d') || localStorage.getItem(`saved_desk_${currentBank}`) || 1);
 
-    let currentBank = lockedBank || localStorage.getItem('saved_teller_bank') || '';
-    let currentDeskId = Number(lockedDesk || localStorage.getItem('saved_teller_desk') || 1);
     let globalState = {};
     let wakeLock = null;
     let audioCtx = null;
-    let silentAudio = null;
+    let keepAliveOsc = null;
 
-    function initAudioAndWakeLock() {
+    const panelRoot = document.getElementById('panelRoot');
+    if (currentBank === '우리은행') panelRoot.className = 'control-panel theme-woori';
+    else if (currentBank === '신한은행') panelRoot.className = 'control-panel theme-shinhan';
+    else if (currentBank === '국민은행') panelRoot.className = 'control-panel theme-kb';
+    else if (currentBank === '푸본현대생명') panelRoot.className = 'control-panel theme-fubon';
+    document.getElementById('bankNameDisplay').innerText = currentBank;
+
+    function toHanja(raw) {
+      const num = parseInt(raw, 10);
+      if (isNaN(num) || num <= 0) return raw;
+      const digits = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
+      if (num < 10) return digits[num];
+      if (num < 100) {
+        const t = Math.floor(num / 10), o = num % 10;
+        return (t === 1 ? '십' : digits[t] + '십') + (o > 0 ? digits[o] : '');
+      }
+      if (num < 1000) {
+        const h = Math.floor(num / 100), r = num % 100, t = Math.floor(r / 10), o = r % 10;
+        return (h === 1 ? '백' : digits[h] + '백') + (t > 0 ? (t === 1 ? '십' : digits[t] + '십') : '') + (o > 0 ? digits[o] : '');
+      }
+      return num;
+    }
+
+    async function ensureAudioActive() {
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
 
-      if (!silentAudio) {
-        silentAudio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
-        silentAudio.loop = true;
-        silentAudio.play().catch(() => {});
+      if (!keepAliveOsc) {
+        keepAliveOsc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        keepAliveOsc.frequency.value = 15;
+        g.gain.value = 0.001;
+        keepAliveOsc.connect(g);
+        g.connect(audioCtx.destination);
+        keepAliveOsc.start();
       }
 
       if ('wakeLock' in navigator && !wakeLock) {
-        navigator.wakeLock.request('screen').then(lock => { wakeLock = lock; }).catch(() => {});
+        try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
       }
     }
 
+    ['click', 'touchstart', 'touchend'].forEach(evt => window.addEventListener(evt, ensureAudioActive, { once: true }));
+
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
-        initAudioAndWakeLock();
+        ensureAudioActive();
         socket.emit('get_all_state');
       }
     });
 
+    function playAlarmBeep(callback) {
+      ensureAudioActive();
+      try {
+        const t = audioCtx.currentTime;
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type = 'square'; o.frequency.setValueAtTime(987.77, t);
+        g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(t); o.stop(t + 0.35);
+        if (callback) setTimeout(callback, 400);
+      } catch (e) {
+        if (callback) callback();
+      }
+    }
+
+    function speakNow(text) {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance("... " + text);
+      u.lang = 'ko-KR'; u.rate = 0.95; u.volume = 1.0;
+      window.speechSynthesis.speak(u);
+    }
+
     socket.on('init_state', (queues) => {
       globalState = queues;
-      setupBankSelect();
+      setupDeskSelect();
       updateUI();
     });
 
@@ -133,72 +195,42 @@
 
     socket.on('new_customer_waiting', ({ bank, ticketNo, waitingCount }) => {
       if (bank === currentBank) {
-        initAudioAndWakeLock();
-        const banner = document.getElementById('newWaitingBanner');
-        const textEl = document.getElementById('bannerText');
-        banner.classList.remove('hidden');
-        textEl.innerText = `🔔 신규 대기 ${ticketNo}번 접수! (대기 ${waitingCount}명)`;
+        ensureAudioActive();
+        const b = document.getElementById('emergencyBoard');
+        b.style.display = 'block';
+        document.getElementById('emergencyText').innerText = `🚨 ${ticketNo}번 고객 접수! (총 ${waitingCount}명 대기)`;
+
+        const tHanja = toHanja(ticketNo);
+        playAlarmBeep(() => {
+          speakNow(`새로운 대기 고객 ${tHanja} 번 고객님이 접수되었습니다.`);
+        });
       }
     });
 
     socket.on('customer_called_dismiss', ({ bank }) => {
       if (bank === currentBank) {
-        document.getElementById('newWaitingBanner').classList.add('hidden');
+        document.getElementById('emergencyBoard').style.display = 'none';
       }
     });
 
-    function setupBankSelect() {
-      const select = document.getElementById('bankSelect');
-      const fixedBadge = document.getElementById('bankFixedBadge');
-      const banks = Object.keys(globalState);
-
-      if (lockedBank && banks.includes(lockedBank)) {
-        currentBank = lockedBank;
-        select.classList.add('hidden');
-        fixedBadge.classList.remove('hidden');
-        fixedBadge.innerText = `🏦 ${lockedBank}`;
-      } else {
-        if (!currentBank || !banks.includes(currentBank)) currentBank = banks[0];
-        select.innerHTML = banks.map(b => `<option value="${b}" ${b === currentBank ? 'selected' : ''}>${b}</option>`).join('');
-      }
-      setupDeskSelect();
-    }
-
     function setupDeskSelect() {
-      const deskSelect = document.getElementById('deskSelect');
+      const s = document.getElementById('deskSelect');
       const desks = (globalState[currentBank] && globalState[currentBank].desks) || [];
-
-      deskSelect.innerHTML = desks.map(d => `
-        <option value="${d.id}" ${d.id === currentDeskId ? 'selected' : ''}>${d.name}</option>
-      `).join('');
-
-      if (!desks.find(d => d.id === currentDeskId) && desks.length > 0) {
-        currentDeskId = desks[0].id;
-      }
-    }
-
-    function onBankChanged() {
-      currentBank = document.getElementById('bankSelect').value;
-      localStorage.setItem('saved_teller_bank', currentBank);
-      const desks = (globalState[currentBank] && globalState[currentBank].desks) || [];
-      if (desks.length > 0) currentDeskId = desks[0].id;
-      localStorage.setItem('saved_teller_desk', currentDeskId);
-      setupDeskSelect();
-      updateUI();
+      s.innerHTML = desks.map(d => `<option value="${d.id}" ${d.id === currentDeskId ? 'selected' : ''}>${d.name}</option>`).join('');
+      if (!desks.find(d => d.id === currentDeskId) && desks.length > 0) currentDeskId = desks[0].id;
     }
 
     function onDeskChanged() {
       currentDeskId = Number(document.getElementById('deskSelect').value);
-      localStorage.setItem('saved_teller_desk', currentDeskId);
+      localStorage.setItem(`saved_desk_${currentBank}`, currentDeskId);
       updateUI();
     }
 
     function callNext() {
-      initAudioAndWakeLock();
+      ensureAudioActive();
       const bankData = globalState[currentBank];
       const desk = bankData && bankData.desks.find(d => d.id === currentDeskId);
-
-      if (!bankData || bankData.waiting.length === 0) return alert('대기 중인 고객이 없습니다.');
+      if (!bankData || bankData.waiting.length === 0) return alert('대기 고객이 없습니다.');
       if (desk && desk.status === '상담중') return alert('현재 상담 중인 고객을 먼저 종료해주세요.');
 
       socket.emit('call_next_desk', { bank: currentBank, deskId: currentDeskId }, (res) => {
@@ -207,10 +239,10 @@
     }
 
     function reCall() {
-      initAudioAndWakeLock();
+      ensureAudioActive();
       const bankData = globalState[currentBank];
       const desk = bankData && bankData.desks.find(d => d.id === currentDeskId);
-      if (!desk || !desk.current) return alert('호출된 고객이 없습니다.');
+      if (!desk || !desk.current) return alert('호출할 고객 번호가 없습니다.');
       socket.emit('recall_desk', { bank: currentBank, deskId: currentDeskId });
     }
 
@@ -225,7 +257,7 @@
       const bankData = globalState[currentBank];
       const desk = bankData && bankData.desks.find(d => d.id === currentDeskId);
       if (!desk || !desk.current) return alert('처리할 고객이 없습니다.');
-      if (confirm(`${desk.current}번 고객을 부재 처리하고 번호표를 취소하시겠습니까?`)) {
+      if (confirm(`${desk.current}번 고객을 부재 처리하고 번호표를 영구 취소하시겠습니까?`)) {
         socket.emit('update_desk_status', { bank: currentBank, deskId: currentDeskId, status: '부재중' });
       }
     }
@@ -234,12 +266,11 @@
       const bankData = globalState[currentBank];
       const desk = bankData && bankData.desks.find(d => d.id === currentDeskId);
       if (!desk || !desk.current) return alert('이동시킬 고객 번호가 없습니다.');
-
       const otherDesks = bankData.desks.filter(d => d.id !== currentDeskId);
       if (otherDesks.length === 0) return alert('이동 가능한 다른 창구가 없습니다.');
 
       const deskOptions = otherDesks.map(d => `${d.id}번: ${d.name} (${d.status})`).join('\n');
-      const targetId = prompt(`현재 ${desk.current}번 고객을 이동시킬 창구 번호(숫자만)를 입력하세요:\n${deskOptions}`);
+      const targetId = prompt(`현재 ${desk.current}번 고객을 보낼 창구 번호(숫자)를 입력하세요:\n${deskOptions}`);
 
       if (targetId) {
         socket.emit('transfer_desk', { bank: currentBank, fromDeskId: currentDeskId, toDeskId: Number(targetId) }, (res) => {
@@ -252,53 +283,37 @@
     function updateUI() {
       const bankData = globalState[currentBank];
       if (!bankData) return;
-
       const desk = bankData.desks.find(d => d.id === currentDeskId) || bankData.desks[0];
       if (!desk) return;
 
       const waitCount = bankData.waiting.length;
-      document.getElementById('deskTitle').innerText = desk.name;
-      document.getElementById('servingNo').innerText = desk.current > 0 ? `${desk.current}번` : '-';
-      document.getElementById('waitCountBadge').innerText = `대기: ${waitCount}명`;
-      document.getElementById('waitingCountText').innerText = `${waitCount}명`;
+      document.getElementById('deskTitleDisplay').innerText = `${desk.name} 관제 화면`;
+      document.getElementById('servingNum').innerText = desk.current > 0 ? `${desk.current}번` : '-';
+      document.getElementById('waitBadge').innerText = `대기: ${waitCount}명`;
 
-      const badge = document.getElementById('statusBadge');
+      const pill = document.getElementById('statusPill');
       const callBtn = document.getElementById('callBtn');
       const recallBtn = document.getElementById('recallBtn');
       const finishBtn = document.getElementById('finishBtn');
       const absentBtn = document.getElementById('absentBtn');
       const transferBtn = document.getElementById('transferBtn');
-      const guide = document.getElementById('servingGuide');
 
-      badge.innerText = desk.status;
-
+      pill.innerText = desk.status;
       if (desk.status === '상담중') {
-        badge.className = 'text-sm font-black px-3 py-0.5 rounded-full bg-emerald-100 text-emerald-700';
-        guide.innerText = '고객 상담 진행 중입니다. 완료 시 [상담종료]를 누르세요.';
-        callBtn.disabled = true;
-        recallBtn.disabled = false;
-        finishBtn.disabled = false;
-        absentBtn.disabled = false;
-        transferBtn.disabled = false;
+        pill.className = 'status-pill pill-상담중';
+        callBtn.disabled = true; recallBtn.disabled = false; finishBtn.disabled = false; absentBtn.disabled = false; transferBtn.disabled = false;
       } else {
-        badge.className = 'text-sm font-black px-3 py-0.5 rounded-full bg-slate-200 text-slate-700';
-        guide.innerText = waitCount > 0 ? '대기 고객이 있습니다. [다음 고객 호출]을 누르세요.' : '대기 중인 고객이 없습니다.';
-        callBtn.disabled = (waitCount === 0);
-        recallBtn.disabled = true;
-        finishBtn.disabled = true;
-        absentBtn.disabled = true;
-        transferBtn.disabled = true;
+        pill.className = 'status-pill pill-대기중';
+        callBtn.disabled = (waitCount === 0); recallBtn.disabled = true; finishBtn.disabled = true; absentBtn.disabled = true; transferBtn.disabled = true;
       }
 
-      const listEl = document.getElementById('waitingList');
+      const listEl = document.getElementById('waitingFlowList');
       if (waitCount > 0) {
         listEl.innerHTML = bankData.waiting.map((n, idx) => `
-          <span class="px-3.5 py-1.5 bg-white border border-slate-300 rounded-xl font-black text-base text-slate-800 shadow-sm">
-            <span class="text-xs text-slate-400 mr-1">${idx + 1}위</span>${n}번
-          </span>
+          <span class="wait-chip"><span style="color:#94a3b8; font-size:12px; margin-right:4px;">${idx+1}위</span>${n}번</span>
         `).join('');
       } else {
-        listEl.innerHTML = '<span class="text-xs text-slate-400">대기 중인 고객이 없습니다.</span>';
+        listEl.innerHTML = '<span style="font-size: 14px; color: #64748b;">대기 고객이 없습니다.</span>';
       }
     }
   </script>
