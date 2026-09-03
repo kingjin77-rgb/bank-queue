@@ -41,9 +41,21 @@
   <script>
     const socket = io();
     const params = new URLSearchParams(window.location.search);
-    const bankKeyMap = { 'woori': '우리은행', 'shinhan': '신한은행', 'kb': '국민은행', 'fubon': '푸본현대생명' };
+
+    const bankKeyMap = {
+      'woori': '우리은행',
+      'shinhan': '신한은행',
+      'kb': '국민은행',
+      'fubon': '푸본현대생명'
+    };
+
     const rawParam = params.get('b') || params.get('bank');
-    let bank = bankKeyMap[rawParam] || (rawParam ? decodeURIComponent(rawParam).trim() : null);
+    let bank = null;
+
+    if (rawParam) {
+      const clean = decodeURIComponent(rawParam).trim();
+      bank = bankKeyMap[clean.toLowerCase()] || clean;
+    }
 
     let audioCtx = null;
     let wakeLock = null;
@@ -52,11 +64,12 @@
     let preAlertNextSent = false;
     let hasProcessed = false;
 
+    // 해당 은행 테마 자동 설정
     const cardEl = document.getElementById('clientCard');
-    if (bank === '우리은행') cardEl.className = 'client-card bank-woori';
-    else if (bank === '신한은행') cardEl.className = 'client-card bank-shinhan';
+    if (bank === '신한은행') cardEl.className = 'client-card bank-shinhan';
     else if (bank === '국민은행') cardEl.className = 'client-card bank-kb';
     else if (bank === '푸본현대생명') cardEl.className = 'client-card bank-fubon';
+    else if (bank === '우리은행') cardEl.className = 'client-card bank-woori';
 
     function toHanja(raw) {
       const num = parseInt(raw, 10);
@@ -322,7 +335,6 @@
         }
       }
 
-      // 최종 창구 호출 수신 시 (표준 어순)
       const calledDesk = data.desks.find(d => d.current === myNumber);
       if (calledDesk) {
         const dNum = calledDesk.name.replace(/[^0-9]/g, '');

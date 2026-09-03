@@ -12,6 +12,7 @@
     body { background-color: #030712; color: #f8fafc; padding: 14px; -webkit-font-smoothing: antialiased; min-height: 100vh; display: flex; justify-content: center; align-items: center; }
     .control-panel { width: 100%; max-width: 760px; background: #0b0f19; border: 3px solid var(--bank-main, #38bdf8); border-radius: 28px; padding: 22px; box-shadow: 0 0 35px var(--bank-glow, rgba(56, 189, 248, 0.25)); display: flex; flex-direction: column; gap: 16px; }
 
+    /* 은행별 테마 */
     .theme-woori { --bank-main: #0067ac; --bank-accent: #00a2ed; --bank-glow: rgba(0, 162, 237, 0.4); --bank-badge: #004270; }
     .theme-shinhan { --bank-main: #0046ff; --bank-accent: #38bdf8; --bank-glow: rgba(0, 70, 255, 0.4); --bank-badge: #002280; }
     .theme-kb { --bank-main: #ffbc00; --bank-accent: #ffd15c; --bank-glow: rgba(255, 188, 0, 0.4); --bank-badge: #785a00; }
@@ -63,7 +64,7 @@
 
     <div class="top-bar">
       <div style="display: flex; align-items: center; gap: 10px;">
-        <span id="bankNameDisplay" class="bank-name-badge">우리은행</span>
+        <span id="bankNameDisplay" class="bank-name-badge">은행명</span>
         <select id="deskSelect" onchange="onDeskChanged()" class="desk-picker"></select>
       </div>
       <span id="waitBadge" class="wait-badge-giant">대기: 0명</span>
@@ -97,9 +98,24 @@
   <script>
     const socket = io();
     const urlParams = new URLSearchParams(window.location.search);
-    const bankKeyMap = { 'woori': '우리은행', 'shinhan': '신한은행', 'kb': '국민은행', 'fubon': '푸본현대생명' };
-    const rawParam = urlParams.get('b') || urlParams.get('bank') || 'woori';
-    const currentBank = bankKeyMap[rawParam] || rawParam;
+
+    // 파라미터 정확한 매핑 테이블
+    const bankKeyMap = {
+      'woori': '우리은행',
+      'shinhan': '신한은행',
+      'kb': '국민은행',
+      'fubon': '푸본현대생명'
+    };
+
+    // 파라미터 읽기: 'b' 또는 'bank' 확인 (한글 디코딩 지원)
+    const rawParam = urlParams.get('b') || urlParams.get('bank');
+    let currentBank = '우리은행';
+
+    if (rawParam) {
+      const cleanParam = decodeURIComponent(rawParam).trim();
+      currentBank = bankKeyMap[cleanParam.toLowerCase()] || cleanParam;
+    }
+
     let currentDeskId = Number(urlParams.get('desk') || urlParams.get('d') || localStorage.getItem(`saved_desk_${currentBank}`) || 1);
 
     let globalState = {};
@@ -107,12 +123,15 @@
     let audioCtx = null;
     let keepAliveOsc = null;
 
+    // 해당 은행 테마 클래스 즉시 적용
     const panelRoot = document.getElementById('panelRoot');
-    if (currentBank === '우리은행') panelRoot.className = 'control-panel theme-woori';
-    else if (currentBank === '신한은행') panelRoot.className = 'control-panel theme-shinhan';
+    if (currentBank === '신한은행') panelRoot.className = 'control-panel theme-shinhan';
     else if (currentBank === '국민은행') panelRoot.className = 'control-panel theme-kb';
     else if (currentBank === '푸본현대생명') panelRoot.className = 'control-panel theme-fubon';
+    else panelRoot.className = 'control-panel theme-woori';
+
     document.getElementById('bankNameDisplay').innerText = currentBank;
+    document.title = `${currentBank} 상담사 단말기`;
 
     function toHanja(raw) {
       const num = parseInt(raw, 10);
@@ -298,10 +317,8 @@
       const otherDesks = bankData.desks.filter(d => d.id !== currentDeskId);
       if (otherDesks.length === 0) return alert('이동 가능한 다른 창구가 없습니다.');
 
-      const deskOptions = otherDesks.map(d => `${d.id}번: ${d.name} (${d.status})`).join('
-');
-      const targetId = prompt(`현재 ${desk.current}번 고객을 보낼 창구 번호(숫자)를 입력하세요:
-${deskOptions}`);
+      const deskOptions = otherDesks.map(d => `${d.id}번: ${d.name} (${d.status})`).join('\n');
+      const targetId = prompt(`현재 ${desk.current}번 고객을 보낼 창구 번호(숫자)를 입력하세요:\n${deskOptions}`);
 
       if (targetId) {
         socket.emit('transfer_desk', { bank: currentBank, fromDeskId: currentDeskId, toDeskId: Number(targetId) }, (res) => {
