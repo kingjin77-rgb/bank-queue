@@ -80,40 +80,37 @@ io.on('connection', (socket) => {
     if (cb) cb({ success: true, ticketNo });
   });
 
-  // 고객 자진 취소 처리
   socket.on('cancel_ticket', ({ bank, ticketNo }, cb) => {
-    if (!queues[bank]) return;
-    const idx = queues[bank].waiting.indexOf(ticketNo);
+    if (!queues[bank]) return cb && cb({ success: false });
+    const idx = queues[bank].waiting.indexOf(Number(ticketNo));
     if (idx > -1) {
       queues[bank].waiting.splice(idx, 1);
       saveDB();
       io.emit('queue_update', { bank, data: queues[bank] });
-      // 상담사용 취소 안내 이벤트 전송
-      io.emit('customer_action_notice', { 
-        bank, 
-        action: 'cancel', 
-        ticketNo, 
-        waitingCount: queues[bank].waiting.length 
+      io.emit('customer_action_notice', {
+        bank,
+        action: 'cancel',
+        ticketNo: Number(ticketNo),
+        waitingCount: queues[bank].waiting.length
       });
     }
     if (cb) cb({ success: true });
   });
 
-  // 고객 순번 미루기 처리
   socket.on('delay_ticket', ({ bank, ticketNo }, cb) => {
     if (!queues[bank]) return cb && cb({ success: false });
-    const idx = queues[bank].waiting.indexOf(ticketNo);
+    const num = Number(ticketNo);
+    const idx = queues[bank].waiting.indexOf(num);
     if (idx > -1) {
       queues[bank].waiting.splice(idx, 1);
-      queues[bank].waiting.push(ticketNo);
+      queues[bank].waiting.push(num);
       saveDB();
       io.emit('queue_update', { bank, data: queues[bank] });
-      // 상담사용 순번 미루기 안내 이벤트 전송
-      io.emit('customer_action_notice', { 
-        bank, 
-        action: 'delay', 
-        ticketNo, 
-        waitingCount: queues[bank].waiting.length 
+      io.emit('customer_action_notice', {
+        bank,
+        action: 'delay',
+        ticketNo: num,
+        waitingCount: queues[bank].waiting.length
       });
       if (cb) cb({ success: true });
     } else {

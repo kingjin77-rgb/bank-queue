@@ -201,6 +201,7 @@
     socket.on('init_state', (data) => { state = data; render(); });
     socket.on('queue_update', ({ bank, data }) => { state[bank] = data; render(); });
 
+    // 표준 호명 방송: 은행 -> 고객번호 -> 창구번호
     socket.on('voice_call', ({ bank, deskName, ticketNo }) => {
       const dNum = deskName.replace(/[^0-9]/g, '');
       const dHanja = dNum ? toHanja(dNum) + ' 번 창구' : deskName;
@@ -209,9 +210,9 @@
       const banner = document.getElementById('callBoard');
       const textEl = document.getElementById('callBoardText');
       banner.style.display = 'block';
-      textEl.innerText = `${bank} ${deskName} ➔ ${ticketNo}번`;
+      textEl.innerText = `${bank} ${ticketNo}번 ➔ ${deskName}`;
 
-      const speech = `${bank}, ${dHanja}, ${tHanja} 창구로 와주시기 바랍니다.`;
+      const speech = `${bank}, ${tHanja}, ${dHanja}로 와주시기 바랍니다.`;
       playBroadcastChime(() => { speakBroadcast(speech); });
     });
 

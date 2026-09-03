@@ -74,7 +74,6 @@
       return num;
     }
 
-    // 고객 폰 슬립 차단
     async function ensureCustomerAudio() {
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtx.state === 'suspended') await audioCtx.resume();
@@ -103,7 +102,6 @@
       }
     });
 
-    // 딩동 차임벨
     function playDingDong(cb) {
       ensureCustomerAudio();
       try {
@@ -250,9 +248,9 @@
     function delayTicket(ticketNo) {
       let ticket = JSON.parse(localStorage.getItem(`ticket_${bank}`));
       if (ticket.delay >= 3) return alert('순번 미루기는 최대 3회까지만 가능합니다.');
-      
-      socket.emit('delay_ticket', { bank, ticketNo }, (res) => {
-        if (res.success) {
+
+      socket.emit('delay_ticket', { bank, ticketNo: Number(ticketNo) }, (res) => {
+        if (res && res.success) {
           ticket.delay++;
           localStorage.setItem(`ticket_${bank}`, JSON.stringify(ticket));
           preAlert3rdSent = false;
@@ -265,7 +263,7 @@
 
     function cancelTicket(ticketNo) {
       if (confirm('대기 번호표를 취소하시겠습니까?')) {
-        socket.emit('cancel_ticket', { bank, ticketNo }, () => {
+        socket.emit('cancel_ticket', { bank, ticketNo: Number(ticketNo) }, () => {
           localStorage.removeItem(`ticket_${bank}`);
           localStorage.removeItem(`ticket_status_${bank}`);
           alert('대기표가 취소되었습니다.');
@@ -307,7 +305,6 @@
           }
         }
 
-        // 3번째 전 사전안내 (딩동 + TTS)
         if (aheadCount === 2 && !preAlert3rdSent) {
           preAlert3rdSent = true;
           playDingDong(() => {
@@ -316,7 +313,6 @@
           if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
         }
 
-        // 직전 사전안내 (딩동 + TTS)
         if (aheadCount === 0 && !preAlertNextSent) {
           preAlertNextSent = true;
           playDingDong(() => {
@@ -326,17 +322,17 @@
         }
       }
 
-      // 최종 창구 호출 수신 시
+      // 최종 창구 호출 수신 시 (표준 어순)
       const calledDesk = data.desks.find(d => d.current === myNumber);
       if (calledDesk) {
         const dNum = calledDesk.name.replace(/[^0-9]/g, '');
         const dHanja = dNum ? toHanja(dNum) + ' 번 창구' : calledDesk.name;
 
         playDingDong(() => {
-          speakCustomer(`${bank} ${dHanja}, ${myNumberHanja} 번 고객님 창구로 와주시기 바랍니다.`);
+          speakCustomer(`${bank}, ${myNumberHanja} 번 고객님, ${dHanja}로 와주시기 바랍니다.`);
         });
         if (navigator.vibrate) navigator.vibrate([600, 200, 600, 200, 600]);
-        
+
         document.getElementById('app').innerHTML = `
           <div style="padding: 10px 0;">
             <span style="display:inline-block; font-size:16px; font-weight:900; background:#991b1b; color:#fff; padding:6px 20px; border-radius:30px; margin-bottom:14px; border:2px solid #ef4444;">● 지금 호출 중입니다</span>

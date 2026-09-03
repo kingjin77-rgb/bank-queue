@@ -1,13 +1,13 @@
 {
   "name": "bank-queue-system",
   "version": "1.0.0",
-  "description": "Smart Bank Queue Management System with Toss-style UI",
+  "description": "Multi-bank Smart Queue Management System",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "socket.io": "^4.7.5"
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
   }
 }
