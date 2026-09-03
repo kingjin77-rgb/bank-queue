@@ -12,73 +12,68 @@
   <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
     * { box-sizing: border-box; }
-    body { font-family: 'Pretendard', sans-serif; background-color: #f2f4f6; color: #191f28; -webkit-font-smoothing: antialiased; }
-    .toss-card { background: #ffffff; border-radius: 24px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04); }
+    body { font-family: 'Pretendard', sans-serif; background-color: #f1f5f9; color: #0f172a; -webkit-font-smoothing: antialiased; }
+    .app-card { background: #ffffff; border-radius: 28px; box-shadow: 0 10px 30px rgba(0,0,0,0.06); }
   </style>
 </head>
-<body class="min-h-screen p-4 flex flex-col justify-center items-center" onclick="initAudioAndWakeLock()">
-  <div class="w-full max-w-md toss-card p-6 border border-gray-100 relative">
+<body class="min-h-screen p-4 md:p-8 flex flex-col justify-center items-center" onclick="initAudioAndWakeLock()">
+  <div class="w-full max-w-xl app-card p-6 md:p-8 border border-slate-200">
     
-    <!-- 대기 고객 접수 시 상단 대형 고정 배너 (호출 실행 시 해제) -->
-    <div id="newWaitingBanner" class="hidden mb-4 p-4 bg-rose-600 text-white rounded-2xl text-center shadow-lg border-2 border-rose-300">
-      <div class="text-[11px] font-bold opacity-90">NEW CUSTOMER</div>
-      <div id="bannerText" class="text-base font-black mt-0.5">🔔 대기 고객 접수됨! 호출 대기 중</div>
+    <div id="newWaitingBanner" class="hidden mb-5 p-4 bg-rose-600 text-white rounded-2xl text-center shadow-lg border-2 border-rose-300">
+      <div class="text-xs font-bold opacity-90">NEW CUSTOMER</div>
+      <div id="bannerText" class="text-xl font-black mt-1">🔔 대기 고객 접수됨!</div>
     </div>
 
-    <!-- 헤더 -->
-    <div class="flex justify-between items-center mb-4 pb-3 border-b border-gray-100">
+    <div class="flex justify-between items-center mb-6 pb-4 border-b border-slate-200">
       <div class="flex gap-2 items-center">
-        <span id="bankFixedBadge" class="hidden text-base font-black px-3 py-1 bg-blue-50 text-blue-600 rounded-xl"></span>
-        <select id="bankSelect" onchange="onBankChanged()" class="font-bold text-lg text-blue-600 bg-transparent outline-none cursor-pointer"></select>
-        <select id="deskSelect" onchange="onDeskChanged()" class="font-bold text-sm text-gray-700 bg-gray-100 px-2.5 py-1.5 rounded-lg outline-none cursor-pointer"></select>
+        <span id="bankFixedBadge" class="hidden text-xl font-black px-4 py-2 bg-blue-50 text-blue-600 rounded-2xl"></span>
+        <select id="bankSelect" onchange="onBankChanged()" class="font-black text-2xl text-blue-600 bg-transparent outline-none cursor-pointer"></select>
+        <select id="deskSelect" onchange="onDeskChanged()" class="font-bold text-base text-slate-700 bg-slate-100 px-3 py-2 rounded-xl outline-none cursor-pointer"></select>
       </div>
-      <div id="waitCountBadge" class="text-sm font-black text-rose-500 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-100">
+      <div id="waitCountBadge" class="text-base font-black text-rose-600 bg-rose-50 px-3.5 py-1.5 rounded-full border border-rose-200">
         대기: 0명
       </div>
     </div>
 
-    <!-- 현재 창구 현황 -->
-    <div class="bg-blue-50/60 border border-blue-100 rounded-2xl p-5 text-center mb-4">
-      <div class="flex justify-center items-center gap-2 mb-1">
-        <span id="deskTitle" class="text-xs font-bold text-gray-500">1번 창구</span>
-        <span id="statusBadge" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-200 text-gray-700">대기중</span>
+    <div class="bg-blue-50/70 border-2 border-blue-200 rounded-3xl p-6 text-center mb-6">
+      <div class="flex justify-center items-center gap-2 mb-2">
+        <span id="deskTitle" class="text-sm font-bold text-slate-500">1번 창구</span>
+        <span id="statusBadge" class="text-sm font-black px-3 py-0.5 rounded-full bg-slate-200 text-slate-700">대기중</span>
       </div>
-      <div id="servingNo" class="text-6xl font-black text-blue-600 my-1">-</div>
-      <p id="servingGuide" class="text-xs font-medium text-gray-500">다음 고객을 호출하면 자동으로 [상담중]으로 시작됩니다.</p>
+      <div id="servingNo" class="text-7xl md:text-8xl font-black text-blue-600 my-2 tracking-tight">-</div>
+      <p id="servingGuide" class="text-sm font-semibold text-slate-500 mt-2">고객을 호출하면 즉시 [상담중]으로 자동 전환됩니다.</p>
     </div>
 
-    <!-- 원터치 제어 패널 -->
-    <div class="space-y-2.5 mb-5">
-      <div class="flex gap-2">
-        <button id="callBtn" onclick="callNext()" class="flex-[2] py-4 bg-blue-600 active:bg-blue-700 text-white font-black text-lg rounded-xl shadow-md transition disabled:bg-gray-200 disabled:text-gray-400">
+    <div class="space-y-3 mb-6">
+      <div class="flex gap-3">
+        <button id="callBtn" onclick="callNext()" class="flex-[2] py-5 bg-blue-600 active:bg-blue-700 text-white font-black text-xl rounded-2xl shadow-lg transition disabled:bg-slate-200 disabled:text-slate-400">
           다음 고객 호출
         </button>
-        <button id="recallBtn" onclick="reCall()" class="flex-1 py-4 bg-amber-500 active:bg-amber-600 text-white font-black text-base rounded-xl shadow-md transition disabled:bg-gray-200 disabled:text-gray-400">
+        <button id="recallBtn" onclick="reCall()" class="flex-1 py-5 bg-amber-500 active:bg-amber-600 text-white font-black text-lg rounded-2xl shadow-lg transition disabled:bg-slate-200 disabled:text-slate-400">
           📢 재호출
         </button>
       </div>
 
-      <div class="grid grid-cols-3 gap-2">
-        <button id="finishBtn" onclick="finishServing()" class="py-3.5 bg-gray-800 active:bg-black text-white font-bold rounded-xl text-sm shadow-sm disabled:opacity-40">
+      <div class="grid grid-cols-3 gap-2.5">
+        <button id="finishBtn" onclick="finishServing()" class="py-4 bg-slate-900 active:bg-black text-white font-bold rounded-2xl text-base shadow-sm disabled:opacity-40">
           상담종료
         </button>
-        <button id="absentBtn" onclick="passAbsent()" class="py-3.5 bg-rose-50 active:bg-rose-100 text-rose-600 font-bold rounded-xl text-sm border border-rose-200 disabled:opacity-40">
+        <button id="absentBtn" onclick="passAbsent()" class="py-4 bg-rose-50 active:bg-rose-100 text-rose-600 font-bold rounded-2xl text-base border border-rose-200 disabled:opacity-40">
           부재(패스)
         </button>
-        <button id="transferBtn" onclick="openTransferModal()" class="py-3.5 bg-purple-50 active:bg-purple-100 text-purple-700 font-bold rounded-xl text-sm border border-purple-200 disabled:opacity-40">
+        <button id="transferBtn" onclick="openTransferModal()" class="py-4 bg-purple-50 active:bg-purple-100 text-purple-700 font-bold rounded-2xl text-base border border-purple-200 disabled:opacity-40">
           창구이동 ➔
         </button>
       </div>
     </div>
 
-    <!-- 대기 명단 -->
-    <div class="bg-gray-50 rounded-2xl p-4 border border-gray-200">
+    <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200">
       <div class="flex justify-between items-center mb-2">
-        <span class="text-xs font-bold text-gray-500">📋 실시간 대기 명단</span>
+        <span class="text-xs font-bold text-slate-500">📋 실시간 대기 고객</span>
         <span id="waitingCountText" class="text-xs font-bold text-blue-600">0명</span>
       </div>
-      <div id="waitingList" class="flex flex-wrap gap-2 min-h-[36px] items-center">
-        <span class="text-xs text-gray-400">대기 중인 고객이 없습니다.</span>
+      <div id="waitingList" class="flex flex-wrap gap-2 min-h-[38px] items-center">
+        <span class="text-xs text-slate-400">대기 중인 고객이 없습니다.</span>
       </div>
     </div>
 
@@ -87,8 +82,11 @@
   <script>
     const socket = io();
     const urlParams = new URLSearchParams(window.location.search);
-    const lockedBank = urlParams.get('bank');
-    const lockedDesk = urlParams.get('desk');
+    
+    const bankKeyMap = { 'woori': '우리은행', 'shinhan': '신한은행', 'kb': '국민은행', 'fubon': '푸본현대생명' };
+    const rawParam = urlParams.get('b') || urlParams.get('bank');
+    const lockedBank = bankKeyMap[rawParam] || rawParam;
+    const lockedDesk = urlParams.get('desk') || urlParams.get('d');
 
     let currentBank = lockedBank || localStorage.getItem('saved_teller_bank') || '';
     let currentDeskId = Number(lockedDesk || localStorage.getItem('saved_teller_desk') || 1);
@@ -119,28 +117,6 @@
       }
     });
 
-    function playBeep() {
-      initAudioAndWakeLock();
-      try {
-        const now = audioCtx.currentTime;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'sine'; osc.frequency.setValueAtTime(880, now);
-        gain.gain.setValueAtTime(0.3, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        osc.start(now); osc.stop(now + 0.3);
-      } catch (e) {}
-    }
-
-    function speakText(text) {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(text);
-        u.lang = 'ko-KR'; u.rate = 0.95;
-        window.speechSynthesis.speak(u);
-      }
-    }
-
     socket.on('init_state', (queues) => {
       globalState = queues;
       setupBankSelect();
@@ -155,19 +131,16 @@
       }
     });
 
-    // 신규 고객 등록 시 상단 고정 배너 노출 & 음성
     socket.on('new_customer_waiting', ({ bank, ticketNo, waitingCount }) => {
       if (bank === currentBank) {
-        playBeep();
-        speakText(`새로운 대기 고객 ${ticketNo}번이 접수되었습니다.`);
+        initAudioAndWakeLock();
         const banner = document.getElementById('newWaitingBanner');
         const textEl = document.getElementById('bannerText');
         banner.classList.remove('hidden');
-        textEl.innerText = `🔔 신규 대기 고객 ${ticketNo}번 접수됨! (대기 ${waitingCount}명)`;
+        textEl.innerText = `🔔 신규 대기 ${ticketNo}번 접수! (대기 ${waitingCount}명)`;
       }
     });
 
-    // 누군가 호출 시 배너 해제
     socket.on('customer_called_dismiss', ({ bank }) => {
       if (bank === currentBank) {
         document.getElementById('newWaitingBanner').classList.add('hidden');
@@ -220,7 +193,6 @@
       updateUI();
     }
 
-    // 다음 호출 -> 자동으로 '상담중' 상태 전환
     function callNext() {
       initAudioAndWakeLock();
       const bankData = globalState[currentBank];
@@ -288,7 +260,7 @@
       document.getElementById('deskTitle').innerText = desk.name;
       document.getElementById('servingNo').innerText = desk.current > 0 ? `${desk.current}번` : '-';
       document.getElementById('waitCountBadge').innerText = `대기: ${waitCount}명`;
-      document.getElementById('waitingCountText').innerText = `${waitCount}명 대기`;
+      document.getElementById('waitingCountText').innerText = `${waitCount}명`;
 
       const badge = document.getElementById('statusBadge');
       const callBtn = document.getElementById('callBtn');
@@ -301,15 +273,15 @@
       badge.innerText = desk.status;
 
       if (desk.status === '상담중') {
-        badge.className = 'text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700';
-        guide.innerText = '고객 상담 진행 중입니다. 끝나면 [상담종료]를 누르세요.';
+        badge.className = 'text-sm font-black px-3 py-0.5 rounded-full bg-emerald-100 text-emerald-700';
+        guide.innerText = '고객 상담 진행 중입니다. 완료 시 [상담종료]를 누르세요.';
         callBtn.disabled = true;
         recallBtn.disabled = false;
         finishBtn.disabled = false;
         absentBtn.disabled = false;
         transferBtn.disabled = false;
       } else {
-        badge.className = 'text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-200 text-gray-700';
+        badge.className = 'text-sm font-black px-3 py-0.5 rounded-full bg-slate-200 text-slate-700';
         guide.innerText = waitCount > 0 ? '대기 고객이 있습니다. [다음 고객 호출]을 누르세요.' : '대기 중인 고객이 없습니다.';
         callBtn.disabled = (waitCount === 0);
         recallBtn.disabled = true;
@@ -321,12 +293,12 @@
       const listEl = document.getElementById('waitingList');
       if (waitCount > 0) {
         listEl.innerHTML = bankData.waiting.map((n, idx) => `
-          <span class="px-3 py-1.5 bg-white border border-gray-200 rounded-xl font-black text-sm text-gray-800 shadow-sm">
-            <span class="text-xs text-gray-400 mr-1">${idx + 1}위</span>${n}번
+          <span class="px-3.5 py-1.5 bg-white border border-slate-300 rounded-xl font-black text-base text-slate-800 shadow-sm">
+            <span class="text-xs text-slate-400 mr-1">${idx + 1}위</span>${n}번
           </span>
         `).join('');
       } else {
-        listEl.innerHTML = '<span class="text-xs text-gray-400">대기 중인 고객이 없습니다.</span>';
+        listEl.innerHTML = '<span class="text-xs text-slate-400">대기 중인 고객이 없습니다.</span>';
       }
     }
   </script>

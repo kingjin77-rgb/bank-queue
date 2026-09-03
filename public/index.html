@@ -26,8 +26,9 @@
   <script>
     const socket = io();
     const params = new URLSearchParams(window.location.search);
-    const rawBank = params.get('bank');
-    let bank = rawBank ? decodeURIComponent(rawBank).trim() : null;
+    const bankKeyMap = { 'woori': '우리은행', 'shinhan': '신한은행', 'kb': '국민은행', 'fubon': '푸본현대생명' };
+    const rawParam = params.get('b') || params.get('bank');
+    let bank = bankKeyMap[rawParam] || (rawParam ? decodeURIComponent(rawParam).trim() : null);
 
     let preAlert3rdSent = false;
     let preAlertNextSent = false;
@@ -61,13 +62,13 @@
         const now = audioCtx.currentTime;
         const o1 = audioCtx.createOscillator(), g1 = audioCtx.createGain();
         o1.type = 'sine'; o1.frequency.setValueAtTime(784, now);
-        gain1.gain.setValueAtTime(0.3, now); gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+        g1.gain.setValueAtTime(0.3, now); g1.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
         o1.connect(g1); g1.connect(audioCtx.destination);
         o1.start(now); o1.stop(now + 0.5);
 
         const o2 = audioCtx.createOscillator(), g2 = audioCtx.createGain();
         o2.type = 'sine'; o2.frequency.setValueAtTime(523.25, now + 0.28);
-        gain2.gain.setValueAtTime(0.35, now + 0.28); g2.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+        g2.gain.setValueAtTime(0.35, now + 0.28); g2.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
         o2.connect(g2); g2.connect(audioCtx.destination);
         o2.start(now + 0.28); o2.stop(now + 0.9);
 
@@ -133,10 +134,10 @@
           <h2 class="text-2xl font-black mb-2">상담 기관 선택</h2>
           <p class="text-xs text-gray-500 mb-6">상담을 원하시는 금융기관을 선택하세요.</p>
           <div class="space-y-3">
-            <button onclick="selectBank('우리은행')" class="w-full py-4 bg-blue-50 text-blue-600 font-black rounded-2xl text-lg hover:bg-blue-100 transition shadow-sm">우리은행</button>
-            <button onclick="selectBank('신한은행')" class="w-full py-4 bg-blue-50 text-blue-600 font-black rounded-2xl text-lg hover:bg-blue-100 transition shadow-sm">신한은행</button>
-            <button onclick="selectBank('국민은행')" class="w-full py-4 bg-blue-50 text-blue-600 font-black rounded-2xl text-lg hover:bg-blue-100 transition shadow-sm">국민은행</button>
-            <button onclick="selectBank('푸본현대생명')" class="w-full py-4 bg-blue-50 text-blue-600 font-black rounded-2xl text-lg hover:bg-blue-100 transition shadow-sm">푸본현대생명</button>
+            <button onclick="selectBank('woori')" class="w-full py-4 bg-blue-50 text-blue-600 font-black rounded-2xl text-lg hover:bg-blue-100 transition shadow-sm">우리은행</button>
+            <button onclick="selectBank('shinhan')" class="w-full py-4 bg-blue-50 text-blue-600 font-black rounded-2xl text-lg hover:bg-blue-100 transition shadow-sm">신한은행</button>
+            <button onclick="selectBank('kb')" class="w-full py-4 bg-blue-50 text-blue-600 font-black rounded-2xl text-lg hover:bg-blue-100 transition shadow-sm">국민은행</button>
+            <button onclick="selectBank('fubon')" class="w-full py-4 bg-blue-50 text-blue-600 font-black rounded-2xl text-lg hover:bg-blue-100 transition shadow-sm">푸본현대생명</button>
           </div>
         `;
         return;
@@ -145,7 +146,6 @@
       const activeData = localStorage.getItem(`ticket_${bank}`);
       const finishedStatus = localStorage.getItem(`ticket_status_${bank}`);
 
-      // 상담완료 또는 부재(패스) 시 -> 전 은행 신청 화면 자동 오픈
       if (finishedStatus) {
         const isAbsent = (finishedStatus === '부재중');
         app.innerHTML = `
@@ -163,10 +163,10 @@
             <div class="bg-gray-50 border border-gray-200 rounded-2xl p-4 mb-5 text-left">
               <span class="text-xs font-black text-blue-600 block mb-2">➕ 다른 금융기관 상담 신청하기</span>
               <div class="grid grid-cols-2 gap-2">
-                <button onclick="selectBank('우리은행')" class="py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-xs text-gray-700 shadow-sm active:bg-blue-50">우리은행</button>
-                <button onclick="selectBank('신한은행')" class="py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-xs text-gray-700 shadow-sm active:bg-blue-50">신한은행</button>
-                <button onclick="selectBank('국민은행')" class="py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-xs text-gray-700 shadow-sm active:bg-blue-50">국민은행</button>
-                <button onclick="selectBank('푸본현대생명')" class="py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-xs text-gray-700 shadow-sm active:bg-blue-50">푸본현대생명</button>
+                <button onclick="selectBank('woori')" class="py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-xs text-gray-700 shadow-sm active:bg-blue-50">우리은행</button>
+                <button onclick="selectBank('shinhan')" class="py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-xs text-gray-700 shadow-sm active:bg-blue-50">신한은행</button>
+                <button onclick="selectBank('kb')" class="py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-xs text-gray-700 shadow-sm active:bg-blue-50">국민은행</button>
+                <button onclick="selectBank('fubon')" class="py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-xs text-gray-700 shadow-sm active:bg-blue-50">푸본현대생명</button>
               </div>
             </div>
 
@@ -209,7 +209,7 @@
       }
     }
 
-    function selectBank(name) { window.location.search = `?bank=${encodeURIComponent(name)}`; }
+    function selectBank(code) { window.location.search = `?b=${code}`; }
 
     function delayTicket(ticketNo) {
       let ticket = JSON.parse(localStorage.getItem(`ticket_${bank}`));
@@ -271,7 +271,6 @@
           }
         }
 
-        // 3번째 전 사전안내
         if (aheadCount === 2 && !preAlert3rdSent) {
           preAlert3rdSent = true;
           playDingDong(() => {
@@ -280,7 +279,6 @@
           if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
         }
 
-        // 바로 직전 안내
         if (aheadCount === 0 && !preAlertNextSent) {
           preAlertNextSent = true;
           playDingDong(() => {
@@ -290,7 +288,6 @@
         }
       }
 
-      // 창구에서 호출 시
       const calledDesk = data.desks.find(d => d.current === myNumber);
       if (calledDesk) {
         const dNum = calledDesk.name.replace(/[^0-9]/g, '');

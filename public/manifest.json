@@ -1,0 +1,20 @@
+{
+  "name": "스마트 대기 순번 시스템",
+  "short_name": "순번시스템",
+  "start_url": "/teller.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3182f6",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2830/2830284.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2830/2830284.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
