@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
   <title>통합 관리자 관제 모니터</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
@@ -34,24 +37,21 @@
     .desk-title { font-size: 12px; color: #6b7684; display: flex; justify-content: space-between; }
     .desk-num { font-size: 24px; font-weight: 900; color: #191f28; margin: 4px 0; }
     .badge-status { font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 800; }
-    .s-호출중 { background: #e8f3ff; color: #1b64da; }
     .s-상담중 { background: #e6f8f0; color: #00874c; }
     .s-대기중 { background: #e5e8eb; color: #6b7684; }
-    .s-부재중 { background: #feebeb; color: #f04452; }
 
     .call-banner { background: #191f28; color: #fff; padding: 12px; border-radius: 14px; text-align: center; margin-bottom: 8px; }
-
     input[type="text"], select { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #d1d6db; font-size: 13px; background: #f9fafb; outline: none; font-weight: 600; }
     input[type="text"]:focus, select:focus { border-color: #3182f6; background: #ffffff; }
     .form-row { display: flex; gap: 6px; margin-top: 8px; }
   </style>
 </head>
-<body onclick="unlockAudio()">
+<body onclick="unlockAllAudio()">
   <div class="wrap">
 
     <div class="card" style="padding: 12px;">
       <button id="voiceBtn" onclick="initVoice(event)" class="btn-voice">
-        🔊 음성 활성화 (터치 필수)
+        🔊 음성 활성화 및 절전 방지 가동 (터치 필수)
       </button>
       <div id="latestCall" class="call-banner" style="display: none;">
         <div id="callText" style="font-size: 17px; font-weight: 900; color: #ffd15c;">-</div>
@@ -92,6 +92,8 @@
     const socket = io();
     let state = {};
     let audioCtx = null;
+    let silentAudio = null;
+    let wakeLock = null;
 
     function toHanja(raw) {
       const num = parseInt(raw, 10);
@@ -109,29 +111,46 @@
       return num;
     }
 
-    function unlockAudio() {
+    function unlockAllAudio() {
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtx.state === 'suspended') audioCtx.resume();
+
+      if (!silentAudio) {
+        silentAudio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+        silentAudio.loop = true;
+        silentAudio.play().catch(() => {});
+      }
+
+      if ('wakeLock' in navigator && !wakeLock) {
+        navigator.wakeLock.request('screen').then(lock => { wakeLock = lock; }).catch(() => {});
+      }
     }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        unlockAllAudio();
+        socket.emit('get_all_state');
+      }
+    });
 
     function initVoice(e) {
       if (e) e.stopPropagation();
-      unlockAudio();
+      unlockAllAudio();
+
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance('음성 안내 시스템이 시작되었습니다.');
-        u.lang = 'ko-KR';
-        u.rate = 0.95;
+        const u = new SpeechSynthesisUtterance('음성 안내 및 절전 방지가 시작되었습니다.');
+        u.lang = 'ko-KR'; u.rate = 0.95;
         window.speechSynthesis.speak(u);
       }
       playDingDong();
       const btn = document.getElementById('voiceBtn');
-      btn.innerText = '● 음성 가동 중 (정상)';
+      btn.innerText = '● 음성 & 절전방지 정상 가동 중';
       btn.className = 'btn-voice on';
     }
 
     function playDingDong(cb) {
-      unlockAudio();
+      unlockAllAudio();
       try {
         const t = audioCtx.currentTime;
         const o1 = audioCtx.createOscillator(), g1 = audioCtx.createGain();
@@ -142,8 +161,7 @@
 
         const o2 = audioCtx.createOscillator(), g2 = audioCtx.createGain();
         o2.type = 'sine'; o2.frequency.setValueAtTime(523.25, t + 0.25);
-        g2.gain.setValueAtTime(0.35, t + 0.25);
-        g2.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+        g2.gain.setValueAtTime(0.35, t + 0.25); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
         o2.connect(g2); g2.connect(audioCtx.destination);
         o2.start(t + 0.25); o2.stop(t + 0.8);
 
@@ -236,11 +254,7 @@
       const name = input.value.trim();
       if (!name) return alert('추가할 은행명을 입력하세요.');
       socket.emit('add_bank', { newBank: name }, (res) => {
-        if (res.success) {
-          input.value = '';
-        } else {
-          alert(res.message || '추가 실패');
-        }
+        if (res.success) { input.value = ''; } else alert(res.message);
       });
     }
 

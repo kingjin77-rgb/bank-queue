@@ -9,37 +9,36 @@ const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 4개 금융기관 및 창구 독립 데이터 구조
 const queues = {
   "우리은행": {
     nextNumber: 1,
     waiting: [],
     desks: [
-      { id: 1, name: "1번 창구", current: 0, status: "대기중" },
-      { id: 2, name: "2번 창구", current: 0, status: "대기중" }
+      { id: 1, name: "1번 창구", current: 0, status: "대기중", completedCount: 0 },
+      { id: 2, name: "2번 창구", current: 0, status: "대기중", completedCount: 0 }
     ]
   },
   "신한은행": {
     nextNumber: 1,
     waiting: [],
     desks: [
-      { id: 1, name: "1번 창구", current: 0, status: "대기중" },
-      { id: 2, name: "2번 창구", current: 0, status: "대기중" }
+      { id: 1, name: "1번 창구", current: 0, status: "대기중", completedCount: 0 },
+      { id: 2, name: "2번 창구", current: 0, status: "대기중", completedCount: 0 }
     ]
   },
   "국민은행": {
     nextNumber: 1,
     waiting: [],
     desks: [
-      { id: 1, name: "1번 창구", current: 0, status: "대기중" },
-      { id: 2, name: "2번 창구", current: 0, status: "대기중" }
+      { id: 1, name: "1번 창구", current: 0, status: "대기중", completedCount: 0 },
+      { id: 2, name: "2번 창구", current: 0, status: "대기중", completedCount: 0 }
     ]
   },
   "푸본현대생명": {
     nextNumber: 1,
     waiting: [],
     desks: [
-      { id: 1, name: "1번 창구", current: 0, status: "대기중" }
+      { id: 1, name: "1번 창구", current: 0, status: "대기중", completedCount: 0 }
     ]
   }
 };
@@ -51,16 +50,18 @@ io.on('connection', (socket) => {
     socket.emit('init_state', queues);
   });
 
-  // 발권
+  // 신규 발권
   socket.on('issue_ticket', ({ bank }, cb) => {
     if (!queues[bank]) return cb && cb({ success: false });
     const ticketNo = queues[bank].nextNumber++;
     queues[bank].waiting.push(ticketNo);
+
     io.emit('queue_update', { bank, data: queues[bank] });
+    io.emit('new_customer_waiting', { bank, ticketNo, waitingCount: queues[bank].waiting.length });
     if (cb) cb({ success: true, ticketNo });
   });
 
-  // 취소
+  // 고객 자진 취소
   socket.on('cancel_ticket', ({ bank, ticketNo }, cb) => {
     if (!queues[bank]) return;
     const idx = queues[bank].waiting.indexOf(ticketNo);
@@ -85,21 +86,27 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 신규 고객 호출
+  // 다음 고객 호출 시 원터치 자동 '상담중' 전환 및 대기 배너 해제
   socket.on('call_next_desk', ({ bank, deskId }, cb) => {
-    if (!queues[bank]) return cb && cb({ success: false, message: '은행을 찾을 수 없습니다.' });
-    if (queues[bank].waiting.length === 0) {
-      return cb && cb({ success: false, message: '대기 고객이 없습니다.' });
-    }
+    if (!queues[bank]) return cb && cb({ success: false, message: '은행 정보가 올바르지 않습니다.' });
     const desk = queues[bank].desks.find(d => d.id === Number(deskId));
     if (!desk) return cb && cb({ success: false, message: '창구를 찾을 수 없습니다.' });
 
+    if (desk.status === '상담중') {
+      return cb && cb({ success: false, message: '현재 고객 상담 중입니다. 상담종료를 먼저 눌러주세요.' });
+    }
+
+    if (queues[bank].waiting.length === 0) {
+      return cb && cb({ success: false, message: '대기 중인 고객이 없습니다.' });
+    }
+
     const nextNum = queues[bank].waiting.shift();
     desk.current = nextNum;
-    desk.status = '호출중';
+    desk.status = '상담중'; // 호출 즉시 상담중 자동 전환
 
     io.emit('queue_update', { bank, data: queues[bank] });
     io.emit('voice_call', { bank, deskName: desk.name, ticketNo: nextNum });
+    io.emit('customer_called_dismiss', { bank }); // 상단 대형 배너 해제
     if (cb) cb({ success: true, ticketNo: nextNum });
   });
 
@@ -108,38 +115,76 @@ io.on('connection', (socket) => {
     if (!queues[bank]) return cb && cb({ success: false });
     const desk = queues[bank].desks.find(d => d.id === Number(deskId));
     if (!desk || !desk.current) {
-      return cb && cb({ success: false, message: '호출할 고객이 없습니다.' });
+      return cb && cb({ success: false, message: '호출할 고객 번호가 없습니다.' });
     }
 
-    desk.status = '호출중';
-    io.emit('queue_update', { bank, data: queues[bank] });
     io.emit('voice_call', { bank, deskName: desk.name, ticketNo: desk.current });
     if (cb) cb({ success: true, ticketNo: desk.current });
   });
 
-  // 상태 변경 (상담중, 상담완료, 부재중)
+  // 창구 이동
+  socket.on('transfer_desk', ({ bank, fromDeskId, toDeskId }, cb) => {
+    if (!queues[bank]) return cb && cb({ success: false, message: '은행 오류' });
+    const fromDesk = queues[bank].desks.find(d => d.id === Number(fromDeskId));
+    const toDesk = queues[bank].desks.find(d => d.id === Number(toDeskId));
+
+    if (!fromDesk || !fromDesk.current) {
+      return cb && cb({ success: false, message: '이동시킬 고객 번호가 없습니다.' });
+    }
+    if (!toDesk) {
+      return cb && cb({ success: false, message: '이동할 대상 창구가 존재하지 않습니다.' });
+    }
+
+    const movingTicket = fromDesk.current;
+    fromDesk.current = 0;
+    fromDesk.status = '대기중';
+
+    toDesk.current = movingTicket;
+    toDesk.status = '상담중';
+
+    io.emit('queue_update', { bank, data: queues[bank] });
+    if (cb) cb({ success: true, ticketNo: movingTicket });
+  });
+
+  // 상담종료 / 부재(패스) 시 원터치 자동 마감 및 고객 번호 영구 소멸
   socket.on('update_desk_status', ({ bank, deskId, status }, cb) => {
     if (!queues[bank]) return cb && cb({ success: false });
     const desk = queues[bank].desks.find(d => d.id === Number(deskId));
     if (!desk) return cb && cb({ success: false });
 
-    desk.status = status;
-    if (status === '상담완료' || status === '부재중') {
+    const targetTicket = desk.current;
+
+    if (status === '상담완료') {
+      desk.completedCount = (desk.completedCount || 0) + 1;
       desk.current = 0;
       desk.status = '대기중';
+      if (targetTicket > 0) {
+        io.emit('ticket_finished', { bank, ticketNo: targetTicket, reason: '상담완료' });
+      }
+    } else if (status === '부재중') {
+      desk.current = 0;
+      desk.status = '대기중';
+      if (targetTicket > 0) {
+        const wIdx = queues[bank].waiting.indexOf(targetTicket);
+        if (wIdx > -1) queues[bank].waiting.splice(wIdx, 1);
+        io.emit('ticket_finished', { bank, ticketNo: targetTicket, reason: '부재중' });
+      }
+    } else {
+      desk.status = status;
     }
+
     io.emit('queue_update', { bank, data: queues[bank] });
     if (cb) cb({ success: true });
   });
 
-  // 창구 수 조절
+  // 창구 인원 증감
   socket.on('adjust_desk_count', ({ bank, change }, cb) => {
     if (!queues[bank]) return cb && cb({ success: false });
     const currentDesks = queues[bank].desks;
-    
+
     if (change > 0) {
       const nextId = currentDesks.length > 0 ? Math.max(...currentDesks.map(d => d.id)) + 1 : 1;
-      currentDesks.push({ id: nextId, name: `${currentDesks.length + 1}번 창구`, current: 0, status: "대기중" });
+      currentDesks.push({ id: nextId, name: `${currentDesks.length + 1}번 창구`, current: 0, status: "대기중", completedCount: 0 });
     } else if (change < 0) {
       if (currentDesks.length <= 1) {
         return cb && cb({ success: false, message: '최소 1개 창구는 유지해야 합니다.' });
@@ -151,13 +196,13 @@ io.on('connection', (socket) => {
     if (cb) cb({ success: true });
   });
 
-  // 은행 추가
+  // 신규 은행 추가
   socket.on('add_bank', ({ newBank }, cb) => {
     if (!newBank || queues[newBank]) return cb && cb({ success: false, message: '중복되거나 잘못된 이름입니다.' });
     queues[newBank] = {
       nextNumber: 1,
       waiting: [],
-      desks: [{ id: 1, name: "1번 창구", current: 0, status: "대기중" }]
+      desks: [{ id: 1, name: "1번 창구", current: 0, status: "대기중", completedCount: 0 }]
     };
     io.emit('init_state', queues);
     if (cb) cb({ success: true });
@@ -168,7 +213,7 @@ io.on('connection', (socket) => {
     if (!queues[bank]) return cb && cb({ success: false });
     queues[bank].nextNumber = 1;
     queues[bank].waiting = [];
-    queues[bank].desks.forEach(d => { d.current = 0; d.status = '대기중'; });
+    queues[bank].desks.forEach(d => { d.current = 0; d.status = '대기중'; d.completedCount = 0; });
     io.emit('queue_update', { bank, data: queues[bank] });
     if (cb) cb({ success: true });
   });
@@ -178,7 +223,7 @@ io.on('connection', (socket) => {
     Object.keys(queues).forEach(b => {
       queues[b].nextNumber = 1;
       queues[b].waiting = [];
-      queues[b].desks.forEach(d => { d.current = 0; d.status = '대기중'; });
+      queues[b].desks.forEach(d => { d.current = 0; d.status = '대기중'; d.completedCount = 0; });
     });
     io.emit('init_state', queues);
     if (cb) cb({ success: true });
