@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -9,7 +10,10 @@ const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-const queues = {
+const DB_FILE = path.join(__dirname, 'database.json');
+
+// 기본 데이터 구조
+const defaultQueues = {
   "우리은행": {
     nextNumber: 1,
     waiting: [],
@@ -43,6 +47,23 @@ const queues = {
   }
 };
 
+let queues = defaultQueues;
+
+// 서버 재시작 시 데이터 복구 (초기화 방지)
+if (fs.existsSync(DB_FILE)) {
+  try {
+    queues = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+  } catch (e) {
+    queues = defaultQueues;
+  }
+}
+
+function saveDB() {
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(queues, null, 2), 'utf8');
+  } catch (e) {}
+}
+
 io.on('connection', (socket) => {
   socket.emit('init_state', queues);
 
@@ -54,6 +75,7 @@ io.on('connection', (socket) => {
     if (!queues[bank]) return cb && cb({ success: false });
     const ticketNo = queues[bank].nextNumber++;
     queues[bank].waiting.push(ticketNo);
+    saveDB();
 
     io.emit('queue_update', { bank, data: queues[bank] });
     io.emit('new_customer_waiting', { bank, ticketNo, waitingCount: queues[bank].waiting.length });
@@ -65,6 +87,7 @@ io.on('connection', (socket) => {
     const idx = queues[bank].waiting.indexOf(ticketNo);
     if (idx > -1) {
       queues[bank].waiting.splice(idx, 1);
+      saveDB();
       io.emit('queue_update', { bank, data: queues[bank] });
     }
     if (cb) cb({ success: true });
@@ -76,6 +99,7 @@ io.on('connection', (socket) => {
     if (idx > -1) {
       queues[bank].waiting.splice(idx, 1);
       queues[bank].waiting.push(ticketNo);
+      saveDB();
       io.emit('queue_update', { bank, data: queues[bank] });
       if (cb) cb({ success: true });
     } else {
@@ -99,6 +123,7 @@ io.on('connection', (socket) => {
     const nextNum = queues[bank].waiting.shift();
     desk.current = nextNum;
     desk.status = '상담중';
+    saveDB();
 
     io.emit('queue_update', { bank, data: queues[bank] });
     io.emit('voice_call', { bank, deskName: desk.name, ticketNo: nextNum });
@@ -109,9 +134,7 @@ io.on('connection', (socket) => {
   socket.on('recall_desk', ({ bank, deskId }, cb) => {
     if (!queues[bank]) return cb && cb({ success: false });
     const desk = queues[bank].desks.find(d => d.id === Number(deskId));
-    if (!desk || !desk.current) {
-      return cb && cb({ success: false, message: '호출할 고객 번호가 없습니다.' });
-    }
+    if (!desk || !desk.current) return cb && cb({ success: false, message: '호출할 고객 번호가 없습니다.' });
 
     io.emit('voice_call', { bank, deskName: desk.name, ticketNo: desk.current });
     if (cb) cb({ success: true, ticketNo: desk.current });
@@ -131,6 +154,7 @@ io.on('connection', (socket) => {
 
     toDesk.current = movingTicket;
     toDesk.status = '상담중';
+    saveDB();
 
     io.emit('queue_update', { bank, data: queues[bank] });
     if (cb) cb({ success: true, ticketNo: movingTicket });
@@ -161,6 +185,7 @@ io.on('connection', (socket) => {
     } else {
       desk.status = status;
     }
+    saveDB();
 
     io.emit('queue_update', { bank, data: queues[bank] });
     if (cb) cb({ success: true });
@@ -177,6 +202,7 @@ io.on('connection', (socket) => {
       if (currentDesks.length <= 1) return cb && cb({ success: false, message: '최소 1개 창구는 유지해야 합니다.' });
       currentDesks.pop();
     }
+    saveDB();
 
     io.emit('queue_update', { bank, data: queues[bank] });
     if (cb) cb({ success: true });
@@ -189,6 +215,7 @@ io.on('connection', (socket) => {
       waiting: [],
       desks: [{ id: 1, name: "1번 창구", current: 0, status: "대기중", completedCount: 0 }]
     };
+    saveDB();
     io.emit('init_state', queues);
     if (cb) cb({ success: true });
   });
@@ -198,6 +225,7 @@ io.on('connection', (socket) => {
     queues[bank].nextNumber = 1;
     queues[bank].waiting = [];
     queues[bank].desks.forEach(d => { d.current = 0; d.status = '대기중'; d.completedCount = 0; });
+    saveDB();
     io.emit('queue_update', { bank, data: queues[bank] });
     if (cb) cb({ success: true });
   });
@@ -208,6 +236,7 @@ io.on('connection', (socket) => {
       queues[b].waiting = [];
       queues[b].desks.forEach(d => { d.current = 0; d.status = '대기중'; d.completedCount = 0; });
     });
+    saveDB();
     io.emit('init_state', queues);
     if (cb) cb({ success: true });
   });
