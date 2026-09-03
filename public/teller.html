@@ -17,10 +17,13 @@
     .theme-kb { --bank-main: #ffbc00; --bank-accent: #ffd15c; --bank-glow: rgba(255, 188, 0, 0.4); --bank-badge: #785a00; }
     .theme-fubon { --bank-main: #0084c7; --bank-accent: #38bdf8; --bank-glow: rgba(0, 132, 199, 0.4); --bank-badge: #004e75; }
 
-    .emergency-board { display: none; background: #000; border: 4px solid #ef4444; border-radius: 22px; padding: 20px; text-align: center; box-shadow: 0 0 40px rgba(239, 68, 68, 0.8); animation: alertPulse 1s infinite alternate; }
+    /* 대형 경보 알림 배너 */
+    .emergency-board { display: none; background: #000; border: 4px solid #ef4444; border-radius: 22px; padding: 18px; text-align: center; box-shadow: 0 0 40px rgba(239, 68, 68, 0.8); }
+    .emergency-board.blink { animation: alertPulse 1s infinite alternate; }
     @keyframes alertPulse { from { border-color: #ef4444; box-shadow: 0 0 40px rgba(239, 68, 68, 0.9); } to { border-color: #fca5a5; box-shadow: 0 0 10px rgba(239, 68, 68, 0.3); } }
+    .emergency-board.info-mode { border-color: #f59e0b; box-shadow: 0 0 30px rgba(245, 158, 11, 0.5); animation: none; }
     .emergency-title { font-size: 14px; font-weight: 900; color: #fca5a5; letter-spacing: 2px; }
-    .emergency-text { font-size: clamp(30px, 5vw, 44px); font-weight: 900; color: #ffffff; margin-top: 4px; }
+    .emergency-text { font-size: clamp(24px, 4.5vw, 36px); font-weight: 900; color: #ffffff; margin-top: 4px; }
 
     .top-bar { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1f2937; padding-bottom: 14px; }
     .bank-name-badge { font-size: 22px; font-weight: 900; color: #fff; background: var(--bank-badge, #1f2937); border: 2px solid var(--bank-accent, #38bdf8); padding: 8px 18px; border-radius: 14px; }
@@ -54,8 +57,8 @@
 <body onclick="ensureAudioActive()">
   <div id="panelRoot" class="control-panel theme-woori">
 
-    <div id="emergencyBoard" class="emergency-board">
-      <div class="emergency-title">🚨 NEW CUSTOMER WAITING</div>
+    <div id="emergencyBoard" class="emergency-board blink">
+      <div id="emergencyTitle" class="emergency-title">🚨 NEW CUSTOMER WAITING</div>
       <div id="emergencyText" class="emergency-text">🔔 신규 대기 접수! (대기 0명)</div>
     </div>
 
@@ -193,17 +196,47 @@
       }
     });
 
+    // 신규 고객 접수 시 경보
     socket.on('new_customer_waiting', ({ bank, ticketNo, waitingCount }) => {
       if (bank === currentBank) {
         ensureAudioActive();
         const b = document.getElementById('emergencyBoard');
+        b.className = 'emergency-board blink';
         b.style.display = 'block';
-        document.getElementById('emergencyText').innerText = `🚨 ${ticketNo}번 고객 접수! (총 ${waitingCount}명 대기)`;
+        document.getElementById('emergencyTitle').innerText = '🚨 NEW CUSTOMER WAITING';
+        document.getElementById('emergencyText').innerText = `🔔 신규 대기 ${ticketNo}번 접수! (총 ${waitingCount}명 대기)`;
 
         const tHanja = toHanja(ticketNo);
         playAlarmBeep(() => {
           speakNow(`새로운 대기 고객 ${tHanja} 번 고객님이 접수되었습니다.`);
         });
+      }
+    });
+
+    // 고객의 취소 / 순번 미루기 실시간 처리 (대기 0명 시 즉시 소멸)
+    socket.on('customer_action_notice', ({ bank, action, ticketNo, waitingCount }) => {
+      if (bank === currentBank) {
+        const b = document.getElementById('emergencyBoard');
+        const titleEl = document.getElementById('emergencyTitle');
+        const textEl = document.getElementById('emergencyText');
+
+        if (waitingCount === 0) {
+          // 대기 고객이 없으면 즉시 배너 닫기
+          b.style.display = 'none';
+          return;
+        }
+
+        b.style.display = 'block';
+        b.className = 'emergency-board info-mode';
+
+        if (action === 'cancel') {
+          titleEl.innerText = '⚠️ TICKET CANCELLED';
+          textEl.innerText = `${ticketNo}번 고객 대기 취소됨 (잔여 대기: ${waitingCount}명)`;
+          playAlarmBeep();
+        } else if (action === 'delay') {
+          titleEl.innerText = '🔄 TICKET DELAYED';
+          textEl.innerText = `${ticketNo}번 고객 순번 미룸 ➔ 맨 뒤로 이동됨`;
+        }
       }
     });
 
@@ -290,6 +323,11 @@
       document.getElementById('deskTitleDisplay').innerText = `${desk.name} 관제 화면`;
       document.getElementById('servingNum').innerText = desk.current > 0 ? `${desk.current}번` : '-';
       document.getElementById('waitBadge').innerText = `대기: ${waitCount}명`;
+
+      // 대기자가 0명이면 배너가 켜져 있을 때 자동 종료
+      if (waitCount === 0) {
+        document.getElementById('emergencyBoard').style.display = 'none';
+      }
 
       const pill = document.getElementById('statusPill');
       const callBtn = document.getElementById('callBtn');

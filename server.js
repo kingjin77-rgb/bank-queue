@@ -80,6 +80,7 @@ io.on('connection', (socket) => {
     if (cb) cb({ success: true, ticketNo });
   });
 
+  // 고객 자진 취소 처리
   socket.on('cancel_ticket', ({ bank, ticketNo }, cb) => {
     if (!queues[bank]) return;
     const idx = queues[bank].waiting.indexOf(ticketNo);
@@ -87,10 +88,18 @@ io.on('connection', (socket) => {
       queues[bank].waiting.splice(idx, 1);
       saveDB();
       io.emit('queue_update', { bank, data: queues[bank] });
+      // 상담사용 취소 안내 이벤트 전송
+      io.emit('customer_action_notice', { 
+        bank, 
+        action: 'cancel', 
+        ticketNo, 
+        waitingCount: queues[bank].waiting.length 
+      });
     }
     if (cb) cb({ success: true });
   });
 
+  // 고객 순번 미루기 처리
   socket.on('delay_ticket', ({ bank, ticketNo }, cb) => {
     if (!queues[bank]) return cb && cb({ success: false });
     const idx = queues[bank].waiting.indexOf(ticketNo);
@@ -99,6 +108,13 @@ io.on('connection', (socket) => {
       queues[bank].waiting.push(ticketNo);
       saveDB();
       io.emit('queue_update', { bank, data: queues[bank] });
+      // 상담사용 순번 미루기 안내 이벤트 전송
+      io.emit('customer_action_notice', { 
+        bank, 
+        action: 'delay', 
+        ticketNo, 
+        waitingCount: queues[bank].waiting.length 
+      });
       if (cb) cb({ success: true });
     } else {
       if (cb) cb({ success: false });
@@ -138,7 +154,6 @@ io.on('connection', (socket) => {
     if (cb) cb({ success: true, ticketNo: desk.current });
   });
 
-  // 창구이동 (1번 창구 비움 & 2번 창구 상담중 전환 & 실시간 브로드캐스트)
   socket.on('transfer_desk', ({ bank, fromDeskId, toDeskId }, cb) => {
     if (!queues[bank]) return cb && cb({ success: false, message: '은행 오류' });
     const fromDesk = queues[bank].desks.find(d => d.id === Number(fromDeskId));
@@ -190,7 +205,6 @@ io.on('connection', (socket) => {
     if (cb) cb({ success: true });
   });
 
-  // 창구 수 증감 (+ / - 실시간 반영)
   socket.on('adjust_desk_count', ({ bank, change }, cb) => {
     if (!queues[bank]) return cb && cb({ success: false });
     const currentDesks = queues[bank].desks;
