@@ -18,18 +18,30 @@
     .theme-kb { --bank-main: #ffbc00; --bank-accent: #ffd15c; --bank-glow: rgba(255, 188, 0, 0.4); --bank-badge: #785a00; }
     .theme-fubon { --bank-main: #0084c7; --bank-accent: #38bdf8; --bank-glow: rgba(0, 132, 199, 0.4); --bank-badge: #004e75; }
 
+    /* 상단 상시 음성 가동 & 테스트 버튼 */
+    .btn-audio-status { width: 100%; height: 50px; background: #16a34a; color: #ffffff; font-size: 16px; font-weight: 900; border-radius: 14px; border: 2px solid #4ade80; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 0 15px rgba(22, 163, 74, 0.4); }
+    .btn-audio-status.active { background: #0f172a; border-color: #334155; color: #38bdf8; box-shadow: none; }
+
+    /* 상단 바 */
+    .top-bar { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1f2937; padding-bottom: 14px; gap: 10px; flex-wrap: wrap; }
+    .bank-brand-group { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 250px; }
+    .bank-name-badge { font-size: 20px; font-weight: 900; color: #fff; background: var(--bank-badge, #1f2937); border: 2px solid var(--bank-accent, #38bdf8); padding: 8px 16px; border-radius: 14px; white-space: nowrap; }
+    
+    /* 창구 선택 셀렉트박스 (너비 및 가독성 확보) */
+    .desk-picker { width: 145px !important; height: 46px !important; font-size: 17px !important; font-weight: 900 !important; background-color: #1e293b !important; color: #ffffff !important; border: 2px solid #38bdf8 !important; padding: 6px 12px !important; border-radius: 14px !important; outline: none !important; cursor: pointer !important; }
+    .desk-picker option { background-color: #0f172a !important; color: #ffffff !important; font-size: 16px !important; font-weight: 800 !important; }
+
+    .wait-badge-giant { font-size: 18px; font-weight: 900; color: #fecaca; background: #991b1b; padding: 8px 18px; border-radius: 14px; border: 1px solid #ef4444; white-space: nowrap; }
+
+    /* 대형 경보 알림 배너 */
     .emergency-board { display: none; background: #000; border: 4px solid #ef4444; border-radius: 22px; padding: 18px; text-align: center; box-shadow: 0 0 40px rgba(239, 68, 68, 0.8); }
     .emergency-board.blink { animation: alertPulse 1s infinite alternate; }
     @keyframes alertPulse { from { border-color: #ef4444; box-shadow: 0 0 40px rgba(239, 68, 68, 0.9); } to { border-color: #fca5a5; box-shadow: 0 0 10px rgba(239, 68, 68, 0.3); } }
     .emergency-board.info-mode { border-color: #f59e0b; box-shadow: 0 0 30px rgba(245, 158, 11, 0.5); animation: none; }
     .emergency-title { font-size: 14px; font-weight: 900; color: #fca5a5; letter-spacing: 2px; }
-    .emergency-text { font-size: clamp(24px, 4.5vw, 36px); font-weight: 900; color: #ffffff; margin-top: 4px; }
+    .emergency-text { font-size: clamp(22px, 4.5vw, 34px); font-weight: 900; color: #ffffff; margin-top: 4px; }
 
-    .top-bar { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1f2937; padding-bottom: 14px; }
-    .bank-name-badge { font-size: 22px; font-weight: 900; color: #fff; background: var(--bank-badge, #1f2937); border: 2px solid var(--bank-accent, #38bdf8); padding: 8px 18px; border-radius: 14px; }
-    .desk-picker { font-size: 18px; font-weight: 900; background: #111827; color: #fff; border: 2px solid #374151; padding: 8px 14px; border-radius: 14px; outline: none; }
-    .wait-badge-giant { font-size: 18px; font-weight: 900; color: #fecaca; background: #991b1b; padding: 6px 16px; border-radius: 12px; border: 1px solid #ef4444; }
-
+    /* 관제 화면 메인 */
     .main-screen { background: #000; border: 3px solid var(--bank-accent, #38bdf8); border-radius: 24px; padding: 24px 16px; text-align: center; }
     .status-pill { display: inline-block; font-size: 14px; font-weight: 900; padding: 4px 14px; border-radius: 30px; margin-top: 6px; }
     .pill-상담중 { background: #064e3b; color: #34d399; border: 1px solid #059669; }
@@ -54,31 +66,46 @@
     .wait-chip { background: #111827; border: 2px solid #374151; color: #fff; font-size: 16px; font-weight: 900; padding: 6px 14px; border-radius: 12px; }
   </style>
 </head>
-<body onclick="ensureAudioActive()">
+<body>
+
   <div id="panelRoot" class="control-panel theme-woori">
 
+    <!-- 신규 고객 알림 배너 -->
     <div id="emergencyBoard" class="emergency-board blink">
       <div id="emergencyTitle" class="emergency-title">🚨 NEW CUSTOMER WAITING</div>
-      <div id="emergencyText" class="emergency-text">🔔 신규 대기 접수! (대기 0명)</div>
+      <div id="emergencyText" class="emergency-text">🔔 신규 대기 접수!</div>
     </div>
 
+    <!-- 상단 바: 은행명 & 창구 선택 드롭다운 & 대기인원 -->
     <div class="top-bar">
-      <div style="display: flex; align-items: center; gap: 10px;">
-        <span id="bankNameDisplay" class="bank-name-badge">은행명</span>
-        <select id="deskSelect" onchange="onDeskChanged()" class="desk-picker"></select>
+      <div class="bank-brand-group">
+        <span id="bankNameDisplay" class="bank-name-badge">우리은행</span>
+        <select id="deskSelect" onchange="onDeskChanged()" class="desk-picker">
+          <option value="1">1번 창구</option>
+          <option value="2">2번 창구</option>
+          <option value="3">3번 창구</option>
+        </select>
       </div>
       <span id="waitBadge" class="wait-badge-giant">대기: 0명</span>
     </div>
 
+    <!-- 상시 음성 가동 및 스피커 테스트 버튼 -->
+    <button id="audioControlBtn" onclick="testAndUnlockAudio()" class="btn-audio-status">
+      🔊 음성 알림 엔진 켜기 (터치하여 테스트)
+    </button>
+
+    <!-- 중앙 메인 관제 화면 -->
     <div class="main-screen">
-      <div style="font-size: 16px; font-weight: 900; color: #94a3b8;" id="deskTitleDisplay">창구 관제 화면</div>
+      <div style="font-size: 18px; font-weight: 900; color: #94a3b8;" id="deskTitleDisplay">1번 창구 관제 화면</div>
       <span id="statusPill" class="status-pill pill-대기중">대기중</span>
       <div id="servingNum" class="big-num">-</div>
       <div style="font-size: 14px; color: #94a3b8; font-weight: 700;">호출 시 즉시 자동으로 [상담중] 전환됩니다.</div>
     </div>
 
+    <!-- 메인 호출 버튼 -->
     <button id="callBtn" onclick="callNext()" class="btn-call-giant">다음 고객 호출</button>
 
+    <!-- 보조 액션 버튼 -->
     <div class="sub-grid">
       <button id="recallBtn" onclick="reCall()" class="btn-act btn-recall">📢 재호출</button>
       <button id="finishBtn" onclick="finishServing()" class="btn-act btn-finish">상담종료</button>
@@ -86,6 +113,7 @@
       <button id="transferBtn" onclick="openTransferModal()" class="btn-act btn-trans">창구이동 ➔</button>
     </div>
 
+    <!-- 대기자 명단 -->
     <div class="wait-box">
       <div style="font-size: 15px; font-weight: 800; color: #94a3b8;">📋 실시간 대기 고객 명단</div>
       <div id="waitingFlowList" class="wait-list">
@@ -99,7 +127,6 @@
     const socket = io();
     const urlParams = new URLSearchParams(window.location.search);
 
-    // 파라미터 정확한 매핑 테이블
     const bankKeyMap = {
       'woori': '우리은행',
       'shinhan': '신한은행',
@@ -107,13 +134,12 @@
       'fubon': '푸본현대생명'
     };
 
-    // 파라미터 읽기: 'b' 또는 'bank' 확인 (한글 디코딩 지원)
     const rawParam = urlParams.get('b') || urlParams.get('bank');
     let currentBank = '우리은행';
 
     if (rawParam) {
-      const cleanParam = decodeURIComponent(rawParam).trim();
-      currentBank = bankKeyMap[cleanParam.toLowerCase()] || cleanParam;
+      const clean = decodeURIComponent(rawParam).trim();
+      currentBank = bankKeyMap[clean.toLowerCase()] || clean;
     }
 
     let currentDeskId = Number(urlParams.get('desk') || urlParams.get('d') || localStorage.getItem(`saved_desk_${currentBank}`) || 1);
@@ -122,8 +148,9 @@
     let wakeLock = null;
     let audioCtx = null;
     let keepAliveOsc = null;
+    let isAudioActive = false;
 
-    // 해당 은행 테마 클래스 즉시 적용
+    // 테마 설정
     const panelRoot = document.getElementById('panelRoot');
     if (currentBank === '신한은행') panelRoot.className = 'control-panel theme-shinhan';
     else if (currentBank === '국민은행') panelRoot.className = 'control-panel theme-kb';
@@ -149,36 +176,56 @@
       return num;
     }
 
-    async function ensureAudioActive() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') await audioCtx.resume();
+    // 상시 음성 가동 및 스피커 테스트 함수
+    async function testAndUnlockAudio() {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
 
-      if (!keepAliveOsc) {
-        keepAliveOsc = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-        keepAliveOsc.frequency.value = 15;
-        g.gain.value = 0.001;
-        keepAliveOsc.connect(g);
-        g.connect(audioCtx.destination);
-        keepAliveOsc.start();
-      }
+        if (!keepAliveOsc) {
+          keepAliveOsc = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          keepAliveOsc.frequency.value = 15;
+          g.gain.value = 0.001;
+          keepAliveOsc.connect(g);
+          g.connect(audioCtx.destination);
+          keepAliveOsc.start();
+        }
 
-      if ('wakeLock' in navigator && !wakeLock) {
-        try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+        if ('wakeLock' in navigator) {
+          try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+        }
+
+        isAudioActive = true;
+        const btn = document.getElementById('audioControlBtn');
+        btn.className = 'btn-audio-status active';
+        btn.innerHTML = '✅ 음성 알림 100% 정상 가동 중 (터치 시 재테스트)';
+
+        // 딩동 비프음 + 한국어 테스트 음성 재생
+        playAlarmBeep(() => {
+          speakNow('음성 안내와 알림이 정상 작동합니다.');
+        });
+      } catch (err) {
+        alert('오디오 활성화 오류: ' + err.message);
       }
     }
 
-    ['click', 'touchstart', 'touchend'].forEach(evt => window.addEventListener(evt, ensureAudioActive, { once: true }));
+    // 첫 터치 시 자동 언락 시도
+    ['click', 'touchstart'].forEach(evt => {
+      window.addEventListener(evt, () => {
+        if (!isAudioActive) testAndUnlockAudio();
+      }, { once: true });
+    });
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
-        ensureAudioActive();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
         socket.emit('get_all_state');
       }
     });
 
     function playAlarmBeep(callback) {
-      ensureAudioActive();
+      if (!audioCtx) return callback && callback();
       try {
         const t = audioCtx.currentTime;
         const o = audioCtx.createOscillator(), g = audioCtx.createGain();
@@ -186,7 +233,7 @@
         g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
         o.connect(g); g.connect(audioCtx.destination);
         o.start(t); o.stop(t + 0.35);
-        if (callback) setTimeout(callback, 400);
+        setTimeout(callback, 400);
       } catch (e) {
         if (callback) callback();
       }
@@ -200,13 +247,14 @@
       window.speechSynthesis.speak(u);
     }
 
-    socket.on('init_state', (queues) => {
-      globalState = queues;
+    socket.on('init_state', (data) => {
+      globalState = data.queues ? data.queues : data;
       setupDeskSelect();
       updateUI();
     });
 
     socket.on('queue_update', ({ bank, data }) => {
+      if (!globalState) globalState = {};
       globalState[bank] = data;
       if (bank === currentBank) {
         setupDeskSelect();
@@ -216,7 +264,6 @@
 
     socket.on('new_customer_waiting', ({ bank, ticketNo, waitingCount }) => {
       if (bank === currentBank) {
-        ensureAudioActive();
         const b = document.getElementById('emergencyBoard');
         b.className = 'emergency-board blink';
         b.style.display = 'block';
@@ -246,7 +293,7 @@
 
         if (action === 'cancel') {
           titleEl.innerText = '⚠️ TICKET CANCELLED';
-          textEl.innerText = `${ticketNo}번 고객 대기 취소됨 (잔여 대기: ${waitingCount}명)`;
+          textEl.innerText = `${ticketNo}번 고객 대기 취소됨 (잔여: ${waitingCount}명)`;
           playAlarmBeep();
         } else if (action === 'delay') {
           titleEl.innerText = '🔄 TICKET DELAYED';
@@ -261,11 +308,31 @@
       }
     });
 
+    // 창구 드롭다운 완벽 렌더링
     function setupDeskSelect() {
       const s = document.getElementById('deskSelect');
-      const desks = (globalState[currentBank] && globalState[currentBank].desks) || [];
-      s.innerHTML = desks.map(d => `<option value="${d.id}" ${d.id === currentDeskId ? 'selected' : ''}>${d.name}</option>`).join('');
-      if (!desks.find(d => d.id === currentDeskId) && desks.length > 0) currentDeskId = desks[0].id;
+      const bankData = globalState && globalState[currentBank];
+      let activeDesks = (bankData && bankData.desks && bankData.desks.filter(d => d.isActive !== false)) || [];
+
+      // 만약 데이터가 아직 안 왔다면 기본 1, 2, 3번 창구 생성
+      if (activeDesks.length === 0) {
+        activeDesks = [
+          { id: 1, name: "1번 창구" },
+          { id: 2, name: "2번 창구" },
+          { id: 3, name: "3번 창구" }
+        ];
+      }
+
+      s.innerHTML = activeDesks.map(d => `
+        <option value="${d.id}" ${d.id === currentDeskId ? 'selected' : ''}>${d.name}</option>
+      `).join('');
+
+      if (!activeDesks.find(d => d.id === currentDeskId)) {
+        currentDeskId = activeDesks[0].id;
+        s.value = currentDeskId;
+      } else {
+        s.value = currentDeskId;
+      }
     }
 
     function onDeskChanged() {
@@ -275,10 +342,9 @@
     }
 
     function callNext() {
-      ensureAudioActive();
       const bankData = globalState[currentBank];
-      const desk = bankData && bankData.desks.find(d => d.id === currentDeskId);
-      if (!bankData || bankData.waiting.length === 0) return alert('대기 고객이 없습니다.');
+      const desk = bankData && bankData.desks && bankData.desks.find(d => d.id === currentDeskId);
+      if (!bankData || !bankData.waiting || bankData.waiting.length === 0) return alert('대기 고객이 없습니다.');
       if (desk && desk.status === '상담중') return alert('현재 상담 중인 고객을 먼저 종료해주세요.');
 
       socket.emit('call_next_desk', { bank: currentBank, deskId: currentDeskId }, (res) => {
@@ -287,34 +353,33 @@
     }
 
     function reCall() {
-      ensureAudioActive();
       const bankData = globalState[currentBank];
-      const desk = bankData && bankData.desks.find(d => d.id === currentDeskId);
+      const desk = bankData && bankData.desks && bankData.desks.find(d => d.id === currentDeskId);
       if (!desk || !desk.current) return alert('호출할 고객 번호가 없습니다.');
       socket.emit('recall_desk', { bank: currentBank, deskId: currentDeskId });
     }
 
     function finishServing() {
       const bankData = globalState[currentBank];
-      const desk = bankData && bankData.desks.find(d => d.id === currentDeskId);
+      const desk = bankData && bankData.desks && bankData.desks.find(d => d.id === currentDeskId);
       if (!desk || !desk.current) return alert('진행 중인 고객이 없습니다.');
       socket.emit('update_desk_status', { bank: currentBank, deskId: currentDeskId, status: '상담완료' });
     }
 
     function passAbsent() {
       const bankData = globalState[currentBank];
-      const desk = bankData && bankData.desks.find(d => d.id === currentDeskId);
+      const desk = bankData && bankData.desks && bankData.desks.find(d => d.id === currentDeskId);
       if (!desk || !desk.current) return alert('처리할 고객이 없습니다.');
-      if (confirm(`${desk.current}번 고객을 부재 처리하고 번호표를 영구 취소하시겠습니까?`)) {
+      if (confirm(`${desk.current}번 고객을 부재 처리하고 번호표를 취소하시겠습니까?`)) {
         socket.emit('update_desk_status', { bank: currentBank, deskId: currentDeskId, status: '부재중' });
       }
     }
 
     function openTransferModal() {
       const bankData = globalState[currentBank];
-      const desk = bankData && bankData.desks.find(d => d.id === currentDeskId);
+      const desk = bankData && bankData.desks && bankData.desks.find(d => d.id === currentDeskId);
       if (!desk || !desk.current) return alert('이동시킬 고객 번호가 없습니다.');
-      const otherDesks = bankData.desks.filter(d => d.id !== currentDeskId);
+      const otherDesks = (bankData.desks || []).filter(d => d.id !== currentDeskId && d.isActive !== false);
       if (otherDesks.length === 0) return alert('이동 가능한 다른 창구가 없습니다.');
 
       const deskOptions = otherDesks.map(d => `${d.id}번: ${d.name} (${d.status})`).join('\n');
@@ -322,22 +387,21 @@
 
       if (targetId) {
         socket.emit('transfer_desk', { bank: currentBank, fromDeskId: currentDeskId, toDeskId: Number(targetId) }, (res) => {
-          if (res.success) alert(`${res.ticketNo}번 고객이 ${targetId}번 창구로 이동되었습니다.`);
-          else alert(res.message || '이동 실패');
+          if (!res.success) alert(res.message || '이동 실패');
         });
       }
     }
 
     function updateUI() {
-      const bankData = globalState[currentBank];
-      if (!bankData) return;
-      const desk = bankData.desks.find(d => d.id === currentDeskId) || bankData.desks[0];
-      if (!desk) return;
+      const bankData = globalState && globalState[currentBank];
+      const deskName = `${currentDeskId}번 창구`;
+      let desk = bankData && bankData.desks && bankData.desks.find(d => d.id === currentDeskId);
 
-      const waitCount = bankData.waiting.length;
-      document.getElementById('deskTitleDisplay').innerText = `${desk.name} 관제 화면`;
-      document.getElementById('servingNum').innerText = desk.current > 0 ? `${desk.current}번` : '-';
+      document.getElementById('deskTitleDisplay').innerText = `${(desk && desk.name) || deskName} 관제 화면`;
+      
+      const waitCount = (bankData && bankData.waiting && bankData.waiting.length) || 0;
       document.getElementById('waitBadge').innerText = `대기: ${waitCount}명`;
+      document.getElementById('servingNum').innerText = (desk && desk.current > 0) ? `${desk.current}번` : '-';
 
       if (waitCount === 0) {
         document.getElementById('emergencyBoard').style.display = 'none';
@@ -350,13 +414,23 @@
       const absentBtn = document.getElementById('absentBtn');
       const transferBtn = document.getElementById('transferBtn');
 
-      pill.innerText = desk.status;
-      if (desk.status === '상담중') {
+      const status = (desk && desk.status) || '대기중';
+      pill.innerText = status;
+
+      if (status === '상담중') {
         pill.className = 'status-pill pill-상담중';
-        callBtn.disabled = true; recallBtn.disabled = false; finishBtn.disabled = false; absentBtn.disabled = false; transferBtn.disabled = false;
+        callBtn.disabled = true;
+        recallBtn.disabled = false;
+        finishBtn.disabled = false;
+        absentBtn.disabled = false;
+        transferBtn.disabled = false;
       } else {
         pill.className = 'status-pill pill-대기중';
-        callBtn.disabled = (waitCount === 0); recallBtn.disabled = true; finishBtn.disabled = true; absentBtn.disabled = true; transferBtn.disabled = true;
+        callBtn.disabled = (waitCount === 0);
+        recallBtn.disabled = true;
+        finishBtn.disabled = true;
+        absentBtn.disabled = true;
+        transferBtn.disabled = true;
       }
 
       const listEl = document.getElementById('waitingFlowList');
