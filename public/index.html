@@ -3,30 +3,29 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>스마트 대기 순번표</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif; }
-    body { background-color: #030712; color: #f8fafc; padding: 16px; -webkit-font-smoothing: antialiased; min-height: 100vh; display: flex; justify-content: center; align-items: center; }
-    .client-card { width: 100%; max-width: 520px; background: #0b0f19; border: 3px solid var(--theme-color, #38bdf8); border-radius: 32px; padding: 28px 22px; box-shadow: 0 0 35px var(--theme-glow, rgba(56, 189, 248, 0.25)); text-align: center; }
+    body { background-color: #030712; color: #f8fafc; padding: 16px; min-height: 100vh; display: flex; justify-content: center; align-items: center; }
+    .client-card { width: 100%; max-width: 520px; background: #0b0f19; border: 3px solid var(--theme-color, #38bdf8); border-radius: 32px; padding: 28px 22px; text-align: center; }
 
     .bank-woori { --theme-color: #00a2ed; --theme-glow: rgba(0, 162, 237, 0.4); --btn-bg: #0067ac; }
     .bank-shinhan { --theme-color: #38bdf8; --theme-glow: rgba(0, 70, 255, 0.4); --btn-bg: #0046ff; }
     .bank-kb { --theme-color: #ffbc00; --theme-glow: rgba(255, 188, 0, 0.4); --btn-bg: #ffbc00; }
     .bank-fubon { --theme-color: #38bdf8; --theme-glow: rgba(0, 132, 199, 0.4); --btn-bg: #0084c7; }
 
-    .brand-pill { display: inline-block; font-size: 16px; font-weight: 900; color: #fff; background: var(--btn-bg, #1e3a8a); padding: 6px 20px; border-radius: 9999px; border: 2px solid var(--theme-color, #38bdf8); margin-bottom: 16px; }
+    .brand-pill { display: inline-block; font-size: 16px; font-weight: 900; color: #fff; background: var(--btn-bg, #1e3a8a); padding: 6px 20px; border-radius: 9999px; margin-bottom: 16px; }
     .led-board { background: #000; border: 3px solid var(--theme-color, #38bdf8); border-radius: 26px; padding: 28px 16px; margin: 18px 0; }
     .led-num { font-size: clamp(84px, 18vw, 120px); font-weight: 900; color: var(--theme-color, #38bdf8); line-height: 1; text-shadow: 0 0 25px var(--theme-glow, rgba(56, 189, 248, 0.6)); }
 
-    .btn-group { display: flex; gap: 10px; margin-top: 14px; }
-    .btn-act { flex: 1; height: 65px; border-radius: 18px; font-size: 17px; font-weight: 900; cursor: pointer; border: 2px solid transparent; }
-    .btn-delay { background: #d97706; color: #fff; border-color: #f59e0b; }
-    .btn-cancel { background: #7f1d1d; color: #fecaca; border-color: #dc2626; }
+    .btn-unlock-sound { width: 100%; padding: 16px; background: #16a34a; color: #fff; font-size: 17px; font-weight: 900; border-radius: 16px; border: 2px solid #4ade80; margin-bottom: 12px; cursor: pointer; }
+    .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+    .btn-act { flex: 1; height: 60px; border-radius: 16px; font-size: 16px; font-weight: 900; border: none; cursor: pointer; }
+    .btn-delay { background: #d97706; color: #fff; }
+    .btn-cancel { background: #7f1d1d; color: #fecaca; }
 
-    .bank-select-btn { width: 100%; height: 75px; font-size: 22px; font-weight: 900; color: #fff; border-radius: 20px; border: 2px solid #374151; background: #111827; margin-bottom: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .bank-select-btn { width: 100%; height: 75px; font-size: 22px; font-weight: 900; color: #fff; border-radius: 20px; border: 2px solid #374151; background: #111827; margin-bottom: 12px; cursor: pointer; }
   </style>
 </head>
 <body onclick="ensureCustomerAudio()">
@@ -41,14 +40,7 @@
   <script>
     const socket = io();
     const params = new URLSearchParams(window.location.search);
-
-    const bankKeyMap = {
-      'woori': '우리은행',
-      'shinhan': '신한은행',
-      'kb': '국민은행',
-      'fubon': '푸본현대생명'
-    };
-
+    const bankKeyMap = { 'woori': '우리은행', 'shinhan': '신한은행', 'kb': '국민은행', 'fubon': '푸본현대생명' };
     const rawParam = params.get('b') || params.get('bank');
     let bank = null;
 
@@ -58,13 +50,12 @@
     }
 
     let audioCtx = null;
-    let wakeLock = null;
     let keepAliveOsc = null;
     let preAlert3rdSent = false;
     let preAlertNextSent = false;
     let hasProcessed = false;
+    let isSoundUnlocked = false;
 
-    // 해당 은행 테마 자동 설정
     const cardEl = document.getElementById('clientCard');
     if (bank === '신한은행') cardEl.className = 'client-card bank-shinhan';
     else if (bank === '국민은행') cardEl.className = 'client-card bank-kb';
@@ -88,32 +79,35 @@
     }
 
     async function ensureCustomerAudio() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') await audioCtx.resume();
+      if (isSoundUnlocked) return;
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
 
-      if (!keepAliveOsc) {
-        keepAliveOsc = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-        keepAliveOsc.frequency.value = 15;
-        g.gain.value = 0.001;
-        keepAliveOsc.connect(g);
-        g.connect(audioCtx.destination);
-        keepAliveOsc.start();
-      }
+        if (!keepAliveOsc) {
+          keepAliveOsc = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          keepAliveOsc.frequency.value = 15;
+          g.gain.value = 0.001;
+          keepAliveOsc.connect(g);
+          g.connect(audioCtx.destination);
+          keepAliveOsc.start();
+        }
 
-      if ('wakeLock' in navigator && !wakeLock) {
-        try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
-      }
+        if ('wakeLock' in navigator) {
+          try { await navigator.wakeLock.request('screen'); } catch (e) {}
+        }
+        isSoundUnlocked = true;
+        const btn = document.getElementById('soundUnlockBtn');
+        if (btn) {
+          btn.innerText = '🔊 음성 및 진동 알림이 켜졌습니다';
+          btn.style.background = '#1e293b';
+          btn.style.borderColor = '#475569';
+        }
+      } catch (e) {}
     }
 
-    ['click', 'touchstart', 'touchend'].forEach(evt => window.addEventListener(evt, ensureCustomerAudio, { once: true }));
-
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        ensureCustomerAudio();
-        socket.emit('get_all_state');
-      }
-    });
+    ['click', 'touchstart'].forEach(evt => window.addEventListener(evt, ensureCustomerAudio, { once: true }));
 
     function playDingDong(cb) {
       ensureCustomerAudio();
@@ -121,17 +115,17 @@
         const t = audioCtx.currentTime;
         const o1 = audioCtx.createOscillator(), g1 = audioCtx.createGain();
         o1.type = 'sine'; o1.frequency.setValueAtTime(784, t);
-        g1.gain.setValueAtTime(0.5, t); g1.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+        g1.gain.setValueAtTime(0.6, t); g1.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
         o1.connect(g1); g1.connect(audioCtx.destination);
         o1.start(t); o1.stop(t + 0.45);
 
         const o2 = audioCtx.createOscillator(), g2 = audioCtx.createGain();
         o2.type = 'sine'; o2.frequency.setValueAtTime(523.25, t + 0.25);
-        g2.gain.setValueAtTime(0.55, t + 0.25); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.85);
+        g2.gain.setValueAtTime(0.65, t + 0.25); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.85);
         o2.connect(g2); g2.connect(audioCtx.destination);
         o2.start(t + 0.25); o2.stop(t + 0.85);
 
-        if (cb) setTimeout(cb, 750);
+        setTimeout(cb, 750);
       } catch (e) {
         if (cb) cb();
       }
@@ -174,11 +168,6 @@
       socket.emit('issue_ticket', { bank }, (res) => {
         if (res && res.success) {
           localStorage.setItem(`ticket_${bank}`, JSON.stringify({ no: res.ticketNo, delay: 0 }));
-          preAlert3rdSent = false;
-          preAlertNextSent = false;
-          render();
-        } else {
-          alert('발권 오류가 발생했습니다.');
           render();
         }
       });
@@ -215,18 +204,7 @@
             <p style="font-size: 14px; color: #94a3b8; margin-bottom: 24px;">
               ${isAbsent ? '호출 시 부재로 인해 번호표가 자동 소멸되었습니다.' : `[${bank}] 상담이 정상 종료되었습니다.`}
             </p>
-
-            <div style="background: #000; border: 2px solid #1f2937; border-radius: 20px; padding: 18px; margin-bottom: 20px; text-align: left;">
-              <span style="font-size: 15px; font-weight: 900; color: var(--theme-color, #38bdf8); display: block; margin-bottom: 12px;">➕ 다른 금융기관 추가 상담 신청</span>
-              <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
-                <button onclick="selectBank('woori')" style="height: 52px; background:#111827; border:2px solid #00a2ed; color:#fff; font-weight:900; border-radius:14px;">우리은행</button>
-                <button onclick="selectBank('shinhan')" style="height: 52px; background:#111827; border:2px solid #0046ff; color:#fff; font-weight:900; border-radius:14px;">신한은행</button>
-                <button onclick="selectBank('kb')" style="height: 52px; background:#111827; border:2px solid #ffbc00; color:#ffd15c; font-weight:900; border-radius:14px;">국민은행</button>
-                <button onclick="selectBank('fubon')" style="height: 52px; background:#111827; border:2px solid #0084c7; color:#fff; font-weight:900; border-radius:14px;">푸본현대생명</button>
-              </div>
-            </div>
-
-            <button onclick="reIssue()" style="width: 100%; height: 60px; background: #1f2937; color: #fff; font-size: 17px; font-weight: 900; border-radius: 16px; border: 1px solid #374151;">
+            <button onclick="reIssue()" style="width: 100%; height: 60px; background: #1f2937; color: #fff; font-size: 17px; font-weight: 900; border-radius: 16px; border: 1px solid #374151; cursor:pointer;">
               ${bank} 새 번호표 다시 뽑기
             </button>
           </div>
@@ -244,6 +222,10 @@
             <div id="waitAheadCount" style="font-size: 16px; font-weight: 900; color: var(--theme-color, #38bdf8); margin-top: 8px;">대기 순서를 조회하고 있습니다...</div>
           </div>
           
+          <button id="soundUnlockBtn" onclick="ensureCustomerAudio()" class="btn-unlock-sound">
+            🔊 내 순번 음성 알림 켜기 (터치 필수)
+          </button>
+
           <div class="btn-group">
             <button onclick="delayTicket(${ticket.no})" id="delay-btn" ${ticket.delay >= 3 ? 'disabled style="opacity: 0.4;"' : ''} class="btn-act btn-delay">
               순번 미루기 (${ticket.delay}/3)
@@ -292,7 +274,6 @@
 
     socket.on('queue_update', ({ bank: b, data }) => {
       if (b !== bank) return;
-
       const activeData = localStorage.getItem(`ticket_${bank}`);
       if (!activeData) return;
 
@@ -318,6 +299,7 @@
           }
         }
 
+        // 3번째 전 사전안내
         if (aheadCount === 2 && !preAlert3rdSent) {
           preAlert3rdSent = true;
           playDingDong(() => {
@@ -326,6 +308,7 @@
           if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
         }
 
+        // 직전 사전안내
         if (aheadCount === 0 && !preAlertNextSent) {
           preAlertNextSent = true;
           playDingDong(() => {
@@ -335,6 +318,7 @@
         }
       }
 
+      // 최종 창구 호출 수신 시 (표준 어순)
       const calledDesk = data.desks.find(d => d.current === myNumber);
       if (calledDesk) {
         const dNum = calledDesk.name.replace(/[^0-9]/g, '');

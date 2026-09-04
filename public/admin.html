@@ -5,55 +5,52 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>종합 관제 센터 (전광판 & 음성 엔진)</title>
+  <title>종합 관리자 센터 & 일일 마감 보고</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif; }
-    body { background-color: #030712; color: #f8fafc; padding: 18px; -webkit-font-smoothing: antialiased; min-height: 100vh; }
+    body { background-color: #030712; color: #f8fafc; padding: 18px; min-height: 100vh; }
     .wrap { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
 
     #audioUnlockLayer { position: fixed; inset: 0; background: rgba(3, 7, 18, 0.96); z-index: 99999; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 24px; text-align: center; }
-    .unlock-btn { background: #2563eb; color: #fff; font-size: 26px; font-weight: 900; padding: 26px 40px; border-radius: 24px; border: 3px solid #60a5fa; box-shadow: 0 0 50px rgba(37, 99, 235, 0.8); cursor: pointer; animation: pulseBtn 1.2s infinite alternate; }
-    @keyframes pulseBtn { from { transform: scale(1); } to { transform: scale(1.05); } }
+    .unlock-btn { background: #2563eb; color: #fff; font-size: 26px; font-weight: 900; padding: 26px 40px; border-radius: 24px; border: 3px solid #60a5fa; box-shadow: 0 0 50px rgba(37, 99, 235, 0.8); cursor: pointer; }
 
-    .top-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; background: #0f172a; border: 2px solid #1e293b; border-radius: 24px; padding: 20px 26px; gap: 14px; }
+    .top-header { display: flex; justify-content: space-between; align-items: center; background: #0f172a; border: 2px solid #1e293b; border-radius: 24px; padding: 20px 26px; }
     .brand-title { font-size: 26px; font-weight: 900; color: #38bdf8; }
-    .system-status { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800; background: #064e3b; color: #34d399; padding: 8px 16px; border-radius: 9999px; border: 1px solid #059669; }
-    .pulse-dot { width: 10px; height: 10px; border-radius: 50%; background: #34d399; animation: pDot 1.5s infinite; }
-    @keyframes pDot { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(1.3); } 100% { opacity: 1; transform: scale(1); } }
+    .status-badge { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800; background: #064e3b; color: #34d399; padding: 8px 16px; border-radius: 9999px; border: 1px solid #059669; }
 
-    .call-board { display: none; background: #000; border: 4px solid #eab308; border-radius: 26px; padding: 24px; text-align: center; box-shadow: 0 0 40px rgba(234, 179, 8, 0.4); }
-    .call-board-tag { font-size: 16px; font-weight: 900; color: #ca8a04; letter-spacing: 3px; }
-    .call-board-num { font-size: clamp(42px, 7vw, 76px); font-weight: 900; color: #fef08a; margin-top: 6px; text-shadow: 0 0 20px rgba(250, 204, 21, 0.7); }
+    .call-board { display: none; background: #000; border: 4px solid #eab308; border-radius: 26px; padding: 20px; text-align: center; }
+    .call-board-num { font-size: clamp(36px, 6vw, 68px); font-weight: 900; color: #fef08a; text-shadow: 0 0 20px rgba(250, 204, 21, 0.7); }
 
-    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-    .kpi-box { background: #0f172a; border: 2px solid #1e293b; border-radius: 20px; padding: 22px; text-align: center; }
-    .kpi-box.green { border-color: #059669; background: linear-gradient(180deg, #064e3b 0%, #0f172a 100%); }
-    .kpi-box.red { border-color: #dc2626; background: linear-gradient(180deg, #7f1d1d 0%, #0f172a 100%); }
-    .kpi-box.blue { border-color: #0284c7; background: linear-gradient(180deg, #0369a1 0%, #0f172a 100%); }
-    .kpi-title { font-size: 15px; font-weight: 800; color: #94a3b8; margin-bottom: 6px; }
-    .kpi-val { font-size: 46px; font-weight: 900; color: #fff; }
+    .btn-close-daily { width: 100%; height: 75px; background: #dc2626; color: #fff; font-size: 22px; font-weight: 900; border-radius: 20px; border: 2px solid #ef4444; cursor: pointer; box-shadow: 0 0 25px rgba(220, 38, 38, 0.4); }
+    .btn-close-daily:active { transform: scale(0.98); }
 
-    .bank-block { background: #0f172a; border: 2px solid #1e293b; border-radius: 24px; padding: 24px; display: flex; flex-direction: column; gap: 18px; }
-    .bank-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1e293b; padding-bottom: 16px; }
-    .bank-name { font-size: 26px; font-weight: 900; color: #fff; }
-    .bank-controls { display: flex; align-items: center; gap: 12px; }
-    .btn-desk-mod { background: #1f2937; border: 2px solid #374151; color: #fff; width: 34px; height: 34px; font-size: 18px; font-weight: 900; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-    .btn-desk-mod:active { background: #2563eb; }
-    .desk-count-badge { font-size: 16px; font-weight: 900; color: #38bdf8; min-width: 24px; text-align: center; }
+    .card { background: #0f172a; border: 2px solid #1e293b; border-radius: 24px; padding: 24px; }
+    .card-title { font-size: 20px; font-weight: 900; color: #fff; margin-bottom: 16px; display: flex; justify-content: space-between; }
 
-    .desk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
-    .desk-box { background: #030712; border: 2px solid #334155; border-radius: 18px; padding: 18px; text-align: center; }
-    .desk-box.active { border-color: #38bdf8; box-shadow: 0 0 20px rgba(56, 189, 248, 0.3); }
-    .desk-title { display: flex; justify-content: space-between; font-size: 16px; font-weight: 900; color: #94a3b8; }
-    .desk-num { font-size: 52px; font-weight: 900; color: #facc15; margin: 6px 0; }
-    .desk-foot { font-size: 13px; font-weight: 800; color: #38bdf8; background: #0f172a; padding: 6px; border-radius: 8px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+    .kpi-box { background: #030712; border: 2px solid #1e293b; border-radius: 18px; padding: 18px; text-align: center; }
+    .kpi-val { font-size: 38px; font-weight: 900; color: #38bdf8; margin-top: 4px; }
 
-    .proxy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
-    .btn-proxy { background: #1e293b; border: 2px solid #334155; color: #fff; padding: 18px; border-radius: 16px; font-size: 18px; font-weight: 900; cursor: pointer; }
-    .btn-proxy:active { transform: scale(0.98); background: #2563eb; }
+    /* 방문 집중도 차트 */
+    .hourly-grid { display: grid; grid-template-columns: repeat(11, 1fr); gap: 8px; align-items: flex-end; height: 160px; padding: 20px 0 10px 0; border-bottom: 2px solid #334155; }
+    .bar-col { display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
+    .bar-pill { width: 100%; background: #38bdf8; border-radius: 6px 6px 0 0; min-height: 4px; transition: height 0.3s; }
+    .bar-label { font-size: 11px; color: #94a3b8; font-weight: 800; margin-top: 6px; }
+    .bar-count { font-size: 13px; color: #fff; font-weight: 900; margin-bottom: 4px; }
 
-    .btn-reset-danger { width: 100%; background: #991b1b; color: #fff; border: none; padding: 16px; border-radius: 14px; font-size: 16px; font-weight: 900; cursor: pointer; }
+    /* 창구 증감 제어 */
+    .bank-block { margin-top: 14px; border-top: 1px solid #1e293b; padding-top: 14px; }
+    .desk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 10px; }
+    .desk-box { background: #030712; border: 2px solid #334155; border-radius: 16px; padding: 14px; text-align: center; }
+    .desk-box.inactive { opacity: 0.35; border-style: dashed; }
+    .desk-num { font-size: 38px; font-weight: 900; color: #facc15; margin: 4px 0; }
+
+    .btn-desk-mod { width: 32px; height: 32px; background: #1f2937; border: 1px solid #475569; color: #fff; font-size: 18px; font-weight: 900; border-radius: 8px; cursor: pointer; }
+
+    /* 모달 */
+    .modal-wrap { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 10000; justify-content: center; align-items: center; padding: 20px; }
+    .modal-box { background: #0f172a; border: 2px solid #38bdf8; border-radius: 24px; padding: 26px; max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto; }
   </style>
 </head>
 <body>
@@ -63,60 +60,77 @@
     <button class="unlock-btn" onclick="startMasterAudioEngine()">
       ⚡ 시스템 관제 엔진 가동 (터치 필수)
     </button>
-    <div style="font-size: 14px; color: #64748b; margin-top: 16px;">터치 시 화면 꺼짐 차단 및 무중단 사운드 파이프라인이 활성화됩니다.</div>
   </div>
 
   <div class="wrap">
 
     <div class="top-header">
-      <div class="brand-title">🏦 종합 관제 센터 (상황실 모니터)</div>
-      <div class="system-status">
-        <div class="pulse-dot"></div>
+      <div class="brand-title">🏦 종합 관리자 관제 센터</div>
+      <div class="status-badge">
+        <span style="font-size: 10px;">●</span>
         <span id="engineStatusText">절전 차단 및 음성 엔진 대기</span>
       </div>
     </div>
 
+    <!-- 대형 방송 알림 배너 -->
     <div id="callBoard" class="call-board">
-      <div class="call-board-tag">NOW CALLING</div>
+      <div style="font-size: 15px; color: #ca8a04; font-weight: 900; letter-spacing: 2px;">BROADCASTING NOW</div>
       <div id="callBoardText" class="call-board-num">-</div>
     </div>
 
-    <div class="kpi-grid">
-      <div class="kpi-box green">
-        <div class="kpi-title">총 상담 완료</div>
-        <div id="kpiTotalDone" class="kpi-val">0건</div>
+    <!-- 하루 상담 마감 버튼 -->
+    <button onclick="closeDailyBusiness()" class="btn-close-daily">
+      🏁 오늘 하루 상담 업무 마감 및 번호표 초기화 (통합 보고서 생성)
+    </button>
+
+    <!-- 실시간 방문 집중도 (시간대별) -->
+    <div class="card">
+      <div class="card-title">
+        <span>📈 실시간 시간대별 방문 집중도 (08:00 ~ 18:00)</span>
+        <span style="font-size: 14px; color: #38bdf8;">호출 시간 기준 분석</span>
       </div>
-      <div class="kpi-box red">
-        <div class="kpi-title">현재 대기 인원</div>
-        <div id="kpiTotalWait" class="kpi-val">0명</div>
-      </div>
-      <div class="kpi-box blue">
-        <div class="kpi-title">운영 창구 수</div>
-        <div id="kpiTotalDesks" class="kpi-val">0개</div>
-      </div>
+      <div id="hourlyChart" class="hourly-grid"></div>
     </div>
 
-    <div id="banksContainer" style="display: flex; flex-direction: column; gap: 18px;"></div>
-
-    <div class="bank-block">
-      <div style="font-size: 18px; font-weight: 900; color: #fff;">📋 현장 대리 발권 (원터치 1초 발권)</div>
-      <div id="proxyContainer" class="proxy-grid"></div>
+    <!-- 은행별 실시간 통계 -->
+    <div class="card">
+      <div class="card-title">📊 은행별 실시간 상담 현황 요약</div>
+      <div id="bankSummaryGrid" class="kpi-grid"></div>
     </div>
 
-    <div class="bank-block">
-      <button onclick="resetAllQueues()" class="btn-reset-danger">
-        ⚠️ 모든 은행 대기번호 및 실적 1번으로 초기화 (마감 전용)
-      </button>
+    <!-- 창구 운영 설정 및 실시간 모니터 -->
+    <div class="card">
+      <div class="card-title">🏦 창구 운영 관리 (실적 보존형 증감 제어)</div>
+      <div id="banksContainer"></div>
     </div>
 
+  </div>
+
+  <!-- 마감 보고서 모달 팝업 -->
+  <div id="reportModal" class="modal-wrap">
+    <div class="modal-box">
+      <h2 style="font-size: 24px; font-weight: 900; color: #38bdf8; margin-bottom: 8px;">📋 일일 상담 업무 마감 최종 보고서</h2>
+      <p id="reportTimestamp" style="font-size: 13px; color: #94a3b8; margin-bottom: 20px;"></p>
+      
+      <div id="reportModalContent" style="display: flex; flex-direction: column; gap: 16px;"></div>
+
+      <div style="display: flex; gap: 10px; margin-top: 24px;">
+        <button onclick="window.print()" style="flex:1; height:50px; background:#2563eb; color:#fff; font-weight:900; border-radius:12px; border:none; cursor:pointer;">인쇄하기</button>
+        <button onclick="document.getElementById('reportModal').style.display='none'" style="flex:1; height:50px; background:#374151; color:#fff; font-weight:900; border-radius:12px; border:none; cursor:pointer;">닫기</button>
+      </div>
+    </div>
   </div>
 
   <script>
     const socket = io();
     let state = {};
+    let latestReport = {};
     let audioCtx = null;
-    let wakeLock = null;
     let keepAliveOsc = null;
+
+    // FIFO 음성 대기열 (동시 호출 시 말 짤림 원천 차단)
+    const voiceQueue = [];
+    let isSpeaking = false;
 
     function toHanja(raw) {
       const num = parseInt(raw, 10);
@@ -141,35 +155,24 @@
 
         if (!keepAliveOsc) {
           keepAliveOsc = audioCtx.createOscillator();
-          const gainNode = audioCtx.createGain();
+          const g = audioCtx.createGain();
           keepAliveOsc.frequency.value = 15;
-          gainNode.gain.value = 0.001;
-          keepAliveOsc.connect(gainNode);
-          gainNode.connect(audioCtx.destination);
+          g.gain.value = 0.001;
+          keepAliveOsc.connect(g);
+          g.connect(audioCtx.destination);
           keepAliveOsc.start();
         }
 
-        if ('wakeLock' in navigator) {
-          try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
-        }
-
         document.getElementById('audioUnlockLayer').style.display = 'none';
-        document.getElementById('engineStatusText').innerText = '절전 차단 & 블루투스 음성 100% 가동 중';
+        document.getElementById('engineStatusText').innerText = '절전 차단 & 음성 큐 100% 가동 중';
         playBroadcastChime();
       } catch (err) {
-        alert('오디오 활성화 오류: ' + err.message);
+        alert(err.message);
       }
     }
 
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-        socket.emit('get_all_state');
-      }
-    });
-
-    function playBroadcastChime(callback) {
-      if (!audioCtx) return callback && callback();
+    function playBroadcastChime(cb) {
+      if (!audioCtx) return cb && cb();
       try {
         const t = audioCtx.currentTime;
         const o1 = audioCtx.createOscillator(), g1 = audioCtx.createGain();
@@ -184,36 +187,67 @@
         o2.connect(g2); g2.connect(audioCtx.destination);
         o2.start(t + 0.25); o2.stop(t + 0.85);
 
-        if (callback) setTimeout(callback, 800);
+        setTimeout(cb, 800);
       } catch (e) {
-        if (callback) callback();
+        if (cb) cb();
       }
     }
 
-    function speakBroadcast(text) {
-      if (!('speechSynthesis' in window)) return;
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance("... " + text);
-      u.lang = 'ko-KR'; u.rate = 0.90; u.volume = 1.0;
-      window.speechSynthesis.speak(u);
-    }
-
-    socket.on('init_state', (data) => { state = data; render(); });
-    socket.on('queue_update', ({ bank, data }) => { state[bank] = data; render(); });
-
-    // 표준 호명 방송: 은행 -> 고객번호 -> 창구번호
-    socket.on('voice_call', ({ bank, deskName, ticketNo }) => {
-      const dNum = deskName.replace(/[^0-9]/g, '');
-      const dHanja = dNum ? toHanja(dNum) + ' 번 창구' : deskName;
-      const tHanja = toHanja(ticketNo) + ' 번 고객님';
+    function processVoiceQueue() {
+      if (voiceQueue.length === 0 || isSpeaking) return;
+      isSpeaking = true;
+      const item = voiceQueue.shift();
 
       const banner = document.getElementById('callBoard');
       const textEl = document.getElementById('callBoardText');
       banner.style.display = 'block';
-      textEl.innerText = `${bank} ${ticketNo}번 ➔ ${deskName}`;
+      textEl.innerText = `${item.bank} ${item.ticketNo}번 ➔ ${item.deskName}`;
 
+      playBroadcastChime(() => {
+        if (!('speechSynthesis' in window)) {
+          isSpeaking = false;
+          processVoiceQueue();
+          return;
+        }
+        const u = new SpeechSynthesisUtterance("... " + item.speech);
+        u.lang = 'ko-KR'; u.rate = 0.90; u.volume = 1.0;
+        u.onend = () => {
+          isSpeaking = false;
+          setTimeout(processVoiceQueue, 400);
+        };
+        u.onerror = () => {
+          isSpeaking = false;
+          processVoiceQueue();
+        };
+        window.speechSynthesis.speak(u);
+      });
+    }
+
+    socket.on('init_state', (data) => {
+      state = data.queues;
+      latestReport = data.report;
+      render();
+    });
+
+    socket.on('queue_update', ({ bank, data }) => {
+      state[bank] = data;
+      render();
+    });
+
+    socket.on('report_update', (report) => {
+      latestReport = report;
+      renderReport();
+    });
+
+    socket.on('voice_call', ({ bank, deskName, ticketNo }) => {
+      const dNum = deskName.replace(/[^0-9]/g, '');
+      const dHanja = dNum ? toHanja(dNum) + ' 번 창구' : deskName;
+      const tHanja = toHanja(ticketNo) + ' 번 고객님';
       const speech = `${bank}, ${tHanja}, ${dHanja}로 와주시기 바랍니다.`;
-      playBroadcastChime(() => { speakBroadcast(speech); });
+
+      // 음성 큐에 넣고 순차 출력 (절대 짤리지 않음)
+      voiceQueue.push({ bank, deskName, ticketNo, speech });
+      processVoiceQueue();
     });
 
     function modifyDesk(bank, change) {
@@ -222,56 +256,67 @@
       });
     }
 
-    function render() {
-      const banks = Object.keys(state);
-      let totalDone = 0, totalWait = 0, totalDesks = 0;
+    function renderReport() {
+      if (!latestReport || !latestReport.hourlyDistribution) return;
 
-      banks.forEach(b => {
-        const item = state[b];
-        totalWait += (item.waiting ? item.waiting.length : 0);
-        totalDesks += item.desks.length;
-        item.desks.forEach(d => { totalDone += (d.completedCount || 0); });
-      });
+      // 시간대별 방문집중도 차트 렌더링
+      const hours = latestReport.hourlyDistribution;
+      const maxVal = Math.max(...Object.values(hours), 1);
+      const chartEl = document.getElementById('hourlyChart');
 
-      document.getElementById('kpiTotalDone').innerText = `${totalDone}건`;
-      document.getElementById('kpiTotalWait').innerText = `${totalWait}명`;
-      document.getElementById('kpiTotalDesks').innerText = `${totalDesks}개`;
+      chartEl.innerHTML = Object.keys(hours).map(h => {
+        const count = hours[h];
+        const heightPct = Math.max((count / maxVal) * 100, 4);
+        return `
+          <div class="bar-col">
+            <span class="bar-count">${count > 0 ? count : ''}</span>
+            <div class="bar-pill" style="height: ${heightPct}%;"></div>
+            <span class="bar-label">${h}</span>
+          </div>
+        `;
+      }).join('');
 
-      document.getElementById('proxyContainer').innerHTML = banks.map(b => `
-        <button onclick="socket.emit('issue_ticket', { bank: '${b}' })" class="btn-proxy">
-          ${b} 발권 +
-        </button>
+      // 은행별 요약 렌더링
+      const bankStats = latestReport.bankStats || {};
+      document.getElementById('bankSummaryGrid').innerHTML = Object.keys(bankStats).map(b => `
+        <div class="kpi-box">
+          <div style="font-size:14px; font-weight:800; color:#94a3b8;">${b}</div>
+          <div class="kpi-val">${bankStats[b].completed}건</div>
+          <div style="font-size:12px; color:#64748b; margin-top:4px;">총 발권: ${bankStats[b].total} / 취소: ${bankStats[b].cancelled}</div>
+        </div>
       `).join('');
+    }
 
+    function render() {
+      renderReport();
+      const banks = Object.keys(state);
       const container = document.getElementById('banksContainer');
+
       container.innerHTML = banks.map(b => {
         const item = state[b];
-        const waitCount = item.waiting ? item.waiting.length : 0;
-        const bankDone = item.desks.reduce((acc, cur) => acc + (cur.completedCount || 0), 0);
+        const activeDesks = item.desks.filter(d => d.isActive);
 
         return `
           <div class="bank-block">
-            <div class="bank-header">
-              <div class="bank-name">${b}</div>
-              <div class="bank-controls">
-                <span style="font-size: 13px; font-weight: 800; color: #94a3b8;">창구 설정:</span>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:20px; font-weight:900; color:#fff;">${b}</span>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:13px; color:#94a3b8; font-weight:700;">운영 창구 수:</span>
                 <button onclick="modifyDesk('${b}', -1)" class="btn-desk-mod">-</button>
-                <span class="desk-count-badge">${item.desks.length}</span>
+                <span style="font-size:16px; font-weight:900; color:#38bdf8; min-width:20px; text-align:center;">${activeDesks.length}</span>
                 <button onclick="modifyDesk('${b}', 1)" class="btn-desk-mod">+</button>
-                <span style="background:#065f46; color:#6ee7b7; font-size:14px; font-weight:900; padding:6px 14px; border-radius:12px; margin-left:8px;">완료: ${bankDone}건</span>
-                <span style="background:#991b1b; color:#fecaca; font-size:14px; font-weight:900; padding:6px 14px; border-radius:12px;">대기: ${waitCount}명</span>
               </div>
             </div>
 
             <div class="desk-grid">
               ${item.desks.map(d => `
-                <div class="desk-box ${d.status === '상담중' ? 'active' : ''}">
-                  <div class="desk-title">
-                    <span>${d.name}</span>
-                    <span style="color: ${d.status === '상담중' ? '#34d399' : '#94a3b8'};">${d.status}</span>
+                <div class="desk-box ${d.isActive ? '' : 'inactive'}">
+                  <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:800; color:#94a3b8;">
+                    <span>${d.name} ${d.isActive ? '' : '(중단)'}</span>
+                    <span style="color:${d.status === '상담중' ? '#34d399' : '#64748b'};">${d.status}</span>
                   </div>
                   <div class="desk-num">${d.current > 0 ? d.current + '번' : '-'}</div>
-                  <div class="desk-foot">완료: ${d.completedCount || 0}건</div>
+                  <div style="font-size:13px; color:#34d399; font-weight:800;">완료 실적: ${d.completedCount || 0}건</div>
                 </div>
               `).join('')}
             </div>
@@ -280,10 +325,41 @@
       }).join('');
     }
 
-    function resetAllQueues() {
-      if (confirm('🚨 모든 은행의 대기번호와 실적을 1번으로 초기화하시겠습니까?')) {
-        socket.emit('reset_all_queues');
+    function closeDailyBusiness() {
+      if (confirm('🚨 오늘 하루 상담 업무를 정식 마감하시겠습니까?\\n\\n- 당일 최종 분석 보고서가 생성됩니다.\\n- 모든 창구의 번호표 및 대기 순번이 1번으로 리셋됩니다.')) {
+        socket.emit('close_daily_business', (res) => {
+          if (res.success) {
+            showReportModal(res.report);
+          }
+        });
       }
+    }
+
+    function showReportModal(rep) {
+      document.getElementById('reportTimestamp').innerText = `마감 정산 일시: ${new Date(rep.generatedAt).toLocaleString()}`;
+      const contentEl = document.getElementById('reportModalContent');
+
+      let deskRows = '';
+      Object.keys(rep.deskStats).forEach(k => {
+        const d = rep.deskStats[k];
+        deskRows += `<tr><td style="padding:8px; border-bottom:1px solid #1e293b;">${k}</td><td style="padding:8px; border-bottom:1px solid #1e293b; text-align:center; font-weight:900; color:#34d399;">${d.count}건</td></tr>`;
+      });
+
+      contentEl.innerHTML = `
+        <div class="kpi-grid">
+          <div class="kpi-box"><div style="font-size:13px; color:#94a3b8;">총 상담 완료</div><div class="kpi-val" style="color:#34d399;">${rep.totalCompleted}건</div></div>
+          <div class="kpi-box"><div style="font-size:13px; color:#94a3b8;">취소 및 부재</div><div class="kpi-val" style="color:#f87171;">${rep.totalCancelled}건</div></div>
+        </div>
+
+        <div style="background:#030712; border-radius:16px; padding:16px; border:1px solid #1e293b;">
+          <div style="font-size:15px; font-weight:900; margin-bottom:10px; color:#fff;">창구별 상담 실적 내역</div>
+          <table style="width:100%; border-collapse:collapse; font-size:14px; color:#f8fafc;">
+            <thead><tr style="color:#94a3b8; text-align:left;"><th style="padding:8px;">창구</th><th style="padding:8px; text-align:center;">처리 건수</th></tr></thead>
+            <tbody>${deskRows}</tbody>
+          </table>
+        </div>
+      `;
+      document.getElementById('reportModal').style.display = 'flex';
     }
   </script>
 </body>

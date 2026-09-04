@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>전 은행 통합 현장 오퍼레이터</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif; }
+    body { background-color: #030712; color: #f8fafc; padding: 14px; min-height: 100vh; }
+    .wrap { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+
+    .header-bar { display: flex; justify-content: space-between; align-items: center; background: #0f172a; border: 2px solid #1e293b; border-radius: 20px; padding: 16px 20px; }
+    .title { font-size: 22px; font-weight: 900; color: #38bdf8; }
+
+    .bank-card { background: #0f172a; border: 2px solid #1e293b; border-radius: 22px; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+    .bank-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1e293b; padding-bottom: 12px; }
+    .bank-name { font-size: 22px; font-weight: 900; }
+    .badge-wait { background: #991b1b; color: #fecaca; font-size: 15px; font-weight: 900; padding: 4px 14px; border-radius: 10px; }
+
+    .desks-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+    .desk-card { background: #030712; border: 2px solid #334155; border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+    .desk-card.serving { border-color: #38bdf8; box-shadow: 0 0 20px rgba(56, 189, 248, 0.25); }
+
+    .desk-top { display: flex; justify-content: space-between; align-items: center; }
+    .desk-num { font-size: 42px; font-weight: 900; color: #facc15; text-align: center; margin: 2px 0; }
+
+    .btn-call { width: 100%; height: 55px; background: #2563eb; color: #fff; font-size: 18px; font-weight: 900; border-radius: 12px; border: none; cursor: pointer; }
+    .btn-call:disabled { background: #1f2937; color: #64748b; }
+
+    .action-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .btn-sm { height: 44px; font-size: 13px; font-weight: 900; border-radius: 8px; border: none; cursor: pointer; }
+    .btn-recall { background: #d97706; color: #fff; }
+    .btn-done { background: #065f46; color: #6ee7b7; }
+    .btn-pass { background: #7f1d1d; color: #fecaca; }
+    .btn-move { background: #581c87; color: #f3e8ff; }
+    .btn-sm:disabled { opacity: 0.3; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header-bar">
+      <div class="title">🎮 전 은행 통합 현장 오퍼레이터 콘솔</div>
+      <div style="font-size: 13px; color: #94a3b8; font-weight: 700;">총괄 관리자 전용 직접 제어 단말</div>
+    </div>
+
+    <div id="operatorContainer" style="display: flex; flex-direction: column; gap: 16px;"></div>
+  </div>
+
+  <script>
+    const socket = io();
+    let state = {};
+
+    socket.on('init_state', (data) => { state = data.queues; render(); });
+    socket.on('queue_update', ({ bank, data }) => { state[bank] = data; render(); });
+
+    function callNext(bank, deskId) {
+      socket.emit('call_next_desk', { bank, deskId: Number(deskId) }, (res) => {
+        if (!res.success && res.message) alert(res.message);
+      });
+    }
+
+    function recall(bank, deskId) {
+      socket.emit('recall_desk', { bank, deskId: Number(deskId) });
+    }
+
+    function finish(bank, deskId) {
+      socket.emit('update_desk_status', { bank, deskId: Number(deskId), status: '상담완료' });
+    }
+
+    function pass(bank, deskId, currentTicket) {
+      if (confirm(`${currentTicket}번 고객을 부재 처리하고 취소하시겠습니까?`)) {
+        socket.emit('update_desk_status', { bank, deskId: Number(deskId), status: '부재중' });
+      }
+    }
+
+    function transfer(bank, fromDeskId, currentTicket) {
+      const targetId = prompt(`현재 ${currentTicket}번 고객을 보낼 창구 번호(숫자)를 입력하세요:`);
+      if (targetId) {
+        socket.emit('transfer_desk', { bank, fromDeskId: Number(fromDeskId), toDeskId: Number(targetId) }, (res) => {
+          if (!res.success) alert(res.message);
+        });
+      }
+    }
+
+    function render() {
+      const container = document.getElementById('operatorContainer');
+      const banks = Object.keys(state);
+
+      container.innerHTML = banks.map(b => {
+        const item = state[b];
+        const waitCount = item.waiting.length;
+        const activeDesks = item.desks.filter(d => d.isActive);
+
+        return `
+          <div class="bank-card">
+            <div class="bank-header">
+              <span class="bank-name">${b}</span>
+              <span class="badge-wait">${waitCount}명 대기 중</span>
+            </div>
+
+            <div class="desks-grid">
+              ${activeDesks.map(d => `
+                <div class="desk-card ${d.status === '상담중' ? 'serving' : ''}">
+                  <div class="desk-top">
+                    <span style="font-size:16px; font-weight:900;">${d.name}</span>
+                    <span style="font-size:13px; font-weight:800; color:${d.status === '상담중' ? '#34d399' : '#94a3b8'};">${d.status} (완료:${d.completedCount||0})</span>
+                  </div>
+
+                  <div class="desk-num">${d.current > 0 ? d.current + '번' : '-'}</div>
+
+                  <button onclick="callNext('${b}', ${d.id})" class="btn-call" ${d.status === '상담중' || waitCount === 0 ? 'disabled' : ''}>
+                    다음 고객 호출
+                  </button>
+
+                  <div class="action-row">
+                    <button onclick="recall('${b}', ${d.id})" class="btn-sm btn-recall" ${d.status !== '상담중' ? 'disabled' : ''}>재호출</button>
+                    <button onclick="finish('${b}', ${d.id})" class="btn-sm btn-done" ${d.status !== '상담중' ? 'disabled' : ''}>완료</button>
+                    <button onclick="pass('${b}', ${d.id}, ${d.current})" class="btn-sm btn-pass" ${d.status !== '상담중' ? 'disabled' : ''}>부재</button>
+                    <button onclick="transfer('${b}', ${d.id}, ${d.current})" class="btn-sm btn-move" ${d.status !== '상담중' ? 'disabled' : ''}>이동</button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  </script>
+</body>
+</html>
