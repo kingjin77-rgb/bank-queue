@@ -25,7 +25,7 @@
 
   <canvas id="keepAliveCanvas" width="2" height="2" class="opacity-0 pointer-events-none fixed top-0 left-0"></canvas>
 
-  <!-- 1. 본인 담당 창구 변경 모달 -->
+  <!-- 1. 본인 창구 선택 및 이동 모달 -->
   <div id="deskSelectModal" style="display:none;" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
     <div class="toss-card p-6 rounded-[32px] max-w-sm w-full text-center border border-white/10 shadow-2xl">
       <div class="text-4xl mb-2">🏢</div>
@@ -35,7 +35,7 @@
     </div>
   </div>
 
-  <!-- 2. [고객 옆 창구로 넘기기 모달] (동일 은행 타 창구 목록) -->
+  <!-- 2. 고객 옆 창구로 넘기기 모달 -->
   <div id="transferDeskModal" style="display:none;" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
     <div class="toss-card p-6 rounded-[32px] max-w-sm w-full text-center border border-indigo-500/40 shadow-2xl">
       <div class="text-4xl mb-2">👥</div>
@@ -46,41 +46,40 @@
     </div>
   </div>
 
-  <!-- PC 대형 화면에서도 중앙에 고정되어 위아래 여백 찢어짐 방지 -->
+  <!-- 메인 모바일 컨테이너 -->
   <div class="w-full max-w-md flex flex-col justify-between h-full gap-3">
 
     <main class="flex flex-col gap-3">
 
-      <!-- 상단 헤더: 기관명 + 본인 창구 이동 버튼 -->
+      <!-- 상단 헤더: 기관명 + 창구이동 버튼 -->
       <div class="flex justify-between items-center pb-2.5 border-b border-slate-800">
         <div>
           <span id="bankBadge" class="px-3 py-1 bg-[#3182f6] text-white font-black text-xs rounded-xl shadow">
             기관 확인
           </span>
-          <h1 class="text-xl font-black text-white mt-1" id="deskTitleHeader">1번 창구</h1>
+          <h1 class="text-xl font-black text-white mt-1" id="deskTitleHeader">창구 미지정</h1>
         </div>
         <button onclick="openDeskSelectModal()" class="toss-btn px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-2xl shadow-lg flex items-center gap-1.5">
           <span>🔄</span> 내 자리 이동
         </button>
       </div>
 
-      <!-- 단말기 가동 버튼 -->
+      <!-- 단말기 음성 알람 켜기 버튼 -->
       <button id="btnActivate" onclick="activateTellerTerminal()" class="toss-btn w-full h-14 bg-[#3182f6] text-white font-black text-base rounded-2xl shadow-lg flex items-center justify-center gap-2">
         <span>🔔</span> 단말기 음성 알람 켜기 (터치)
       </button>
 
-      <!-- 우리 기관 실시간 대기 인원 -->
+      <!-- 우리 기관 실시간 대기 인원 카드 -->
       <div class="toss-card rounded-[28px] p-5 text-center shadow-xl">
         <div class="text-xs font-black text-slate-400 mb-1" id="waitCardTitle">우리 기관 실시간 대기 인원</div>
         <div id="waitCount" class="text-6xl sm:text-7xl font-black text-amber-400 my-1 tracking-tight">0</div>
         <p class="text-xs font-bold text-slate-500">새 손님 접수 시 이 단말기에서만 알람이 울립니다</p>
       </div>
 
-      <!-- 현재 진행 고객 카드 + [고객 옆 창구로 넘기기 버튼] -->
+      <!-- 현재 진행 고객 카드 + 옆 창구로 넘기기 버튼 -->
       <div class="toss-card rounded-[28px] p-5 text-center shadow-xl">
         <div class="flex justify-between items-center mb-1">
-          <span id="currentDeskLabel" class="text-xs font-black text-[#3182f6]">1번 창구 진행 중</span>
-          
+          <span id="currentDeskLabel" class="text-xs font-black text-[#3182f6]">창구 선택 필요</span>
           <button id="btnTransferDesk" onclick="openTransferDeskModal()" disabled class="toss-btn px-3 py-1.5 bg-indigo-600/30 border border-indigo-400/40 disabled:opacity-30 disabled:border-slate-800 disabled:text-slate-600 text-indigo-200 text-xs font-black rounded-xl flex items-center gap-1">
             <span>👉</span> 옆 창구로 고객 넘기기
           </button>
@@ -91,7 +90,7 @@
         </div>
       </div>
 
-      <!-- 모바일 미니 전광판 (옆 창구들 상황 확인용) -->
+      <!-- 간이 전광판 모니터 -->
       <div class="toss-card rounded-[24px] p-4">
         <div class="flex justify-between items-center mb-2 pb-1 border-b border-white/5">
           <span class="text-xs font-black text-slate-300 flex items-center gap-1.5">
@@ -142,7 +141,7 @@
 
     const urlParams = new URLSearchParams(window.location.search);
     const rawParam = urlParams.get('b') || urlParams.get('bank');
-    let currentBankId = localStorage.getItem('teller_saved_bank_id') || 'kb';
+    let currentBankId = localStorage.getItem('teller_saved_bank_id') || 'woori';
 
     if (rawParam) {
       currentBankId = rawParam.toLowerCase().trim();
@@ -155,7 +154,7 @@
     document.getElementById('waitCardTitle').innerText = `[${currentBankName}] 실시간 대기 인원`;
 
     let savedDeskId = localStorage.getItem(`teller_locked_desk_${currentBankId}`);
-    let currentDeskId = savedDeskId ? parseInt(savedDeskId, 10) : null;
+    let currentDeskId = savedDeskId ? parseInt(savedDeskId, 10) : 1;
 
     function openDeskSelectModal() {
       renderModalDeskButtons();
@@ -172,11 +171,12 @@
     function renderModalDeskButtons() {
       const container = document.getElementById('modalDeskButtons');
       container.innerHTML = '';
-      if (availableDesks.length === 0) {
-        container.innerHTML = '<div class="text-xs text-slate-500 py-3">개설된 창구가 없습니다. 관리자에게 문의하세요.</div>';
-        return;
-      }
-      availableDesks.forEach(d => {
+      
+      const desksToRender = (availableDesks.length > 0) ? availableDesks : [
+        { id: 1, name: '1번 창구' }, { id: 2, name: '2번 창구' }, { id: 3, name: '3번 창구' }, { id: 4, name: '4번 창구' }
+      ];
+
+      desksToRender.forEach(d => {
         const btn = document.createElement('button');
         const isCurrent = (d.id === currentDeskId);
         btn.className = `toss-btn w-full h-14 rounded-2xl font-black text-sm flex items-center justify-between px-5 ${
@@ -191,10 +191,6 @@
     }
 
     function updateUI() {
-      if (!currentDeskId) {
-        openDeskSelectModal();
-        return;
-      }
       document.getElementById('deskTitleHeader').innerText = `${currentDeskId}번 창구 (잠금)`;
       document.getElementById('currentDeskLabel').innerText = `${currentDeskId}번 창구 진행 중`;
       updateStateDisplay();
@@ -203,32 +199,31 @@
     function openTransferDeskModal() {
       const container = document.getElementById('targetDeskButtons');
       container.innerHTML = '';
-      const otherDesks = availableDesks.filter(d => d.id !== currentDeskId);
+      const otherDesks = (availableDesks.length > 0 ? availableDesks : [
+        { id: 1, name: '1번 창구' }, { id: 2, name: '2번 창구' }, { id: 3, name: '3번 창구' }, { id: 4, name: '4번 창구' }
+      ]).filter(d => d.id !== currentDeskId);
 
-      if (otherDesks.length === 0) {
-        container.innerHTML = '<div class="text-xs text-slate-400 py-4">넘겨줄 수 있는 다른 창구가 없습니다.<br>(관리자에서 창구를 추가하세요)</div>';
-      } else {
-        otherDesks.forEach(d => {
-          const btn = document.createElement('button');
-          const isBusy = !!d.currentTicket;
-          btn.className = 'toss-btn w-full h-14 rounded-2xl bg-[#1f293d] hover:bg-indigo-950/60 border border-indigo-500/20 text-white font-black text-sm flex items-center justify-between px-5';
-          btn.innerHTML = `
-            <span>${d.name} ${isBusy ? `(${d.currentTicket}번 상담중)` : '(비어있음)'}</span>
-            <span class="text-xs text-indigo-400 font-bold">이 창구로 전달 ➔</span>
-          `;
-          btn.onclick = () => {
-            if (confirm(`현재 고객을 [${d.name}]로 넘기시겠습니까?`)) {
-              socket.emit('transfer_customer_desk', {
-                bank: currentBankId,
-                fromDeskId: currentDeskId,
-                toDeskId: d.id
-              });
-              closeTransferDeskModal();
-            }
-          };
-          container.appendChild(btn);
-        });
-      }
+      otherDesks.forEach(d => {
+        const btn = document.createElement('button');
+        const isBusy = !!d.currentTicket;
+        btn.className = 'toss-btn w-full h-14 rounded-2xl bg-[#1f293d] hover:bg-indigo-950/60 border border-indigo-500/20 text-white font-black text-sm flex items-center justify-between px-5';
+        btn.innerHTML = `
+          <span>${d.name} ${isBusy ? `(${d.currentTicket}번 상담중)` : '(비어있음)'}</span>
+          <span class="text-xs text-indigo-400 font-bold">이 창구로 전달 ➔</span>
+        `;
+        btn.onclick = () => {
+          if (confirm(`현재 고객을 [${d.name}]로 넘기시겠습니까?`)) {
+            socket.emit('transfer_customer_desk', {
+              bank: currentBankId,
+              fromDeskId: currentDeskId,
+              toDeskId: d.id
+            });
+            closeTransferDeskModal();
+          }
+        };
+        container.appendChild(btn);
+      });
+
       document.getElementById('transferDeskModal').style.display = 'flex';
     }
     function closeTransferDeskModal() { document.getElementById('transferDeskModal').style.display = 'none'; }
@@ -265,7 +260,10 @@
     function renderMiniDisplay(desks) {
       const container = document.getElementById('miniDisplayGrid');
       container.innerHTML = '';
-      desks.forEach(d => {
+      const list = desks.length > 0 ? desks : [
+        { id: 1, name: '1번 창구' }, { id: 2, name: '2번 창구' }, { id: 3, name: '3번 창구' }, { id: 4, name: '4번 창구' }
+      ];
+      list.forEach(d => {
         const isMe = (d.id === currentDeskId);
         const div = document.createElement('div');
         div.className = `p-2.5 rounded-xl border flex justify-between items-center ${
@@ -343,8 +341,7 @@
       window.lastState = states;
       if (states && states[currentBankId]) {
         availableDesks = states[currentBankId].desks || [];
-        if (!currentDeskId && availableDesks.length > 0) openDeskSelectModal();
-        else updateUI();
+        updateUI();
       }
     });
 
@@ -365,23 +362,21 @@
     });
 
     function callNextCustomer() {
-      if (!currentDeskId) return openDeskSelectModal();
       socket.emit('call_next_customer', { bank: currentBankId, deskId: currentDeskId });
     }
     function recallCustomer() {
-      if (!currentDeskId) return openDeskSelectModal();
       socket.emit('recall_customer', { bank: currentBankId, deskId: currentDeskId });
     }
     function passCustomer() {
-      if (!currentDeskId) return openDeskSelectModal();
       if (confirm(`${currentDeskId}번 창구 고객을 부재(패스) 처리하시겠습니까?`)) {
         socket.emit('pass_customer', { bank: currentBankId, deskId: currentDeskId });
       }
     }
     function completeCurrent() {
-      if (!currentDeskId) return openDeskSelectModal();
       socket.emit('complete_consultation', { bank: currentBankId, deskId: currentDeskId });
     }
+
+    updateUI();
   </script>
 </body>
 </html>
