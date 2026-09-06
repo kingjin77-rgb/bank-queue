@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>총괄 관리자 콘솔 | 입주상담 시스템</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body { font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif; letter-spacing: -0.035em; }
+    .toss-card { background: #171f30; border: 1px solid rgba(255,255,255,0.08); }
+    .toss-btn { transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1); }
+    .toss-btn:active { transform: scale(0.96); }
+  </style>
+</head>
+<body class="bg-[#0b101b] text-white min-h-screen p-4 md:p-6 select-none">
+
+  <div id="audioUnlockModal" class="fixed inset-0 bg-[#0b101b]/95 z-50 flex flex-col items-center justify-center p-6 text-center backdrop-blur-md">
+    <div class="text-5xl mb-4">📢</div>
+    <h1 class="text-3xl font-black text-amber-400 mb-2">현장 총괄 관리자 콘솔</h1>
+    <p class="text-slate-400 text-sm mb-6">스피커 앰프 연결 전, 아래 버튼을 터치해 고출력 자동 방송을 활성화하세요.</p>
+    <button onclick="unlockMasterAudio()" class="toss-btn px-8 py-4 bg-[#3182f6] hover:bg-[#286cd0] text-white font-black text-xl rounded-2xl shadow-xl shadow-blue-500/30">
+      방송 엔진 및 콘솔 시작
+    </button>
+  </div>
+
+  <header class="flex justify-between items-center pb-4 mb-6 border-b border-slate-800">
+    <div class="flex items-center gap-3">
+      <span class="px-3 py-1 bg-[#8b0029] text-white font-black text-xs rounded-xl">법무법인 제이엘</span>
+      <h1 class="text-2xl font-black text-white">현장 총괄 마스터 콘솔</h1>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="audioStatusBadge" class="text-xs font-black px-3 py-1 bg-slate-800 text-slate-400 rounded-xl">방송 대기 중</span>
+      <button onclick="resetAllQueues()" class="toss-btn px-4 py-2 bg-rose-500/20 border border-rose-500/40 text-rose-300 font-bold text-xs rounded-xl hover:bg-rose-500 hover:text-white">
+        전체 대기열 리셋
+      </button>
+    </div>
+  </header>
+
+  <section id="bannerSection" class="toss-card rounded-[28px] p-6 mb-6 text-center border-2 border-slate-800 transition-all duration-300">
+    <div id="bannerSub" class="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">실시간 방송 대기</div>
+    <div id="bannerMain" class="text-2xl md:text-4xl font-black text-slate-500 py-1 tracking-tight">
+      대기 중인 안내 방송이 없습니다
+    </div>
+  </section>
+
+  <main class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="bankControlGrid"></main>
+
+  <script>
+    const socket = io();
+    let audioCtx = null;
+    let bankList = [];
+    let fullState = {};
+
+    function unlockMasterAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.resume();
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
+      }
+      document.getElementById('audioUnlockModal').style.display = 'none';
+      document.getElementById('audioStatusBadge').innerText = '⚡ 방송 엔진 정상 가동';
+      document.getElementById('audioStatusBadge').className = 'text-xs font-black px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-xl';
+      playChime(() => speakMaster('총괄 관리자 콘솔 음성 시스템이 활성화되었습니다.'));
+    }
+
+    function playChime(cb) {
+      if (!audioCtx) return cb && cb();
+      const notes = [523.25, 659.25, 783.99, 1046.50];
+      const now = audioCtx.currentTime;
+      notes.forEach((freq, idx) => {
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.frequency.setValueAtTime(freq, now + idx * 0.15);
+        g.gain.setValueAtTime(0.4, now + idx * 0.15);
+        g.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.15 + 0.35);
+        osc.connect(g);
+        g.connect(audioCtx.destination);
+        osc.start(now + idx * 0.15);
+        osc.stop(now + idx * 0.15 + 0.36);
+      });
+      setTimeout(() => { if (cb) cb(); }, 700);
+    }
+
+    function speakMaster(text) {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'ko-KR';
+      u.rate = 0.95;
+      u.pitch = 1.0;
+      window.speechSynthesis.speak(u);
+    }
+
+    // [전 기관 등록 음성 안내 및 상단 배너 점등]
+    socket.on('new_ticket_issued', ({ bankName, ticketNo }) => {
+      const banner = document.getElementById('bannerSection');
+      const sub = document.getElementById('bannerSub');
+      const main = document.getElementById('bannerMain');
+
+      sub.innerText = '🔔 신규 대기 고객 접수';
+      sub.className = 'text-xs font-black text-cyan-400 uppercase tracking-widest mb-1';
+      banner.className = 'toss-card rounded-[28px] p-6 mb-6 text-center border-2 border-cyan-400 bg-cyan-950/40 shadow-xl';
+      main.className = 'text-2xl md:text-4xl font-black text-cyan-300 py-1 tracking-tight animate-pulse';
+      main.innerText = `[${bankName}] ${ticketNo}번 고객 대기 등록`;
+
+      playChime(() => {
+        speakMaster(`${bankName}, ${ticketNo}번 고객님이 대기 등록되었습니다.`);
+      });
+
+      setTimeout(() => {
+        banner.className = 'toss-card rounded-[28px] p-6 mb-6 text-center border-2 border-slate-800';
+        sub.innerText = '실시간 방송 대기';
+        sub.className = 'text-xs font-black text-slate-400 uppercase tracking-widest mb-1';

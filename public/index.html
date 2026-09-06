@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>입주 상담 대기표 발권</title>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body { font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif; letter-spacing: -0.035em; }
+    .toss-card { background: #171f30; border: 1px solid rgba(255,255,255,0.08); }
+    .toss-btn { transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1); }
+    .toss-btn:active { transform: scale(0.96); }
+  </style>
+</head>
+<body class="bg-[#0b101b] text-white min-h-screen p-5 flex flex-col justify-between select-none">
+
+  <!-- 첫 터치 오디오 언락 모달 -->
+  <div id="audioUnlockModal" style="display:none;" class="fixed inset-0 bg-[#0b101b]/95 z-50 flex flex-col justify-center items-center p-5 text-center backdrop-blur-md">
+    <div class="toss-card border border-[#3182f6]/40 rounded-[36px] p-7 w-full max-w-sm shadow-2xl">
+      <div class="text-6xl mb-4">🔔</div>
+      <h3 class="text-2xl font-black text-white mb-2">상담 순번 접수 완료</h3>
+      <p class="text-sm font-semibold text-slate-400 mb-6 leading-relaxed">
+        고객님의 차례가 되면 <span class="text-[#3182f6] font-black">음성 안내와 진동</span>이 울립니다.<br>아래 확인을 눌러주세요.
+      </p>
+      <button onclick="confirmAndUnlockCustomerAudio()" class="toss-btn w-full h-16 bg-[#3182f6] text-white font-black text-lg rounded-2xl shadow-xl shadow-blue-500/25">
+        번호표 확인 (알림 켜기)
+      </button>
+    </div>
+  </div>
+
+  <header class="py-2">
+    <div class="inline-flex items-center gap-2 px-3 py-1 bg-slate-800 rounded-xl text-xs font-black text-slate-400 mb-2">
+      <span>🏛️ 입주 상담·분양전환 지원센터</span>
+    </div>
+    <h1 class="text-3xl font-black text-white tracking-tight" id="mainTitle">상담 대기표 발권</h1>
+  </header>
+
+  <main class="my-auto py-4">
+    <!-- 1. 기관 선택 모드 -->
+    <div id="selectionMode">
+      <p class="text-sm font-semibold text-slate-400 mb-4">상담을 원하시는 기관을 터치하세요</p>
+      <div id="activeBankList" class="flex flex-col gap-3"></div>
+    </div>
+
+    <!-- 2. 내 번호표 확인 모드 -->
+    <div id="ticketMode" style="display:none;" class="flex flex-col gap-4">
+      <div class="toss-card rounded-[36px] p-7 text-center shadow-2xl">
+        <div class="inline-block px-4 py-1.5 rounded-full text-xs font-black mb-3" id="myBankBadge" style="background:#1f293d; color:#38bdf8;">
+          기관명
+        </div>
+        <div class="text-xs font-black text-slate-400 uppercase tracking-wider">나의 대기 번호</div>
+        <div class="text-8xl font-black text-amber-400 my-3 tracking-tighter" id="myTicketNumber">0</div>
+        
+        <div class="bg-[#1f293d] border border-white/5 rounded-2xl p-4 mt-2 flex justify-between items-center">
+          <span class="text-sm font-bold text-slate-400">내 앞 대기 인원</span>
+          <span class="text-2xl font-black text-white" id="aheadCountText">0명</span>
+        </div>
+      </div>
+
+      <!-- 하단 정보 & 분양전환 안내 롤링 카드 -->
+      <div class="toss-card rounded-[28px] p-5">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-black text-amber-400">대기 중 안내사항</span>
+          <span class="text-[11px] font-bold text-slate-500">안내</span>
+        </div>
+        <div id="adContent" class="text-sm font-bold text-slate-300 leading-relaxed min-h-[44px]">
+          🏛️ <span class="text-rose-400 font-black">법무법인 제이엘</span>: 분양전환 소유권 이전등기 및 법률 원스톱 상담 창구 운영 중
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="py-3 text-center text-xs font-bold text-slate-500 border-t border-slate-800/80">
+    순번이 가까워지면 알람이 울리오니 화면을 닫지 마세요.
+  </footer>
+
+  <script>
+    const socket = io();
+    let audioCtx = null;
+    let isSoundUnlocked = false;
+    let myBank = null;
+    let myTicketNo = null;
+    let preAlert3rdSent = false;
+    let preAlertNextSent = false;
+
+    const promoMessages = [
+      '🏛️ <span class="text-rose-400 font-black">법무법인 제이엘</span>: 분양전환 소유권 이전등기 및 법률 원스톱 상담 지원 중',
+      '📄 <span class="text-amber-300 font-black">필수 서류 확인</span>: 신분증 및 분양전환 안내문을 미리 준비해 주세요.',
+      '🏦 <span class="text-blue-400 font-black">금융 혜택 비교</span>: 각 협약 은행별 우대금리와 대출한도 맞춤 상담 가능'
+    ];
+    let msgIdx = 0;
+    setInterval(() => {
+      msgIdx = (msgIdx + 1) % promoMessages.length;
+      const el = document.getElementById('adContent');
+      if (el) el.innerHTML = promoMessages[msgIdx];
+    }, 6000);
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const directBank = urlParams.get('b') || urlParams.get('bank');
+
+    function confirmAndUnlockCustomerAudio() {
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
+        }
+        isSoundUnlocked = true;
+      } catch (e) {}
+      document.getElementById('audioUnlockModal').style.display = 'none';
+    }
+
+    function playCustomerChime(cb) {
+      if (!audioCtx) return cb && cb();
+      const notes = [523.25, 659.25, 783.99, 1046.50];
+      const now = audioCtx.currentTime;
+      notes.forEach((freq, idx) => {
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.frequency.setValueAtTime(freq, now + idx * 0.14);
+        g.gain.setValueAtTime(0.35, now + idx * 0.14);
+        g.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.14 + 0.3);
+        osc.connect(g);
+        g.connect(audioCtx.destination);
+        osc.start(now + idx * 0.14);
+        osc.stop(now + idx * 0.14 + 0.31);
+      });
+      setTimeout(() => { if (cb) cb(); }, 650);
+    }
+
+    function speakCustomer(text) {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'ko-KR';
+      u.rate = 1.0;
+      window.speechSynthesis.speak(u);
+    }
+
+    socket.on('bank_list_sync', (list) => {
+      if (directBank) {
+        handleAutoIssue(directBank);
+      } else {
+        renderSelectionList(list);
+      }
+    });
+
+    function renderSelectionList(list) {
+      const container = document.getElementById('activeBankList');
+      container.innerHTML = '';
+      list.filter(b => b.active).forEach(b => {
+        const btn = document.createElement('button');
+        btn.className = 'toss-btn w-full h-16 px-6 rounded-2xl font-black text-lg text-white shadow-xl flex justify-between items-center';
+        btn.style.backgroundColor = b.color;
+        btn.innerHTML = `<span>${b.name} 접수</span><span class="text-sm bg-black/20 px-3 py-1.5 rounded-xl font-bold">발권 ➔</span>`;
+        btn.onclick = () => handleAutoIssue(b.id);
+        container.appendChild(btn);
+      });
+    }
+
+    function handleAutoIssue(bId) {
+      myBank = bId;
+      document.getElementById('selectionMode').style.display = 'none';
+      document.getElementById('ticketMode').style.display = 'flex';
+
+      const savedTicket = localStorage.getItem(`my_ticket_${bId}`);
+      if (savedTicket) {
+        myTicketNo = parseInt(savedTicket, 10);
+        document.getElementById('myTicketNumber').innerText = myTicketNo;
+        document.getElementById('audioUnlockModal').style.display = 'flex';
+        return;
+      }
+
+      socket.emit('issue_ticket', { bank: bId }, (res) => {
+        if (res && res.success) {
+          myTicketNo = res.ticketNo;
+          localStorage.setItem(`my_ticket_${bId}`, myTicketNo);
+          document.getElementById('myBankBadge').innerText = res.bankName;
+          document.getElementById('myTicketNumber').innerText = myTicketNo;
+          document.getElementById('audioUnlockModal').style.display = 'flex';
+        }
+      });
+    }
+
+    socket.on('queue_update', ({ bankId, state }) => {
+      if (bankId === myBank && myTicketNo) {
+        const myIndex = state.waiting.findIndex(w => w.ticketNo === myTicketNo);
+
+        if (myIndex >= 0) {
+          document.getElementById('aheadCountText').innerText = `${myIndex}명`;
+
+          if (myIndex <= 2 && myIndex > 0 && !preAlert3rdSent) {
+            preAlert3rdSent = true;
+            playCustomerChime(() => {
+              speakCustomer(`${myTicketNo}번 고객님, 곧 상담 순서입니다. 창구 근처로 이동해 주세요.`);
+            });
+            if (navigator.vibrate) navigator.vibrate([400, 200, 400]);
+          }
+
+          if (myIndex === 0 && !preAlertNextSent) {
+            preAlertNextSent = true;
+            playCustomerChime(() => {
+              speakCustomer(`곧 ${myTicketNo}번 고객님 순서입니다. 창구 바로 앞에서 대기해 주세요.`);
+            });
+            if (navigator.vibrate) navigator.vibrate([600, 200, 600]);
+          }
+        } else if (state.calling && state.calling.ticketNo === myTicketNo) {
+          document.getElementById('aheadCountText').innerText = '지금 호출 중!';
+          playCustomerChime(() => {
+            speakCustomer(`${myTicketNo}번 고객님, 창구로 와주시기 바랍니다.`);
+          });
+          if (navigator.vibrate) navigator.vibrate([800, 300, 800]);
+        }
+      }
+    });
+  </script>
+</body>
+</html>

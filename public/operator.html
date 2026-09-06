@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>현장 관제 센터 | 법무법인 제이엘</title>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body { font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif; letter-spacing: -0.035em; }
+    .toss-card { background: #171f30; border: 1px solid rgba(255,255,255,0.08); }
+    .toss-btn { transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1); }
+    .toss-btn:active { transform: scale(0.96); }
+  </style>
+</head>
+<body class="bg-[#0b101b] text-white min-h-screen p-4 md:p-6 pb-24 select-none">
+
+  <!-- 스마트폰 화면 꺼짐 방지 백그라운드 캔버스 애니메이션 -->
+  <canvas id="keepAliveCanvasOp" width="2" height="2" class="opacity-0 pointer-events-none fixed top-0 left-0"></canvas>
+
+  <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-6 mb-6 border-b border-slate-800/80">
+    <div>
+      <div class="inline-flex items-center gap-2 px-3 py-1 bg-[#8b0029] rounded-xl text-xs font-black text-rose-200 mb-2">
+        <span>🏛️ 법무법인 제이엘</span>
+        <span class="text-white/40">|</span>
+        <span>현장 진행본부</span>
+      </div>
+      <h1 class="text-3xl font-black text-white tracking-tight">현장 창구 제어 센터</h1>
+    </div>
+    
+    <button onclick="openProxyModal()" class="toss-btn w-full md:w-auto px-8 py-5 bg-[#3182f6] hover:bg-[#286cd0] text-white font-black text-xl rounded-3xl shadow-xl shadow-blue-500/20 flex items-center justify-center gap-3">
+      <span class="text-2xl">🎫</span>
+      <span>원터치 대리 발권</span>
+    </button>
+  </header>
+
+  <main id="operatorGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"></main>
+
+  <div id="proxyModal" style="display:none;" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-[#171f30] border border-white/10 max-w-md w-full p-6 rounded-[32px] shadow-2xl">
+      <div class="flex justify-between items-center pb-4 mb-4 border-b border-slate-800">
+        <h3 class="text-2xl font-black text-white">어르신 대리 발권</h3>
+        <button onclick="closeProxyModal()" class="w-10 h-10 flex items-center justify-center rounded-full bg-slate-800 text-slate-400 font-black text-xl">✕</button>
+      </div>
+      <p class="text-sm font-semibold text-slate-400 mb-5">발권할 기관을 누르면 즉시 번호표가 발행됩니다.</p>
+      <div id="proxyBankList" class="flex flex-col gap-3"></div>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+    let bankList = [];
+    let fullState = {};
+
+    // 캔버스 애니메이션 기반 화면 꺼짐 방지
+    const canvas = document.getElementById('keepAliveCanvasOp');
+    if (canvas && canvas.getContext) {
+      const ctx = canvas.getContext('2d');
+      let f = 0;
+      function loop() {
+        f++;
+        ctx.fillStyle = (f % 2 === 0) ? '#000000' : '#010101';
+        ctx.fillRect(0, 0, 2, 2);
+        requestAnimationFrame(loop);
+      }
+      loop();
+    }
+    if ('wakeLock' in navigator) {
+      navigator.wakeLock.request('screen').catch(() => {});
+    }
+
+    socket.on('bank_list_sync', (list) => { bankList = list; render(); });
+    socket.on('full_state_sync', (states) => { fullState = states; render(); });
+    socket.on('queue_update', ({ bankId, state }) => { fullState[bankId] = state; render(); });
+
+    function render() {
+      const container = document.getElementById('operatorGrid');
+      container.innerHTML = '';
+
+      bankList.filter(b => b.active).forEach(bank => {
+        const state = fullState[bank.id] || { waiting: [], desks: [] };
+        const card = document.createElement('div');
+        card.className = 'toss-card rounded-[32px] p-6 flex flex-col justify-between shadow-2xl';
+
+        let html = `
+          <div>
+            <div class="flex justify-between items-center pb-4 mb-5 border-b border-white/5">
+              <div class="flex items-center gap-3">
+                <span class="w-4 h-4 rounded-full shadow" style="background-color:${bank.color}"></span>
+                <span class="text-2xl font-black text-white tracking-tight">${bank.name}</span>
+              </div>
+              <div class="px-4 py-2 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-[#3182f6] font-black text-base">
+                대기 <span class="text-white text-xl font-black">${state.waiting ? state.waiting.length : 0}</span>명
+              </div>
+            </div>
+            <div class="flex flex-col gap-4">
+        `;
+
+        state.desks.forEach(desk => {
+          const isBusy = !!desk.currentTicket;
+          html += `
+            <div class="bg-[#1f293d] border border-white/5 rounded-2xl p-4">
+              <div class="flex justify-between items-center mb-3">
+                <span class="text-lg font-black text-slate-200">${desk.name}</span>
+                <span class="px-3 py-1 rounded-xl text-sm font-black ${isBusy ? 'bg-amber-400 text-slate-950 animate-pulse' : 'bg-slate-800 text-slate-400'}">
+                  ${isBusy ? `진행중 : ${desk.currentTicket}번` : '호출 대기'}
+                </span>
+              </div>
+              
+              <div class="grid grid-cols-4 gap-2">
+                <button onclick="callCustomer('${bank.id}', ${desk.id})" class="toss-btn h-14 bg-[#3182f6] hover:bg-[#286cd0] text-white font-black text-base rounded-2xl flex items-center justify-center shadow">
+                  호출
+                </button>
+                <button onclick="recallCustomer('${bank.id}', ${desk.id})" class="toss-btn h-14 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-base rounded-2xl flex items-center justify-center shadow">
+                  재호출
+                </button>
+                <button onclick="passCustomer('${bank.id}', ${desk.id})" class="toss-btn h-14 bg-rose-500/20 border border-rose-500/40 text-rose-300 hover:bg-rose-500 hover:text-white font-black text-sm rounded-2xl flex items-center justify-center">
+                  부재패스
+                </button>
+                <button onclick="completeCustomer('${bank.id}', ${desk.id})" class="toss-btn h-14 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-base rounded-2xl flex items-center justify-center shadow">
+                  완료
+                </button>
+              </div>
+            </div>
+          `;
+        });
+
+        html += `
+            </div>
+          </div>
+          <div class="pt-4 mt-4 border-t border-white/5 flex items-center justify-between text-xs font-bold text-slate-400">
+            <span>대기열: ${state.waiting.length > 0 ? state.waiting.map(w => w.ticketNo + '번').slice(0, 5).join(', ') : '비어있음'}</span>
+          </div>
+        `;
+
+        card.innerHTML = html;
+        container.appendChild(card);
+      });
+    }
+
+    function callCustomer(bank, deskId) { socket.emit('call_next_customer', { bank, deskId }); }
+    function recallCustomer(bank, deskId) { socket.emit('recall_customer', { bank, deskId }); }
+    function passCustomer(bank, deskId) {
+      if (confirm('현재 고객을 부재(패스) 처리하시겠습니까?')) {
+        socket.emit('pass_customer', { bank, deskId });
+      }
+    }
+    function completeCustomer(bank, deskId) { socket.emit('complete_consultation', { bank, deskId }); }
+
+    function openProxyModal() {
+      const list = document.getElementById('proxyBankList');
+      list.innerHTML = '';
+      bankList.filter(b => b.active).forEach(bank => {
+        const btn = document.createElement('button');
+        btn.className = 'toss-btn w-full h-16 rounded-2xl text-white font-black text-lg flex items-center justify-between px-6 shadow-lg';
+        btn.style.backgroundColor = bank.color;
+        btn.innerHTML = `<span>${bank.name}</span><span class="text-sm bg-black/20 px-3 py-1.5 rounded-xl">대리 발권 ➔</span>`;
+        btn.onclick = () => {
+          socket.emit('issue_ticket', { bank: bank.id }, (res) => {
+            if (res && res.success) {
+              alert(`[발권 완료]\n${res.bankName} ${res.ticketNo}번`);
+              closeProxyModal();
+            }
+          });
+        };
+        list.appendChild(btn);
+      });
+      document.getElementById('proxyModal').style.display = 'flex';
+    }
+    function closeProxyModal() { document.getElementById('proxyModal').style.display = 'none'; }
+  </script>
+</body>
+</html>

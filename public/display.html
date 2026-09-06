@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>현장 종합 호출 전광판 | 토스 스타일</title>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body { font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif; letter-spacing: -0.035em; }
+    .toss-card { background: #171f30; border: 1px solid rgba(255,255,255,0.08); }
+    @keyframes flashToss {
+      0%, 100% { background-color: #171f30; border-color: #f59e0b; }
+      50% { background-color: #78350f; border-color: #fbbf24; }
+    }
+    .calling-toss { animation: flashToss 1.2s infinite ease-in-out; }
+  </style>
+</head>
+<body class="bg-[#0b101b] text-white min-h-screen p-5 font-sans flex flex-col justify-between select-none">
+
+  <!-- 시작 오디오 해금 -->
+  <div id="audioUnlock" class="fixed inset-0 bg-[#0b101b]/95 z-50 flex flex-col items-center justify-center p-6 text-center backdrop-blur-md">
+    <h1 class="text-4xl font-black text-amber-400 mb-3 tracking-tight">📺 초대형 종합 전광판 시스템</h1>
+    <p class="text-slate-400 mb-8 text-base font-semibold">스피커 앰프와 연결되었습니다. 화면을 터치해 고출력 음성을 활성화하세요.</p>
+    <button onclick="initDisplayAudio()" class="px-10 py-6 bg-[#3182f6] hover:bg-[#286cd0] font-black text-2xl rounded-3xl shadow-2xl shadow-blue-500/30">
+      전광판 및 음성 방송 가동
+    </button>
+  </div>
+
+  <header>
+    <!-- [핵심 복원] 상단 전체 대기고객 실시간 목록 바 -->
+    <div class="toss-card rounded-2xl p-4 mb-4 flex items-center gap-4 overflow-hidden border border-blue-500/30">
+      <div class="flex items-center gap-2 shrink-0 px-3 py-1 bg-blue-500/10 text-[#3182f6] rounded-xl font-black text-sm">
+        <span>⏳ 실시간 대기 현황</span>
+        <span id="totalWaitBadge" class="bg-[#3182f6] text-white px-2 py-0.5 rounded-lg text-xs">총 0명</span>
+      </div>
+      <div id="waitingTickerList" class="flex items-center gap-2 overflow-x-auto whitespace-nowrap py-1">
+        <span class="text-xs text-slate-500 font-bold">현재 대기 중인 고객이 없습니다.</span>
+      </div>
+    </div>
+
+    <!-- 대형 호출 전광판 배너 -->
+    <div id="mainCallBanner" class="toss-card rounded-[36px] p-6 mb-5 text-center border-2 border-slate-800 transition-all duration-300">
+      <div class="text-sm font-black text-slate-400 uppercase tracking-widest mb-1">창구 호출 안내 방송</div>
+      <div id="bannerText" class="text-4xl md:text-6xl font-black text-slate-500 py-2 tracking-tight">
+        대기 중인 호출이 없습니다
+      </div>
+    </div>
+  </header>
+
+  <!-- 중단: 활성 기관 창구 카드 그리드 -->
+  <main class="flex-1">
+    <div id="gridContainer" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
+  </main>
+
+  <footer class="mt-4 py-3 toss-card rounded-2xl px-6 flex justify-between items-center text-slate-400 text-xs font-bold">
+    <span>🏛️ 입주 상담·분양전환 지원센터 종합 현황</span>
+    <span class="text-amber-400 font-black">호출된 고객님께서는 해당 창구로 이동해 주시기 바랍니다.</span>
+  </footer>
+
+  <script>
+    const socket = io();
+    let audioCtx = null;
+    let bankList = [];
+    let fullState = {};
+
+    function initDisplayAudio() {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
+      }
+      document.getElementById('audioUnlock').style.display = 'none';
+      playChime();
+    }
+
+    function playChime(cb) {
+      if (!audioCtx) return cb && cb();
+      const notes = [523.25, 659.25, 783.99, 1046.50];
+      const now = audioCtx.currentTime;
+      notes.forEach((freq, idx) => {
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.frequency.setValueAtTime(freq, now + idx * 0.15);
+        g.gain.setValueAtTime(0.35, now + idx * 0.15);
+        g.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.15 + 0.35);
+        osc.connect(g);
+        g.connect(audioCtx.destination);
+        osc.start(now + idx * 0.15);
+        osc.stop(now + idx * 0.15 + 0.36);
+      });
+      setTimeout(() => { if (cb) cb(); }, 750);
+    }
+
+    function speak(text) {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'ko-KR';
+      u.rate = 0.92;
+      u.pitch = 1.0;
+      window.speechSynthesis.speak(u);
+    }
+
+    socket.on('bank_list_sync', (list) => { bankList = list; renderAll(); });
+    socket.on('full_state_sync', (states) => { fullState = states; renderAll(); });
+    socket.on('queue_update', ({ bankId, state }) => { fullState[bankId] = state; renderAll(); });
+
+    socket.on('customer_called', ({ bankName, ticketNo, deskId }) => {
+      const banner = document.getElementById('mainCallBanner');
+      const text = document.getElementById('bannerText');
+
+      banner.className = 'rounded-[36px] p-6 mb-5 text-center border-4 border-amber-400 calling-toss shadow-2xl';
+      text.className = 'text-4xl md:text-6xl font-black text-amber-300 tracking-tight';
+      text.innerText = `[${bankName}] ${ticketNo}번 ➔ ${deskId}번 창구`;
+
+      playChime(() => {
+        speak(`${bankName}, ${ticketNo}번 고객님, ${deskId}번 창구로 와주시기 바랍니다.`);
+      });
+
+      setTimeout(() => {
+        banner.className = 'toss-card rounded-[36px] p-6 mb-5 text-center border-2 border-slate-800';
+        text.className = 'text-3xl md:text-5xl font-black text-slate-400 tracking-tight';
+        text.innerText = `[호출 완료] ${bankName} ${ticketNo}번 고객님`;
+      }, 10000);
+    });
+
+    function renderAll() {
+      renderGrid();
+      renderWaitingTicker();
+    }
+
+    // 상단 대기목록 바 렌더링
+    function renderWaitingTicker() {
+      const ticker = document.getElementById('waitingTickerList');
+      ticker.innerHTML = '';
+
+      let totalWait = 0;
+      const allWaitingItems = [];
+
+      bankList.filter(b => b.active).forEach(b => {
+        const st = fullState[b.id];
+        if (st && st.waiting) {
+          totalWait += st.waiting.length;
+          st.waiting.forEach(w => {
+            allWaitingItems.push({ bankName: b.name, color: b.color, ticketNo: w.ticketNo });
+          });
+        }
+      });
+
+      document.getElementById('totalWaitBadge').innerText = `총 ${totalWait}명`;
+
+      if (allWaitingItems.length === 0) {
+        ticker.innerHTML = '<span class="text-xs text-slate-500 font-bold">현재 대기 중인 고객이 없습니다.</span>';
+        return;
+      }
+
+      allWaitingItems.forEach(item => {
+        const badge = document.createElement('span');
+        badge.className = 'px-3 py-1.5 rounded-xl text-xs font-black text-white flex items-center gap-1.5 shadow';
+        badge.style.backgroundColor = item.color;
+        badge.innerHTML = `<span>${item.bankName}</span><span class="bg-black/30 px-1.5 py-0.5 rounded-lg text-amber-300 font-black">${item.ticketNo}번</span>`;
+        ticker.appendChild(badge);
+      });
+    }
+
+    function renderGrid() {
+      const container = document.getElementById('gridContainer');
+      if (!container) return;
+      container.innerHTML = '';
+
+      bankList.filter(b => b.active).forEach(bank => {
+        const state = fullState[bank.id] || { waiting: [], calling: null };
+        const card = document.createElement('div');
+        card.className = 'toss-card rounded-[28px] p-5 flex flex-col justify-between shadow-xl';
+        card.innerHTML = `
+          <div class="flex justify-between items-center pb-2 border-b border-white/5">
+            <span class="font-black text-base text-white flex items-center gap-2">
+              <span class="w-3 h-3 rounded-full" style="background-color:${bank.color}"></span>
+              ${bank.name}
+            </span>
+            <span class="text-xs font-black px-2.5 py-0.5 rounded-xl bg-blue-500/10 text-[#3182f6]">
+              대기 ${state.waiting ? state.waiting.length : 0}명
+            </span>
+          </div>
+          <div class="my-3 text-center">
+            <div class="text-[11px] text-slate-500 font-black mb-1">현재 호출 번호</div>
+            <div class="text-4xl font-black ${state.calling ? 'text-amber-400' : 'text-slate-600'} tracking-tight">
+              ${state.calling ? state.calling.ticketNo + '번' : '-'}
+            </div>
+          </div>
+          <div class="text-center text-xs font-black text-slate-400">
+            ${state.calling ? `${state.calling.deskId}번 창구 진행 중` : '호출 준비'}
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>입주상담 통합 포털 앱</title>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif; letter-spacing: -0.035em; }
+    .toss-card { background: #171f30; border: 1px solid rgba(255,255,255,0.08); }
+    .toss-btn { transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1); }
+    .toss-btn:active { transform: scale(0.96); }
+  </style>
+</head>
+<body class="bg-[#0b101b] text-white min-h-screen p-4 md:p-6 select-none pb-20">
+
+  <header class="pb-6 mb-6 border-b border-slate-800">
+    <div class="inline-flex items-center gap-2 px-3 py-1 bg-[#8b0029] rounded-xl text-xs font-black text-rose-200 mb-3">
+      <span>🏛️ 법무법인 제이엘</span>
+    </div>
+    <h1 class="text-3xl font-black text-white tracking-tight">현장 접속 포털</h1>
+    <p class="text-sm font-bold text-slate-400 mt-2">부여받은 권한 및 창구 버튼을 터치하여 접속하세요.</p>
+  </header>
+
+  <main class="flex flex-col gap-6">
+
+    <!-- 1. 현장 총괄 및 관제 그룹 -->
+    <section>
+      <h2 class="text-base font-black text-amber-400 mb-3 ml-2 flex items-center gap-2">
+        <span>⚙️</span> 현장 본부 관제 (관리자용)
+      </h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <button onclick="location.href='/admin.html'" class="toss-btn w-full h-16 bg-[#1f293d] border border-white/5 rounded-2xl flex items-center justify-between px-5 shadow-lg">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">📢</span>
+            <span class="text-lg font-black text-white">앰프/총괄 마스터 콘솔</span>
+          </div>
+          <span class="text-slate-500 font-black">접속 ➔</span>
+        </button>
+        <button onclick="location.href='/operator.html'" class="toss-btn w-full h-16 bg-[#1f293d] border border-white/5 rounded-2xl flex items-center justify-between px-5 shadow-lg">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">⚡</span>
+            <span class="text-lg font-black text-white">제이엘 진행요원 패널</span>
+          </div>
+          <span class="text-slate-500 font-black">접속 ➔</span>
+        </button>
+        <button onclick="location.href='/display.html'" class="toss-btn w-full h-16 bg-[#1f293d] border border-white/5 rounded-2xl flex items-center justify-between px-5 shadow-lg">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">📺</span>
+            <span class="text-lg font-black text-white">초대형 종합 전광판</span>
+          </div>
+          <span class="text-slate-500 font-black">접속 ➔</span>
+        </button>
+        <button onclick="location.href='/woori_leader.html'" class="toss-btn w-full h-16 bg-[#0067ac]/20 border border-[#0067ac]/40 rounded-2xl flex items-center justify-between px-5 shadow-lg">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">📈</span>
+            <span class="text-lg font-black text-blue-200">우리은행 팀장 모니터링</span>
+          </div>
+          <span class="text-blue-400 font-black">접속 ➔</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- 2. 각 기관 상담사 단말기 그룹 -->
+    <section>
+      <h2 class="text-base font-black text-[#3182f6] mb-3 ml-2 flex items-center gap-2">
+        <span>👨‍💻</span> 각 기관 창구 단말기 (상담사용)
+      </h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <button onclick="location.href='/teller.html?b=jl'" class="toss-btn w-full h-16 bg-[#8b0029] hover:bg-[#6c0020] text-white rounded-2xl flex items-center justify-between px-5 shadow-lg">
+          <span class="text-lg font-black tracking-tight">법무법인 제이엘 단말기</span>
+          <span class="text-xs bg-black/20 px-3 py-1.5 rounded-xl font-bold">실행 ➔</span>
+        </button>
+        <button onclick="location.href='/teller.html?b=kb'" class="toss-btn w-full h-16 bg-[#ffbc00] hover:bg-[#e5a900] text-slate-950 rounded-2xl flex items-center justify-between px-5 shadow-lg">
+          <span class="text-lg font-black tracking-tight">KB국민은행 단말기</span>
+          <span class="text-xs bg-black/10 px-3 py-1.5 rounded-xl font-bold">실행 ➔</span>
+        </button>
+        <button onclick="location.href='/teller.html?b=woori'" class="toss-btn w-full h-16 bg-[#0067ac] hover:bg-[#005a96] text-white rounded-2xl flex items-center justify-between px-5 shadow-lg">
+          <span class="text-lg font-black tracking-tight">우리은행 단말기</span>
+          <span class="text-xs bg-black/20 px-3 py-1.5 rounded-xl font-bold">실행 ➔</span>
+        </button>
+        <button onclick="location.href='/teller.html?b=shinhan'" class="toss-btn w-full h-16 bg-[#0046ff] hover:bg-[#003de6] text-white rounded-2xl flex items-center justify-between px-5 shadow-lg">
+          <span class="text-lg font-black tracking-tight">신한은행 단말기</span>
+          <span class="text-xs bg-black/20 px-3 py-1.5 rounded-xl font-bold">실행 ➔</span>
+        </button>
+        <button onclick="location.href='/teller.html?b=hana'" class="toss-btn w-full h-16 bg-[#008485] hover:bg-[#007475] text-white rounded-2xl flex items-center justify-between px-5 shadow-lg">
+          <span class="text-lg font-black tracking-tight">하나은행 단말기</span>
+          <span class="text-xs bg-black/20 px-3 py-1.5 rounded-xl font-bold">실행 ➔</span>
+        </button>
+        <button onclick="location.href='/teller.html?b=fubon'" class="toss-btn w-full h-16 bg-[#002f6c] hover:bg-[#002657] text-white rounded-2xl flex items-center justify-between px-5 shadow-lg">
+          <span class="text-lg font-black tracking-tight">푸본현대생명 단말기</span>
+          <span class="text-xs bg-black/20 px-3 py-1.5 rounded-xl font-bold">실행 ➔</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- 3. 고객 발권 화면 -->
+    <section>
+      <h2 class="text-base font-black text-emerald-400 mb-3 ml-2 flex items-center gap-2">
+        <span>📱</span> 고객용 
+      </h2>
+      <button onclick="location.href='/index.html'" class="toss-btn w-full h-16 bg-emerald-600 hover:bg-emerald-500 rounded-2xl flex items-center justify-between px-5 shadow-lg">
+        <div class="flex items-center gap-3">
+          <span class="text-xl font-black text-white">고객용 번호표 발권 메인</span>
+        </div>
+        <span class="text-xs bg-black/20 px-3 py-1.5 rounded-xl text-white font-bold">오픈 ➔</span>
+      </button>
+    </section>
+
+  </main>
+</body>
+</html>
