@@ -2,286 +2,300 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
+const https = require('https');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
-
-const PORT = process.env.PORT || 3000;
+const io = new Server(server, {
+  cors: { origin: '*' },
+  transports: ['websocket', 'polling']
+});
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-global.bankMasterList = [
-  { id: 'woori', name: '우리은행', color: '#0067ac', active: true, order: 1 },
-  { id: 'shinhan', name: '신한은행', color: '#0046ff', active: true, order: 2 },
-  { id: 'kb', name: '국민은행', color: '#ffbc00', active: true, order: 3 },
-  { id: 'hana', name: '하나은행', color: '#008485', active: true, order: 4 },
-  { id: 'fubon', name: '푸본현대생명', color: '#00a0e9', active: true, order: 5 },
-  { id: 'jl', name: '법무법인 제이엘', color: '#1e293b', active: true, order: 6 },
-  { id: 'nh', name: 'NH농협은행', color: '#02a850', active: true, order: 7 },
-  { id: 'sh', name: '수협은행', color: '#0072ce', active: true, order: 8 },
-  { id: 'hyundai', name: '현대캐피탈', color: '#002c6c', active: true, order: 9 }
-];
+const BACKUP_FILE = path.join(__dirname, 'queue_db_backup.json');
 
-global.queueState = {};
+// 모든 은행 2개 창구, 푸본만 단일 창구(1개)
+const INITIAL_DESKS = {
+  woori: [
+    { desk: 1, name: '1번 창구', status: 'idle', currentCustomer: null, duration: 10, startTime: null },
+    { desk: 2, name: '2번 창구', status: 'idle', currentCustomer: null, duration: 10, startTime: null }
+  ],
+  shinhan: [
+    { desk: 1, name: '1번 창구', status: 'idle', currentCustomer: null, duration: 10, startTime: null },
+    { desk: 2, name: '2번 창구', status: 'idle', currentCustomer: null, duration: 10, startTime: null }
+  ],
+  kb: [
+    { desk: 1, name: '1번 창구', status: 'idle', currentCustomer: null, duration: 10, startTime: null },
+    { desk: 2, name: '2번 창구', status: 'idle', currentCustomer: null, duration: 10, startTime: null }
+  ],
+  fubon: [
+    { desk: 1, name: '단일 창구', status: 'idle', currentCustomer: null, duration: 15, startTime: null }
+  ]
+};
 
-function initBankState(bankId) {
-  const b = bankId.toLowerCase().trim();
-  if (!global.queueState[b]) {
-    global.queueState[b] = {
-      currentSeq: 100,
-      waiting: [],
-      calling: null,
-      completedCount: 0,
-      hourlyStats: {},
-      desks: [
-        { id: 1, name: '1번 창구', status: 'idle', currentTicket: null, completedCount: 0 },
-        { id: 2, name: '2번 창구', status: 'idle', currentTicket: null, completedCount: 0 },
-        { id: 3, name: '3번 창구', status: 'idle', currentTicket: null, completedCount: 0 },
-        { id: 4, name: '4번 창구', status: 'idle', currentTicket: null, completedCount: 0 }
-      ]
-    };
-  }
-  return b;
+let db = {
+  queues: { woori: [], fubon: [], shinhan: [], kb: [] },
+  desks: JSON.parse(JSON.stringify(INITIAL_DESKS)),
+  ticketSequence: { woori: 100, fubon: 100, shinhan: 100, kb: 100 },
+  completedLogs: []
+};
+
+// 파일 백업 자동 복구
+function loadBackup() {
+  try {
+    if (fs.existsSync(BACKUP_FILE)) {
+      const raw = fs.readFileSync(BACKUP_FILE, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.queues) {
+        db = parsed;
+        // 창구 규격 강제 동기화 (우리2, 신한2, 국민2, 푸본1)
+        db.desks = JSON.parse(JSON.stringify(INITIAL_DESKS));
+      }
+    }
+  } catch (err) {}
+}
+loadBackup();
+
+function saveBackup() {
+  try {
+    fs.writeFileSync(BACKUP_FILE, JSON.stringify(db, null, 2), 'utf8');
+  } catch (err) {}
 }
 
-global.bankMasterList.forEach(b => initBankState(b.id));
+function sanitizeBank(b) {
+  const bank = (b || 'kb').toLowerCase().trim();
+  return ['woori', 'fubon', 'shinhan', 'kb'].includes(bank) ? bank : 'kb';
+}
 
-let operatingHours = { startHour: 9, endHour: 20 };
+function broadcastBank(bank) {
+  const b = sanitizeBank(bank);
+  io.emit('state_update', {
+    bank: b,
+    queue: db.queues[b] || [],
+    desks: db.desks[b] || []
+  });
+  io.emit('all_state_update', {
+    queues: db.queues,
+    desks: db.desks,
+    logs: db.completedLogs
+  });
+  saveBackup();
+}
 
 io.on('connection', (socket) => {
-  socket.emit('bank_list_sync', global.bankMasterList);
-  socket.emit('operating_hours_update', operatingHours);
-  socket.emit('full_state_sync', global.queueState);
-
-  // 번호표 발권
-  socket.on('issue_ticket', ({ bank }) => {
-    const bId = initBankState(bank);
-    const bState = global.queueState[bId];
-    bState.currentSeq += 1;
-    const ticketNo = bState.currentSeq;
-
-    bState.waiting.push({ ticketNo, issuedAt: new Date().toISOString() });
-
-    io.emit('queue_update', { bankId: bId, state: bState });
-    io.emit('new_ticket_issued', { bankId: bId, ticketNo });
-    socket.emit('ticket_issued_success', { bankId: bId, ticketNo });
+  // 개별 은행 상태
+  socket.on('get_state', ({ bank }) => {
+    const b = sanitizeBank(bank);
+    socket.emit('state_update', {
+      bank: b,
+      queue: db.queues[b] || [],
+      desks: db.desks[b] || []
+    });
   });
 
-  // 호출
-  socket.on('call_next_customer', ({ bank, deskId }) => {
-    const bId = initBankState(bank);
-    const bState = global.queueState[bId];
-    const targetDeskId = parseInt(deskId, 10) || 1;
-    const desk = bState.desks.find(d => d.id === targetDeskId);
+  // 통합 상태
+  socket.on('get_all_state', () => {
+    socket.emit('all_state_update', {
+      queues: db.queues,
+      desks: db.desks,
+      logs: db.completedLogs
+    });
+  });
 
-    if (bState.waiting.length > 0 && desk) {
-      const nextClient = bState.waiting.shift();
-      desk.status = 'calling';
-      desk.currentTicket = nextClient.ticketNo;
-      bState.calling = { ticketNo: nextClient.ticketNo, deskId: desk.id };
+  // 번호표 발권
+  socket.on('issue_ticket', ({ bank, phone, name }, callback) => {
+    const b = sanitizeBank(bank);
+    db.ticketSequence[b] += 1;
+    const ticketNumber = db.ticketSequence[b];
+    const ticket = {
+      id: `${b}-${ticketNumber}-${Date.now()}`,
+      ticketNumber,
+      bank: b,
+      phone: phone || '',
+      name: name || '고객',
+      status: 'waiting',
+      createdAt: new Date().toISOString()
+    };
 
-      const bankObj = global.bankMasterList.find(b => b.id === bId) || { name: bId };
+    db.queues[b].push(ticket);
+    broadcastBank(b);
+    if (callback) callback({ success: true, ticket });
+  });
 
-      io.emit('queue_update', { bankId: bId, state: bState });
-      io.emit('customer_called', {
-        bankId: bId,
-        bankName: bankObj.name,
-        ticketNo: nextClient.ticketNo,
-        deskId: desk.id
-      });
-    }
+  // 고객 호출
+  socket.on('call_customer', ({ bank, deskNumber, customerId }) => {
+    const b = sanitizeBank(bank);
+    const desk = db.desks[b].find(d => d.desk === parseInt(deskNumber));
+    if (!desk) return;
+
+    let target = customerId ? db.queues[b].find(c => c.id === customerId) : db.queues[b].find(c => c.status === 'waiting');
+    if (!target) return;
+
+    target.status = 'called';
+    target.desk = desk.desk;
+    target.deskName = desk.name;
+    target.calledAt = new Date().toISOString();
+
+    desk.status = 'consulting';
+    desk.currentCustomer = target;
+    desk.startTime = new Date().toISOString();
+
+    io.emit('customer_called', {
+      bank: b,
+      desk: desk.desk,
+      deskName: desk.name,
+      customer: target
+    });
+    broadcastBank(b);
   });
 
   // 재호출
-  socket.on('recall_customer', ({ bank, deskId }) => {
-    const bId = initBankState(bank);
-    const bState = global.queueState[bId];
-    const targetDeskId = parseInt(deskId, 10) || 1;
-    const desk = bState.desks.find(d => d.id === targetDeskId);
+  socket.on('recall_customer', ({ bank, deskNumber }) => {
+    const b = sanitizeBank(bank);
+    const desk = db.desks[b].find(d => d.desk === parseInt(deskNumber));
+    if (!desk || !desk.currentCustomer) return;
 
-    if (desk && desk.currentTicket) {
-      const bankObj = global.bankMasterList.find(b => b.id === bId) || { name: bId };
-      io.emit('customer_recalled', {
-        bankId: bId,
-        bankName: bankObj.name,
-        ticketNo: desk.currentTicket,
-        deskId: desk.id
-      });
-    }
-  });
-
-  // 부재패스
-  socket.on('pass_customer', ({ bank, deskId }) => {
-    const bId = initBankState(bank);
-    const bState = global.queueState[bId];
-    const targetDeskId = parseInt(deskId, 10) || 1;
-    const desk = bState.desks.find(d => d.id === targetDeskId);
-
-    if (desk && desk.currentTicket) {
-      const passedTicket = desk.currentTicket;
-      desk.status = 'idle';
-      desk.currentTicket = null;
-      bState.calling = null;
-
-      io.emit('queue_update', { bankId: bId, state: bState });
-      io.emit('customer_passed', { bankId: bId, ticketNo: passedTicket });
-    }
-  });
-
-  // 상담종료
-  socket.on('complete_consultation', ({ bank, deskId }) => {
-    const bId = initBankState(bank);
-    const bState = global.queueState[bId];
-    const targetDeskId = parseInt(deskId, 10) || 1;
-    const desk = bState.desks.find(d => d.id === targetDeskId);
-    const finishedTicket = desk ? desk.currentTicket : null;
-
-    bState.completedCount += 1;
-    const nowKST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
-    const curHour = nowKST.getHours();
-    bState.hourlyStats[curHour] = (bState.hourlyStats[curHour] || 0) + 1;
-
-    if (desk) {
-      desk.status = 'idle';
-      desk.currentTicket = null;
-      desk.completedCount = (desk.completedCount || 0) + 1;
-    }
-    bState.calling = null;
-
-    io.emit('queue_update', { bankId: bId, state: bState });
-
-    if (finishedTicket) {
-      io.emit('consultation_finished', { bankId: bId, ticketNo: finishedTicket });
-    }
-  });
-
-  // 창구 간 고객 이동
-  socket.on('transfer_customer_desk', ({ bank, fromDeskId, toDeskId }) => {
-    const bId = initBankState(bank);
-    const bState = global.queueState[bId];
-    if (!bState) return;
-
-    const fDesk = bState.desks.find(d => d.id === parseInt(fromDeskId, 10));
-    const tDesk = bState.desks.find(d => d.id === parseInt(toDeskId, 10));
-
-    if (!fDesk || !fDesk.currentTicket || !tDesk) return;
-
-    const movingTicket = fDesk.currentTicket;
-    fDesk.status = 'idle';
-    fDesk.currentTicket = null;
-
-    if (!tDesk.currentTicket) {
-      tDesk.status = 'calling';
-      tDesk.currentTicket = movingTicket;
-    } else {
-      bState.waiting.unshift({ ticketNo: movingTicket, targetDeskId: tDesk.id, issuedAt: new Date().toISOString() });
-    }
-
-    const bankObj = global.bankMasterList.find(b => b.id === bId) || { name: bId };
-
-    io.emit('queue_update', { bankId: bId, state: bState });
     io.emit('customer_called', {
-      bankId: bId,
-      bankName: bankObj.name,
-      ticketNo: movingTicket,
-      deskId: tDesk.id,
-      isTransfer: true
+      bank: b,
+      desk: desk.desk,
+      deskName: desk.name,
+      customer: desk.currentCustomer
     });
   });
 
-  // ================= [관리자 admin 기능] =================
+  // 상담 종료 및 자동 다음호출
+  socket.on('complete_consultation', ({ bank, deskNumber, autoCall }) => {
+    const b = sanitizeBank(bank);
+    const desk = db.desks[b].find(d => d.desk === parseInt(deskNumber));
+    if (!desk || !desk.currentCustomer) return;
 
-  // 창구(상담사) 1개 추가
-  socket.on('admin_add_desk', ({ bank }) => {
-    const bId = initBankState(bank);
-    const bState = global.queueState[bId];
-    const newId = bState.desks.length + 1;
-    bState.desks.push({
-      id: newId,
-      name: `${newId}번 창구`,
-      status: 'idle',
-      currentTicket: null,
-      completedCount: 0
+    const completedCust = desk.currentCustomer;
+    const durationMin = desk.startTime ? Math.max(1, Math.round((new Date() - new Date(desk.startTime)) / 60000)) : 10;
+
+    db.completedLogs.push({
+      bank: b,
+      desk: desk.desk,
+      deskName: desk.name,
+      ticketNumber: completedCust.ticketNumber,
+      consultDuration: durationMin,
+      completedAt: new Date().toISOString()
     });
-    io.emit('queue_update', { bankId: bId, state: bState });
-    io.emit('full_state_sync', global.queueState);
-  });
 
-  // 창구 1개 제거
-  socket.on('admin_remove_desk', ({ bank }) => {
-    const bId = initBankState(bank);
-    const bState = global.queueState[bId];
-    if (bState.desks.length > 1) {
-      bState.desks.pop();
-      io.emit('queue_update', { bankId: bId, state: bState });
-      io.emit('full_state_sync', global.queueState);
+    db.queues[b] = db.queues[b].filter(c => c.id !== completedCust.id);
+    desk.status = 'idle';
+    desk.currentCustomer = null;
+    desk.startTime = null;
+
+    broadcastBank(b);
+
+    if (autoCall) {
+      const nextCust = db.queues[b].find(c => c.status === 'waiting');
+      if (nextCust) {
+        nextCust.status = 'called';
+        nextCust.desk = desk.desk;
+        nextCust.deskName = desk.name;
+        nextCust.calledAt = new Date().toISOString();
+
+        desk.status = 'consulting';
+        desk.currentCustomer = nextCust;
+        desk.startTime = new Date().toISOString();
+
+        io.emit('customer_called', {
+          bank: b,
+          desk: desk.desk,
+          deskName: desk.name,
+          customer: nextCust
+        });
+        broadcastBank(b);
+      }
     }
   });
 
-  // 단일 기관 초기화
-  socket.on('reset_bank_queue', ({ bank }) => {
-    const bId = bank.toLowerCase().trim();
-    const curDesks = (global.queueState[bId] && global.queueState[bId].desks) ? global.queueState[bId].desks : [
-      { id: 1, name: '1번 창구', status: 'idle', currentTicket: null, completedCount: 0 },
-      { id: 2, name: '2번 창구', status: 'idle', currentTicket: null, completedCount: 0 },
-      { id: 3, name: '3번 창구', status: 'idle', currentTicket: null, completedCount: 0 },
-      { id: 4, name: '4번 창구', status: 'idle', currentTicket: null, completedCount: 0 }
-    ];
+  // 손님 창구 전달(이관)
+  socket.on('transfer_customer', ({ bank, fromDesk, toDesk }) => {
+    const b = sanitizeBank(bank);
+    const sourceDesk = db.desks[b].find(d => d.desk === parseInt(fromDesk));
+    const targetDesk = db.desks[b].find(d => d.desk === parseInt(toDesk));
 
-    curDesks.forEach(d => { d.status = 'idle'; d.currentTicket = null; d.completedCount = 0; });
+    if (!sourceDesk || !sourceDesk.currentCustomer || !targetDesk) return;
 
-    global.queueState[bId] = {
-      currentSeq: 100,
-      waiting: [],
-      calling: null,
-      completedCount: 0,
-      hourlyStats: {},
-      desks: curDesks
+    const cust = sourceDesk.currentCustomer;
+    cust.desk = targetDesk.desk;
+    cust.deskName = targetDesk.name;
+
+    sourceDesk.status = 'idle';
+    sourceDesk.currentCustomer = null;
+    sourceDesk.startTime = null;
+
+    targetDesk.status = 'consulting';
+    targetDesk.currentCustomer = cust;
+    targetDesk.startTime = new Date().toISOString();
+
+    io.emit('customer_called', {
+      bank: b,
+      desk: targetDesk.desk,
+      deskName: targetDesk.name,
+      customer: cust
+    });
+    broadcastBank(b);
+  });
+
+  // 상담시간 조정
+  socket.on('update_duration', ({ bank, deskNumber, duration }) => {
+    const b = sanitizeBank(bank);
+    const desk = db.desks[b].find(d => d.desk === parseInt(deskNumber));
+    if (desk) {
+      desk.duration = parseInt(duration) || 10;
+      broadcastBank(b);
+    }
+  });
+
+  // [관리자] 번호표 초기화
+  socket.on('admin_reset_tickets', ({ bank }) => {
+    const targetBanks = (bank === 'all') ? ['woori', 'fubon', 'shinhan', 'kb'] : [sanitizeBank(bank)];
+    targetBanks.forEach(b => {
+      db.queues[b] = [];
+      db.ticketSequence[b] = 100;
+      db.desks[b].forEach(d => { d.status = 'idle'; d.currentCustomer = null; d.startTime = null; });
+      broadcastBank(b);
+    });
+  });
+
+  // [관리자] 비상 긴급 복구
+  socket.on('admin_emergency_repair', () => {
+    ['woori', 'fubon', 'shinhan', 'kb'].forEach(b => {
+      db.queues[b] = [];
+      db.desks[b] = JSON.parse(JSON.stringify(INITIAL_DESKS[b]));
+      db.ticketSequence[b] = 100;
+    });
+    io.emit('emergency_repaired');
+    ['woori', 'fubon', 'shinhan', 'kb'].forEach(broadcastBank);
+  });
+
+  // [관리자] 일마감
+  socket.on('admin_day_close', () => {
+    const report = {
+      closedAt: new Date().toISOString(),
+      totalCount: db.completedLogs.length,
+      logs: db.completedLogs
     };
-    io.emit('queue_update', { bankId: bId, state: global.queueState[bId] });
-    io.emit('full_state_sync', global.queueState);
-  });
-
-  // 전체 기관 일괄 초기화
-  socket.on('reset_all_queues', () => {
-    global.bankMasterList.forEach(b => {
-      const curDesks = (global.queueState[b.id] && global.queueState[b.id].desks) ? global.queueState[b.id].desks : [
-        { id: 1, name: '1번 창구', status: 'idle', currentTicket: null, completedCount: 0 },
-        { id: 2, name: '2번 창구', status: 'idle', currentTicket: null, completedCount: 0 },
-        { id: 3, name: '3번 창구', status: 'idle', currentTicket: null, completedCount: 0 },
-        { id: 4, name: '4번 창구', status: 'idle', currentTicket: null, completedCount: 0 }
-      ];
-      curDesks.forEach(d => { d.status = 'idle'; d.currentTicket = null; d.completedCount = 0; });
-
-      global.queueState[b.id] = {
-        currentSeq: 100,
-        waiting: [],
-        calling: null,
-        completedCount: 0,
-        hourlyStats: {},
-        desks: curDesks
-      };
+    ['woori', 'fubon', 'shinhan', 'kb'].forEach(b => {
+      db.queues[b] = [];
+      db.desks[b].forEach(d => { d.status = 'idle'; d.currentCustomer = null; d.startTime = null; });
+      broadcastBank(b);
     });
-    io.emit('full_state_sync', global.queueState);
-  });
-
-  // 기관 마스터 목록 갱신
-  socket.on('update_bank_list', (newList) => {
-    if (Array.isArray(newList)) {
-      global.bankMasterList = newList;
-      newList.forEach(b => initBankState(b.id));
-      io.emit('bank_list_sync', global.bankMasterList);
-    }
-  });
-
-  // 운영시간 갱신
-  socket.on('update_operating_hours', (newHours) => {
-    operatingHours = newHours;
-    io.emit('operating_hours_update', operatingHours);
+    io.emit('day_closed', report);
   });
 });
 
+// Render 슬립 방지 10분 자체 핑
+setInterval(() => {
+  https.get('https://bank-queue.onrender.com', () => {}).on('error', () => {});
+}, 10 * 60 * 1000);
+
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server started on port ${PORT}`);
 });

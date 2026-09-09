@@ -2,386 +2,267 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>상담 창구 단말기 | 토스 스타일</title>
-  <link rel="manifest" href="/manifest.json">
-  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
-  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>상담사 업무 콘솔</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    * {
-      font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif !important;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
+    :root {
+      --bg: #f2f4f6;
+      --card-bg: #ffffff;
+      --primary: #3182f6;
+      --primary-pressed: #1b64da;
+      --text: #191f28;
+      --text-sub: #8b95a1;
+      --border: #e5e8eb;
+      --danger: #f04452;
+      --success: #04b071;
     }
-    html, body { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; word-break: keep-all; }
-    body {
-      background-color: #0b101b;
-      letter-spacing: -0.035em;
-      min-height: 100dvh;
-      padding-bottom: env(safe-area-inset-bottom, 20px);
-    }
-    .toss-card { background: #171f30; border: 1px solid rgba(255,255,255,0.08); }
-    .toss-btn { transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1); }
-    .toss-btn:active { transform: scale(0.96); }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; padding: 16px; display: flex; justify-content: center; }
+    .wrap { width: 100%; max-width: 520px; }
+
+    #gateModal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 999; display: flex; justify-content: center; align-items: center; padding: 20px; }
+    .gate-card { background: #fff; border-radius: 28px; padding: 36px 24px; width: 100%; max-width: 400px; text-align: center; }
+    .gate-card h2 { font-size: 24px; font-weight: 800; margin-bottom: 10px; }
+    .gate-card p { font-size: 15px; color: var(--text-sub); margin-bottom: 24px; line-height: 1.5; }
+    .gate-select { width: 100%; padding: 16px; border-radius: 14px; border: 2px solid var(--border); font-size: 17px; font-weight: 700; margin-bottom: 20px; outline: none; }
+    .btn-gate-start { width: 100%; height: 60px; font-size: 18px; font-weight: 800; background: var(--primary); color: #fff; border: none; border-radius: 16px; cursor: pointer; }
+
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 0 4px; }
+    .bank-info { display: flex; align-items: center; gap: 10px; }
+    .bank-tag { font-size: 22px; font-weight: 800; }
+    .desk-pill { background: #e8f3ff; color: var(--primary); font-size: 14px; font-weight: 800; padding: 6px 14px; border-radius: 20px; }
+    .btn-seat-change { background: #fff; border: 1px solid var(--border); padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; }
+
+    .card { background: var(--card-bg); border-radius: 28px; padding: 30px 24px; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin-bottom: 16px; }
+    .status-badge { display: inline-block; font-size: 13px; font-weight: 700; padding: 6px 14px; border-radius: 20px; background: #e5e8eb; color: #4e5968; margin-bottom: 8px; }
+    .status-badge.active { background: #e8f3ff; color: var(--primary); }
+
+    .center-display { text-align: center; padding: 16px 0 24px; }
+    .center-display .label { font-size: 15px; color: var(--text-sub); font-weight: 600; }
+    .center-display .number { font-size: 76px; font-weight: 900; color: var(--primary); margin: 6px 0; line-height: 1; letter-spacing: -1.5px; }
+    .center-display .timer { font-size: 18px; font-weight: 800; color: var(--danger); margin-top: 10px; }
+
+    .btn-stack { display: flex; flex-direction: column; gap: 12px; }
+    .btn-huge { width: 100%; height: 64px; border-radius: 18px; font-size: 19px; font-weight: 800; border: none; cursor: pointer; transition: transform 0.1s; display: flex; justify-content: center; align-items: center; gap: 8px; }
+    .btn-huge:active { transform: scale(0.98); }
+    .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 6px 20px rgba(49, 130, 246, 0.3); }
+    .btn-finish-auto { background: #191f28; color: #fff; }
+    .btn-sub-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .btn-sub { height: 54px; border-radius: 16px; font-size: 16px; font-weight: 700; border: 1px solid var(--border); background: #fff; color: #333d4b; cursor: pointer; }
+
+    .duration-box { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
+    .chips { display: flex; gap: 6px; }
+    .chip { padding: 8px 14px; border-radius: 10px; border: 1px solid var(--border); background: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .chip.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+    .queue-card { background: var(--card-bg); border-radius: 24px; padding: 20px 24px; }
+    .queue-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 15px; font-weight: 800; }
+    .queue-slider { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; }
+    .queue-chip { background: #f9fafb; border: 1px solid var(--border); padding: 10px 18px; border-radius: 14px; font-size: 16px; font-weight: 800; white-space: nowrap; }
   </style>
 </head>
-<body class="text-white flex justify-center p-3 sm:p-5 select-none">
+<body>
 
-  <canvas id="keepAliveCanvas" width="2" height="2" class="opacity-0 pointer-events-none fixed top-0 left-0"></canvas>
-
-  <!-- 창구 선택 및 이동 모달 -->
-  <div id="deskSelectModal" style="display:none;" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
-    <div class="toss-card p-6 rounded-[32px] max-w-sm w-full text-center border border-white/10 shadow-2xl">
-      <div class="text-4xl mb-2">🏢</div>
-      <h2 class="text-xl font-black text-white mb-1" id="modalBankTitle">창구 선택 및 이동</h2>
-      <p class="text-xs font-bold text-slate-400 mb-5">내가 상담할 창구를 터치하세요.<br>선택 완료 시 해당 창구로 즉시 고정됩니다.</p>
-      <div id="modalDeskButtons" class="flex flex-col gap-2.5 max-h-60 overflow-y-auto pr-1"></div>
+  <div id="gateModal">
+    <div class="gate-card">
+      <h2>🔊 창구 업무 시작</h2>
+      <p>실시간 음성 알림을 켜고<br>담당 상담 창구를 선택해주세요.</p>
+      <select id="deskSelect" class="gate-select"></select>
+      <button class="btn-gate-start" onclick="startWork()">음성 켜고 콘솔 시작</button>
     </div>
   </div>
 
-  <!-- 고객 옆 창구로 넘기기 모달 -->
-  <div id="transferDeskModal" style="display:none;" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
-    <div class="toss-card p-6 rounded-[32px] max-w-sm w-full text-center border border-indigo-500/40 shadow-2xl">
-      <div class="text-4xl mb-2">👥</div>
-      <h2 class="text-xl font-black text-indigo-400 mb-1">고객 다른 창구로 넘기기</h2>
-      <p class="text-xs font-bold text-slate-300 mb-4">현재 고객을 넘겨받을 창구를 선택하세요.<br>해당 창구 상담사에게 즉시 전달됩니다.</p>
-      <div id="targetDeskButtons" class="flex flex-col gap-2.5 max-h-60 overflow-y-auto pr-1 mb-4"></div>
-      <button onclick="closeTransferDeskModal()" class="toss-btn w-full h-12 bg-slate-800 text-slate-400 font-black text-sm rounded-xl">닫기 (취소)</button>
+  <div class="wrap">
+    <div class="header">
+      <div class="bank-info">
+        <span class="bank-tag" id="bankTitle">은행</span>
+        <span class="desk-pill" id="deskPill">-번 창구</span>
+      </div>
+      <button class="btn-seat-change" onclick="changeSeat()">창구 자리이동</button>
     </div>
-  </div>
 
-  <!-- 메인 모바일 박스 -->
-  <div class="w-full max-w-md flex flex-col justify-between h-full gap-3">
-
-    <main class="flex flex-col gap-3">
-
-      <!-- 상단 헤더 -->
-      <div class="flex justify-between items-center pb-2.5 border-b border-slate-800">
-        <div>
-          <span id="bankBadge" class="px-3 py-1 bg-[#3182f6] text-white font-black text-xs rounded-xl shadow">
-            기관 확인
-          </span>
-          <h1 class="text-xl font-black text-white mt-1" id="deskTitleHeader">1번 창구</h1>
-        </div>
-        <button onclick="openDeskSelectModal()" class="toss-btn px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-2xl shadow-lg flex items-center gap-1.5">
-          <span>🔄</span> 내 자리 이동
-        </button>
+    <div class="card">
+      <div style="text-align: center;">
+        <span class="status-badge" id="deskStatusBadge">상담 대기</span>
+      </div>
+      
+      <div class="center-display">
+        <div class="label">현재 상담 중인 고객</div>
+        <div class="number" id="currentCustNum">-</div>
+        <div class="timer" id="timerDisplay">대기 중</div>
       </div>
 
-      <!-- 단말기 가동 버튼 -->
-      <button id="btnActivate" onclick="activateTellerTerminal()" class="toss-btn w-full h-14 bg-[#3182f6] text-white font-black text-base rounded-2xl shadow-lg flex items-center justify-center gap-2">
-        <span>🔔</span> 단말기 음성 알람 켜기 (터치)
-      </button>
-
-      <!-- 실시간 대기 인원 카드 -->
-      <div class="toss-card rounded-[28px] p-5 text-center shadow-xl">
-        <div class="text-xs font-black text-slate-400 mb-1" id="waitCardTitle">실시간 대기 인원</div>
-        <div id="waitCount" class="text-6xl sm:text-7xl font-black text-amber-400 my-1 tracking-tight">0</div>
-        <p class="text-xs font-bold text-slate-500">새 손님 접수 시 이 단말기에서만 알람이 울립니다</p>
+      <div class="btn-stack">
+        <button class="btn-huge btn-primary" id="btnCallNext" onclick="callNext()">다음 고객 호출</button>
+        <div class="btn-sub-row">
+          <button class="btn-sub" onclick="recall()">🔔 재호출</button>
+          <button class="btn-sub" onclick="transferPrompt()">창구 이동전달</button>
+        </div>
+        <button class="btn-huge btn-finish-auto" onclick="finishAndAutoCall()">상담 완료 및 자동 다음호출</button>
       </div>
 
-      <!-- 현재 진행 고객 카드 + 고객 넘기기 -->
-      <div class="toss-card rounded-[28px] p-5 text-center shadow-xl">
-        <div class="flex justify-between items-center mb-1">
-          <span id="currentDeskLabel" class="text-xs font-black text-[#3182f6]">1번 창구 진행 중</span>
-          <button id="btnTransferDesk" onclick="openTransferDeskModal()" disabled class="toss-btn px-3 py-1.5 bg-indigo-600/30 border border-indigo-400/40 disabled:opacity-30 disabled:border-slate-800 disabled:text-slate-600 text-indigo-200 text-xs font-black rounded-xl flex items-center gap-1">
-            <span>👉</span> 옆 창구로 고객 넘기기
-          </button>
-        </div>
-        <div id="currentClient" class="text-6xl font-black text-white my-2 tracking-tight">-</div>
-        <div id="callingStatusBadge" class="inline-block px-3 py-1 rounded-xl text-xs font-black bg-slate-800 text-slate-400">
-          호출 대기 중
+      <div class="duration-box">
+        <span style="font-size: 14px; font-weight: 700; color: var(--text-sub);">상담 기준시간</span>
+        <div class="chips">
+          ${[5, 10, 15, 20].map(m => `<button class="chip" id="dur-${m}" onclick="changeDuration(${m})">${m}분</button>`).join('')}
         </div>
       </div>
+    </div>
 
-      <!-- 동료 창구 간이 모니터 -->
-      <div class="toss-card rounded-[24px] p-4">
-        <div class="flex justify-between items-center mb-2 pb-1 border-b border-white/5">
-          <span class="text-xs font-black text-slate-300 flex items-center gap-1.5">
-            <span>📺</span> 동료 창구 진행 상황
-          </span>
-          <span class="text-[10px] text-slate-500 font-bold">실시간 연동</span>
-        </div>
-        <div id="miniDisplayGrid" class="grid grid-cols-2 gap-2 text-xs"></div>
+    <div class="queue-card">
+      <div class="queue-head">
+        <span>실시간 대기열</span>
+        <span id="queueCount" style="color: var(--primary);">대기 0명</span>
       </div>
-
-    </main>
-
-    <!-- 하단 4대 대형 버튼: [상담종료] 반영 -->
-    <footer class="grid grid-cols-4 gap-2 pt-2 border-t border-slate-800 shrink-0">
-      <button id="btnCallNext" onclick="callNextCustomer()" class="toss-btn h-16 sm:h-20 bg-[#3182f6] hover:bg-[#286cd0] disabled:bg-slate-800 disabled:text-slate-600 disabled:opacity-50 text-white font-black text-lg rounded-2xl flex flex-col items-center justify-center shadow-lg">
-        <span>호출</span>
-      </button>
-      <button onclick="recallCustomer()" class="toss-btn h-16 sm:h-20 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-lg rounded-2xl flex flex-col items-center justify-center shadow-lg">
-        <span>재호출</span>
-      </button>
-      <button onclick="passCustomer()" class="toss-btn h-16 sm:h-20 bg-rose-500/20 border border-rose-500/40 text-rose-300 hover:bg-rose-500 hover:text-white font-black text-sm rounded-2xl flex flex-col items-center justify-center">
-        <span>부재패스</span>
-      </button>
-      <button onclick="completeCurrent()" class="toss-btn h-16 sm:h-20 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-base sm:text-lg rounded-2xl flex flex-col items-center justify-center shadow-lg">
-        <span>상담종료</span>
-      </button>
-    </footer>
-
+      <div class="queue-slider" id="queueList"></div>
+    </div>
   </div>
 
   <script>
-    const socket = io();
-    let audioCtx = null;
-    let isActivated = false;
-    let availableDesks = [];
-
-    const bankKeyMap = {
-      'woori': '우리은행',
-      'shinhan': '신한은행',
-      'kb': '국민은행',
-      'hana': '하나은행',
-      'fubon': '푸본현대생명',
-      'jl': '법무법인 제이엘',
-      'nh': 'NH농협은행',
-      'sh': '수협은행',
-      'hyundai': '현대캐피탈'
-    };
-
+    const socket = io({ transports: ['websocket', 'polling'] });
     const urlParams = new URLSearchParams(window.location.search);
-    const rawParam = urlParams.get('b') || urlParams.get('bank');
-    let currentBankId = localStorage.getItem('teller_saved_bank_id') || 'woori';
+    const bank = (urlParams.get('bank') || 'kb').toLowerCase();
 
-    if (rawParam) {
-      currentBankId = rawParam.toLowerCase().trim();
-      localStorage.setItem('teller_saved_bank_id', currentBankId);
+    const BANK_NAMES = { woori: '우리은행', shinhan: '신한은행', kb: '국민은행', fubon: '푸본현대생명' };
+    document.getElementById('bankTitle').innerText = BANK_NAMES[bank] || '은행';
+
+    let myDesk = parseInt(localStorage.getItem(`selected_desk_${bank}`)) || parseInt(urlParams.get('desk')) || 1;
+    let deskData = null;
+    let audioCtx = null;
+    let timerId = null;
+
+    if ('wakeLock' in navigator) {
+      navigator.wakeLock.request('screen').catch(() => {});
     }
 
-    const currentBankName = bankKeyMap[currentBankId] || currentBankId;
-    document.getElementById('bankBadge').innerText = currentBankName;
-    document.getElementById('modalBankTitle').innerText = `${currentBankName} 창구 선택·이동`;
-    document.getElementById('waitCardTitle').innerText = `[${currentBankName}] 실시간 대기 인원`;
-
-    let savedDeskId = localStorage.getItem(`teller_locked_desk_${currentBankId}`);
-    let currentDeskId = savedDeskId ? parseInt(savedDeskId, 10) : 1;
-
-    function openDeskSelectModal() {
-      renderModalDeskButtons();
-      document.getElementById('deskSelectModal').style.display = 'flex';
-    }
-
-    function selectAndLockDesk(deskId) {
-      currentDeskId = parseInt(deskId, 10);
-      localStorage.setItem(`teller_locked_desk_${currentBankId}`, currentDeskId);
-      document.getElementById('deskSelectModal').style.display = 'none';
-      updateUI();
-    }
-
-    function renderModalDeskButtons() {
-      const container = document.getElementById('modalDeskButtons');
-      container.innerHTML = '';
-      
-      const desksToRender = (availableDesks.length > 0) ? availableDesks : [
-        { id: 1, name: '1번 창구' }, { id: 2, name: '2번 창구' }, { id: 3, name: '3번 창구' }, { id: 4, name: '4번 창구' }
-      ];
-
-      desksToRender.forEach(d => {
-        const btn = document.createElement('button');
-        const isCurrent = (d.id === currentDeskId);
-        btn.className = `toss-btn w-full h-14 rounded-2xl font-black text-sm flex items-center justify-between px-5 ${
-          isCurrent 
-            ? 'bg-[#3182f6] text-white shadow-lg ring-2 ring-blue-400' 
-            : 'bg-[#1f293d] text-slate-300 hover:bg-[#28354f]'
-        }`;
-        btn.innerHTML = `<span>${d.name}</span><span class="text-xs ${isCurrent ? 'font-black text-white' : 'opacity-60'}">${isCurrent ? '현재 내 창구 (잠김)' : '이 창구로 변경 ➔'}</span>`;
-        btn.onclick = () => selectAndLockDesk(d.id);
-        container.appendChild(btn);
+    function initSelect(desks) {
+      const s = document.getElementById('deskSelect');
+      s.innerHTML = '';
+      desks.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.desk;
+        opt.innerText = d.name;
+        if (d.desk === myDesk) opt.selected = true;
+        s.appendChild(opt);
       });
     }
 
-    function updateUI() {
-      document.getElementById('deskTitleHeader').innerText = `${currentDeskId}번 창구 (잠금)`;
-      document.getElementById('currentDeskLabel').innerText = `${currentDeskId}번 창구 진행 중`;
-      updateStateDisplay();
-    }
-
-    function openTransferDeskModal() {
-      const container = document.getElementById('targetDeskButtons');
-      container.innerHTML = '';
-      const otherDesks = (availableDesks.length > 0 ? availableDesks : [
-        { id: 1, name: '1번 창구' }, { id: 2, name: '2번 창구' }, { id: 3, name: '3번 창구' }, { id: 4, name: '4번 창구' }
-      ]).filter(d => d.id !== currentDeskId);
-
-      otherDesks.forEach(d => {
-        const btn = document.createElement('button');
-        const isBusy = !!d.currentTicket;
-        btn.className = 'toss-btn w-full h-14 rounded-2xl bg-[#1f293d] hover:bg-indigo-950/60 border border-indigo-500/20 text-white font-black text-sm flex items-center justify-between px-5';
-        btn.innerHTML = `
-          <span>${d.name} ${isBusy ? `(${d.currentTicket}번 진행중)` : '(비어있음)'}</span>
-          <span class="text-xs text-indigo-400 font-bold">이 창구로 전달 ➔</span>
-        `;
-        btn.onclick = () => {
-          if (confirm(`현재 고객을 [${d.name}]로 넘기시겠습니까?`)) {
-            socket.emit('transfer_customer_desk', {
-              bank: currentBankId,
-              fromDeskId: currentDeskId,
-              toDeskId: d.id
-            });
-            closeTransferDeskModal();
-          }
-        };
-        container.appendChild(btn);
-      });
-
-      document.getElementById('transferDeskModal').style.display = 'flex';
-    }
-    function closeTransferDeskModal() { document.getElementById('transferDeskModal').style.display = 'none'; }
-
-    function updateStateDisplay() {
-      const st = (window.lastState && window.lastState[currentBankId]) || null;
-      if (!st) return;
-
-      document.getElementById('waitCount').innerText = (st.waiting || []).length;
-      const myDesk = (st.desks || []).find(d => d.id === currentDeskId);
-
-      const btnCall = document.getElementById('btnCallNext');
-      const btnTransfer = document.getElementById('btnTransferDesk');
-      const badge = document.getElementById('callingStatusBadge');
-      const clientTxt = document.getElementById('currentClient');
-
-      if (myDesk && myDesk.currentTicket) {
-        clientTxt.innerText = `${myDesk.currentTicket}번`;
-        badge.innerText = '상담 진행 중 (호출 잠김)';
-        badge.className = 'inline-block px-3 py-1 rounded-xl text-xs font-black bg-amber-400 text-slate-950 animate-pulse';
-        btnCall.disabled = true;
-        btnTransfer.disabled = false;
-      } else {
-        clientTxt.innerText = '-';
-        badge.innerText = '호출 가능';
-        badge.className = 'inline-block px-3 py-1 rounded-xl text-xs font-black bg-slate-800 text-emerald-400';
-        btnCall.disabled = false;
-        btnTransfer.disabled = true;
-      }
-
-      renderMiniDisplay(st.desks || []);
-    }
-
-    function renderMiniDisplay(desks) {
-      const container = document.getElementById('miniDisplayGrid');
-      container.innerHTML = '';
-      const list = desks.length > 0 ? desks : [
-        { id: 1, name: '1번 창구' }, { id: 2, name: '2번 창구' }, { id: 3, name: '3번 창구' }, { id: 4, name: '4번 창구' }
-      ];
-      list.forEach(d => {
-        const isMe = (d.id === currentDeskId);
-        const div = document.createElement('div');
-        div.className = `p-2.5 rounded-xl border flex justify-between items-center ${
-          isMe ? 'bg-blue-950/40 border-blue-500/40' : 'bg-slate-900/60 border-white/5'
-        }`;
-        div.innerHTML = `
-          <span class="font-bold ${isMe ? 'text-blue-300' : 'text-slate-400'}">${d.name}</span>
-          <span class="font-black ${d.currentTicket ? 'text-amber-400' : 'text-slate-600'}">
-            ${d.currentTicket ? d.currentTicket + '번' : '대기'}
-          </span>
-        `;
-        container.appendChild(div);
-      });
-    }
-
-    const canvas = document.getElementById('keepAliveCanvas');
-    if (canvas && canvas.getContext) {
-      const ctx = canvas.getContext('2d');
-      let f = 0;
-      function loop() {
-        f++;
-        ctx.fillStyle = (f % 2 === 0) ? '#000000' : '#010101';
-        ctx.fillRect(0, 2, 2, 2);
-        requestAnimationFrame(loop);
-      }
-      loop();
-    }
-
-    async function activateTellerTerminal() {
-      if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(() => {});
+    function startWork() {
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') await audioCtx.resume();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+
+      const sel = document.getElementById('deskSelect');
+      myDesk = parseInt(sel.value);
+      localStorage.setItem(`selected_desk_${bank}`, myDesk);
+
+      document.getElementById('gateModal').style.display = 'none';
+      document.getElementById('deskPill').innerText = `${myDesk}번 창구`;
+      socket.emit('get_state', { bank });
+    }
+
+    function changeSeat() {
+      localStorage.removeItem(`selected_desk_${bank}`);
+      window.location.reload();
+    }
+
+    function speak(text) {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
-        window.speechSynthesis.resume();
-        window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'ko-KR';
+        u.rate = 1.0;
+        window.speechSynthesis.speak(u);
       }
-      isActivated = true;
-      const btn = document.getElementById('btnActivate');
-      btn.className = 'toss-btn w-full h-14 bg-emerald-600 text-white font-black text-base rounded-2xl shadow-lg flex items-center justify-center';
-      btn.innerText = `✅ [${currentBankName} ${currentDeskId}번 창구] 정상 가동 중`;
-
-      playLocalChime(() => speakTeller(`${currentBankName} ${currentDeskId}번 창구 단말기가 가동되었습니다.`));
     }
 
-    function playLocalChime(cb) {
-      if (!audioCtx) return cb && cb();
-      const notes = [523.25, 659.25, 783.99, 1046.50];
-      const now = audioCtx.currentTime;
-      notes.forEach((freq, idx) => {
-        const osc = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-        osc.frequency.setValueAtTime(freq, now + idx * 0.14);
-        g.gain.setValueAtTime(0.4, now + idx * 0.14);
-        g.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.14 + 0.3);
-        osc.connect(g);
-        g.connect(audioCtx.destination);
-        osc.start(now + idx * 0.14);
-        osc.stop(now + idx * 0.14 + 0.31);
+    socket.on('connect', () => {
+      socket.emit('get_state', { bank });
+    });
+
+    socket.on('state_update', (data) => {
+      if (data.bank !== bank) return;
+      initSelect(data.desks);
+
+      deskData = data.desks.find(d => d.desk === myDesk) || data.desks[0];
+      if (deskData) {
+        myDesk = deskData.desk;
+        document.getElementById('deskPill').innerText = deskData.name;
+        renderDesk(deskData);
+      }
+
+      document.getElementById('queueCount').innerText = `대기 ${data.queue.length}명`;
+      const qBox = document.getElementById('queueList');
+      qBox.innerHTML = '';
+      data.queue.forEach(c => {
+        const item = document.createElement('div');
+        item.className = 'queue-chip';
+        item.innerText = `${c.ticketNumber}번`;
+        qBox.appendChild(item);
       });
-      setTimeout(() => { if (cb) cb(); }, 650);
-    }
-
-    function speakTeller(text) {
-      if (!('speechSynthesis' in window)) return;
-      window.speechSynthesis.cancel();
-      if (window.speechSynthesis.paused) window.speechSynthesis.resume();
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'ko-KR';
-      u.rate = 1.0;
-      window.speechSynthesis.speak(u);
-    }
-
-    socket.on('full_state_sync', (states) => {
-      window.lastState = states;
-      if (states && states[currentBankId]) {
-        availableDesks = states[currentBankId].desks || [];
-        updateUI();
-      }
     });
 
-    socket.on('queue_update', ({ bankId, state }) => {
-      if (!window.lastState) window.lastState = {};
-      window.lastState[bankId] = state;
-      if (bankId === currentBankId) {
-        availableDesks = state.desks || [];
-        updateStateDisplay();
+    function renderDesk(d) {
+      const isBusy = d.status === 'consulting' && d.currentCustomer;
+      const numEl = document.getElementById('currentCustNum');
+      const badge = document.getElementById('deskStatusBadge');
+
+      if (isBusy) {
+        numEl.innerText = `${d.currentCustomer.ticketNumber}번`;
+        badge.innerText = '상담 진행 중';
+        badge.className = 'status-badge active';
+      } else {
+        numEl.innerText = '-';
+        badge.innerText = '상담 대기';
+        badge.className = 'status-badge';
+      }
+
+      [5, 10, 15, 20].forEach(m => {
+        const btn = document.getElementById(`dur-${m}`);
+        if (btn) btn.className = `chip ${(d.duration || 10) === m ? 'selected' : ''}`;
+      });
+    }
+
+    clearInterval(timerId);
+    timerId = setInterval(() => {
+      if (deskData && deskData.status === 'consulting' && deskData.startTime) {
+        const sec = Math.floor((new Date() - new Date(deskData.startTime)) / 1000);
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        document.getElementById('timerDisplay').innerText = `상담 진행: ${m}분 ${s < 10 ? '0' : ''}${sec}초`;
+      } else {
+        document.getElementById('timerDisplay').innerText = '대기 중';
+      }
+    }, 1000);
+
+    function callNext() {
+      socket.emit('call_customer', { bank, deskNumber: myDesk });
+    }
+
+    function recall() {
+      socket.emit('recall_customer', { bank, deskNumber: myDesk });
+    }
+
+    function finishAndAutoCall() {
+      socket.emit('complete_consultation', { bank, deskNumber: myDesk, autoCall: true });
+    }
+
+    function transferPrompt() {
+      const target = prompt('손님을 전달할 창구 번호를 입력하세요 (예: 2)');
+      if (target) {
+        socket.emit('transfer_customer', { bank, fromDesk: myDesk, toDesk: target });
+      }
+    }
+
+    function changeDuration(duration) {
+      socket.emit('update_duration', { bank, deskNumber: myDesk, duration });
+    }
+
+    socket.on('customer_called', (data) => {
+      if (data.bank === bank && data.desk === myDesk) {
+        speak(`${data.customer.ticketNumber}번 고객님 호출되었습니다.`);
       }
     });
-
-    socket.on('new_ticket_issued', (data) => {
-      if (data.bankId === currentBankId) {
-        playLocalChime(() => speakTeller(`${data.ticketNo}번 고객님이 대기 접수되었습니다.`));
-        if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
-      }
-    });
-
-    function callNextCustomer() {
-      socket.emit('call_next_customer', { bank: currentBankId, deskId: currentDeskId });
-    }
-    function recallCustomer() {
-      socket.emit('recall_customer', { bank: currentBankId, deskId: currentDeskId });
-    }
-    function passCustomer() {
-      if (confirm(`${currentDeskId}번 창구 고객을 부재(패스) 처리하시겠습니까?`)) {
-        socket.emit('pass_customer', { bank: currentBankId, deskId: currentDeskId });
-      }
-    }
-    function completeCurrent() {
-      socket.emit('complete_consultation', { bank: currentBankId, deskId: currentDeskId });
-    }
-
-    updateUI();
   </script>
 </body>
 </html>
