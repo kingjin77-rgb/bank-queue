@@ -24,7 +24,6 @@
     .bank-pill { display: inline-block; background: var(--primary-sub); color: var(--primary); font-size: 15px; font-weight: 800; padding: 8px 20px; border-radius: 20px; margin-bottom: 16px; border: 1px solid var(--primary); }
     .title { font-size: 24px; font-weight: 800; margin-bottom: 20px; }
 
-    /* 번호표 뷰 */
     .ticket-box { background: #f9fafb; border: 2px solid var(--border); border-radius: 24px; padding: 28px 16px; margin: 20px 0; }
     .ticket-label { font-size: 15px; color: var(--text-sub); font-weight: 600; }
     .ticket-number { font-size: 76px; font-weight: 900; color: var(--primary); margin: 10px 0; letter-spacing: -2px; }
@@ -35,14 +34,12 @@
     .call-alert h2 { font-size: 22px; font-weight: 900; color: var(--primary); margin-bottom: 6px; }
     .call-alert p { font-size: 18px; font-weight: 800; color: #191f28; }
 
-    /* 상담 완료 후 전체 은행 선택 뷰 */
     #completeSection { display: none; text-align: left; }
     .complete-badge { display: inline-block; background: #e6fcf5; color: #0ca678; font-size: 13px; font-weight: 800; padding: 6px 12px; border-radius: 12px; margin-bottom: 8px; }
     .bank-select-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; margin-bottom: 24px; }
     .btn-bank-pick { padding: 16px 12px; border-radius: 16px; border: 2px solid var(--border); background: #fff; font-size: 16px; font-weight: 800; cursor: pointer; text-align: center; }
     .btn-bank-pick:active { background: #f1f5f9; }
 
-    /* 법무법인 제이엘 안내 배너 */
     .jl-banner { background: #1e293b; color: #fff; border-radius: 20px; padding: 20px; text-align: left; margin-top: 10px; }
     .jl-tag { background: #38bdf8; color: #0f172a; font-size: 11px; font-weight: 900; padding: 3px 8px; border-radius: 6px; display: inline-block; margin-bottom: 6px; }
     .jl-title { font-size: 17px; font-weight: 800; margin-bottom: 6px; color: #f8fafc; }
@@ -55,7 +52,6 @@
     <span class="bank-pill" id="bankPill">은행</span>
     <h1 class="title" id="pageTitle">상담 대기표</h1>
 
-    <!-- 1. 발권 완료 및 대기 화면 -->
     <div id="ticketSection">
       <div class="ticket-box">
         <div class="ticket-label">내 대기 번호</div>
@@ -73,7 +69,6 @@
       </p>
     </div>
 
-    <!-- 2. 상담 완료 후 화면 (전체 은행 선택 + 법무법인 제이엘 안내) -->
     <div id="completeSection">
       <div style="text-align: center; margin-bottom: 18px;">
         <span class="complete-badge">상담 완료</span>
@@ -83,7 +78,6 @@
 
       <div class="bank-select-grid" id="bankSelectGrid"></div>
 
-      <!-- 법무법인 제이엘 분양전환 안내 배너 -->
       <div class="jl-banner">
         <span class="jl-tag">전문 법률 자문</span>
         <div class="jl-title">법무법인 제이엘 분양전환 센터</div>
@@ -95,24 +89,34 @@
   </div>
 
   <script>
-    const socket = io({ transports: ['websocket', 'polling'] });
+    // 1. 페이지 뜨자마자 URL 파라미터 기반으로 은행 색상 즉시 강제 주입
     const urlParams = new URLSearchParams(window.location.search);
     let currentBank = (urlParams.get('bank') || 'kb').toLowerCase();
 
+    const LOCAL_BANK_THEMES = {
+      kb: { name: '국민은행', color: '#ffbc00', sub: '#fff9e6', btnText: '#2b2b2b' },
+      shinhan: { name: '신한은행', color: '#0046ff', sub: '#e8f0fe', btnText: '#ffffff' },
+      woori: { name: '우리은행', color: '#0067ac', sub: '#e6f3fa', btnText: '#ffffff' },
+      fubon: { name: '푸본현대생명', color: '#e83828', sub: '#fdeeed', btnText: '#ffffff' }
+    };
+
+    function applyThemeDirect(theme) {
+      if (!theme) return;
+      document.documentElement.style.setProperty('--primary', theme.color);
+      document.documentElement.style.setProperty('--primary-sub', theme.sub);
+      document.documentElement.style.setProperty('--btn-text', theme.btnText || '#fff');
+      document.getElementById('bankPill').innerText = theme.name;
+    }
+
+    // 소켓 접속 전에 화면 즉시 색칠
+    applyThemeDirect(LOCAL_BANK_THEMES[currentBank] || LOCAL_BANK_THEMES.kb);
+
+    const socket = io({ transports: ['websocket', 'polling'] });
     let myTicket = null;
     let audioCtx = null;
-    let allBankInfo = {};
 
     if ('wakeLock' in navigator) {
       navigator.wakeLock.request('screen').catch(() => {});
-    }
-
-    function applyTheme(info) {
-      if (!info) return;
-      document.documentElement.style.setProperty('--primary', info.color);
-      document.documentElement.style.setProperty('--primary-sub', info.sub || '#f2f4f6');
-      document.documentElement.style.setProperty('--btn-text', info.btnText || '#fff');
-      document.getElementById('bankPill').innerText = info.name;
     }
 
     function unlockAudio() {
@@ -148,14 +152,12 @@
       }
     }
 
-    // [QR 직행 발권] 기존 발권 확인 or 접속 즉시 자동 발권
     function autoIssue() {
       const saved = localStorage.getItem(`my_ticket_${currentBank}`);
       if (saved) {
         myTicket = JSON.parse(saved);
         showTicket();
       } else {
-        // 접속 즉시 자동 발권 진행
         socket.emit('issue_ticket', { bank: currentBank, name: '고객' }, (res) => {
           if (res && res.success) {
             myTicket = res.ticket;
@@ -173,7 +175,6 @@
       socket.emit('get_state', { bank: currentBank });
     }
 
-    // 화면 터치 시 브라우저 오디오 해제
     window.addEventListener('click', unlockAudio, { once: true });
     window.addEventListener('touchstart', unlockAudio, { once: true });
 
@@ -183,19 +184,17 @@
     });
 
     socket.on('all_state_update', (data) => {
-      allBankInfo = data.bankInfo;
       renderBankSelection(data.bankInfo);
     });
 
     socket.on('state_update', (data) => {
       if (data.bank !== currentBank) return;
-      applyTheme(data.bankInfo);
+      if (data.bankInfo) applyThemeDirect(data.bankInfo);
       if (!myTicket) return;
 
       const inQueue = data.queue.some(c => c.id === myTicket.id);
       const isConsulting = data.desks.some(d => d.currentCustomer && d.currentCustomer.id === myTicket.id);
 
-      // 상담이 완료되어 대기열과 창구에서 모두 제거되었을 때 -> 전체 은행 선택 모드 전환
       if (!inQueue && !isConsulting && myTicket.status === 'called') {
         showCompleteView();
         return;

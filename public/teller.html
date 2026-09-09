@@ -106,17 +106,15 @@
   </div>
 
   <script>
-    const socket = io({ transports: ['websocket', 'polling'] });
     const urlParams = new URLSearchParams(window.location.search);
     const bank = (urlParams.get('bank') || 'kb').toLowerCase();
 
-    let myDesk = parseInt(localStorage.getItem(`selected_desk_${bank}`)) || parseInt(urlParams.get('desk')) || 1;
-    let deskData = null;
-    let audioCtx = null;
-
-    if ('wakeLock' in navigator) {
-      navigator.wakeLock.request('screen').catch(() => {});
-    }
+    const LOCAL_BANK_THEMES = {
+      kb: { name: '국민은행', color: '#ffbc00', sub: '#fff9e6', btnText: '#2b2b2b' },
+      shinhan: { name: '신한은행', color: '#0046ff', sub: '#e8f0fe', btnText: '#ffffff' },
+      woori: { name: '우리은행', color: '#0067ac', sub: '#e6f3fa', btnText: '#ffffff' },
+      fubon: { name: '푸본현대생명', color: '#e83828', sub: '#fdeeed', btnText: '#ffffff' }
+    };
 
     function applyTheme(info) {
       if (!info) return;
@@ -124,6 +122,17 @@
       document.documentElement.style.setProperty('--primary-sub', info.sub || '#f2f4f6');
       document.documentElement.style.setProperty('--btn-text', info.btnText || '#fff');
       document.getElementById('bankTitle').innerText = info.name;
+    }
+
+    applyTheme(LOCAL_BANK_THEMES[bank] || LOCAL_BANK_THEMES.kb);
+
+    const socket = io({ transports: ['websocket', 'polling'] });
+    let myDesk = parseInt(localStorage.getItem(`selected_desk_${bank}`)) || parseInt(urlParams.get('desk')) || 1;
+    let deskData = null;
+    let audioCtx = null;
+
+    if ('wakeLock' in navigator) {
+      navigator.wakeLock.request('screen').catch(() => {});
     }
 
     function initSelect(desks) {
@@ -172,7 +181,7 @@
 
     socket.on('state_update', (data) => {
       if (data.bank !== bank) return;
-      applyTheme(data.bankInfo);
+      if (data.bankInfo) applyTheme(data.bankInfo);
       initSelect(data.desks);
 
       deskData = data.desks.find(d => d.desk === myDesk) || data.desks[0];
