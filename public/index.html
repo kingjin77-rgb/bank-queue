@@ -2,81 +2,153 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" id="themeColorMeta" content="#00A88F">
   <title>스마트 모바일 번호표</title>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <script src="/socket.io/socket.io.js"></script>
   <style>
     :root {
+      --font-stack: "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+      --brand: #00A88F;
+      --brand-sub: #e6f7f4;
+      --brand-text: #ffffff;
       --bg: #f2f4f6;
-      --card-bg: #ffffff;
-      --primary: #00A88F;
-      --primary-sub: #e6f7f4;
+      --card: #ffffff;
       --text: #191f28;
       --text-sub: #8b95a1;
       --border: #e5e8eb;
-      --danger: #f04452;
-      --btn-text: #ffffff;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif; -webkit-tap-highlight-color: transparent; }
-    body { background: var(--bg); color: var(--text); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 16px; }
-    .card { background: var(--card-bg); border-radius: 32px; padding: 36px 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.06); width: 100%; max-width: 420px; text-align: center; border-top: 8px solid var(--primary); }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background: var(--bg); color: var(--text); font-weight: 700; letter-spacing: -0.4px; min-height: 100vh; display: flex; flex-direction: column; }
 
-    .bank-pill { display: inline-block; background: var(--primary-sub); color: var(--primary); font-size: 15px; font-weight: 800; padding: 8px 20px; border-radius: 20px; margin-bottom: 16px; border: 1px solid var(--primary); }
-    .title { font-size: 24px; font-weight: 800; margin-bottom: 20px; }
+    /* ===== 은행 브랜드 컬러 헤더 (키오스크 스타일) ===== */
+    .brand-bar {
+      background: var(--brand); color: var(--brand-text);
+      padding: calc(env(safe-area-inset-top) + 22px) 20px 22px;
+      text-align: center;
+    }
+    .brand-name { font-size: 30px; font-weight: 900; letter-spacing: -1px; line-height: 1.15; }
+    .brand-sub { font-size: 15px; font-weight: 700; opacity: 0.85; margin-top: 6px; }
 
-    .ticket-box { background: #f9fafb; border: 2px solid var(--border); border-radius: 24px; padding: 28px 16px; margin: 20px 0; }
-    .ticket-label { font-size: 15px; color: var(--text-sub); font-weight: 600; }
-    .ticket-number { font-size: clamp(64px, 15vw, 84px); font-weight: 900; color: var(--primary); margin: 10px 0; letter-spacing: -2px; }
-    .wait-text { font-size: 19px; font-weight: 800; color: var(--text); }
+    main { flex: 1; width: 100%; max-width: 480px; margin: 0 auto; padding: 20px 16px 32px; }
 
-    .call-alert { display: none; background: var(--primary-sub); border: 3px solid var(--primary); border-radius: 24px; padding: 24px; margin-top: 18px; animation: flash 1s infinite alternate; }
-    @keyframes flash { from { transform: scale(1); } to { transform: scale(1.03); } }
-    .call-alert h2 { font-size: 22px; font-weight: 900; color: var(--primary); margin-bottom: 6px; }
-    .call-alert p { font-size: 18px; font-weight: 800; color: #191f28; }
+    /* ===== 번호표 카드 ===== */
+    .ticket-card {
+      background: var(--card); border-radius: 28px; padding: 32px 20px;
+      text-align: center; box-shadow: 0 8px 28px rgba(0,0,0,0.07);
+      border-top: 10px solid var(--brand);
+    }
+    .t-label { font-size: 17px; font-weight: 800; color: var(--text-sub); }
+    .t-number { font-size: 108px; font-weight: 900; color: var(--brand); line-height: 1; letter-spacing: -4px; margin: 10px 0 4px; }
+    .t-unit { font-size: 22px; font-weight: 800; color: var(--brand); }
 
-    #completeSection { display: none; text-align: left; }
-    .complete-badge { display: inline-block; background: #e6fcf5; color: #0ca678; font-size: 13px; font-weight: 800; padding: 6px 12px; border-radius: 12px; margin-bottom: 8px; }
-    .bank-select-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; margin-bottom: 24px; }
-    .btn-bank-pick { padding: 16px 12px; border-radius: 16px; border: 2px solid var(--border); background: #fff; font-size: 16px; font-weight: 800; cursor: pointer; text-align: center; }
+    .t-divider { height: 1px; background: var(--border); margin: 24px 0 20px; }
+    .t-rows { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .t-cell { background: var(--brand-sub); border-radius: 18px; padding: 16px 8px; }
+    .t-cell .c-label { font-size: 13px; font-weight: 800; color: var(--text-sub); }
+    .t-cell .c-value { font-size: 26px; font-weight: 900; color: var(--text); margin-top: 4px; }
 
-    .jl-banner { background: #1e293b; color: #fff; border-radius: 20px; padding: 20px; text-align: left; margin-top: 10px; }
-    .jl-tag { background: #38bdf8; color: #0f172a; font-size: 11px; font-weight: 900; padding: 3px 8px; border-radius: 6px; display: inline-block; margin-bottom: 6px; }
-    .jl-title { font-size: 17px; font-weight: 800; margin-bottom: 6px; color: #f8fafc; }
-    .jl-desc { font-size: 13px; color: #94a3b8; line-height: 1.5; }
+    .t-hint { font-size: 15px; font-weight: 700; color: var(--text-sub); margin-top: 18px; line-height: 1.5; }
+
+    /* ===== 큰 버튼 ===== */
+    .btn-big {
+      width: 100%; min-height: 68px; border-radius: 20px; border: none;
+      font-size: 19px; font-weight: 900; cursor: pointer; margin-top: 14px;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-big:active { transform: scale(0.98); }
+    .btn-sound { background: #191f28; color: #fff; }
+    .btn-sound.on { background: var(--brand); color: var(--brand-text); }
+    .btn-brand { background: var(--brand); color: var(--brand-text); }
+
+    /* ===== 호출 전체화면 ===== */
+    #callOverlay {
+      position: fixed; inset: 0; z-index: 900; display: none;
+      background: var(--brand); color: var(--brand-text);
+      flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: 24px; animation: pulse 1.1s infinite alternate;
+    }
+    @keyframes pulse { from { filter: brightness(1); } to { filter: brightness(1.22); } }
+    #callOverlay .co-tag { font-size: 20px; font-weight: 800; opacity: 0.9; }
+    #callOverlay .co-num { font-size: 132px; font-weight: 900; line-height: 1; letter-spacing: -5px; margin: 12px 0; }
+    #callOverlay .co-desk { font-size: 40px; font-weight: 900; letter-spacing: -1px; }
+    #callOverlay .co-note { font-size: 17px; font-weight: 700; opacity: 0.9; margin-top: 18px; line-height: 1.5; }
+    #callOverlay button {
+      margin-top: 30px; background: rgba(0,0,0,0.22); color: inherit; border: 2px solid rgba(255,255,255,0.5);
+      border-radius: 18px; padding: 16px 34px; font-size: 17px; font-weight: 900; cursor: pointer;
+    }
+
+    /* ===== 상담 완료 ===== */
+    #completeSection { display: none; }
+    .done-card { background: var(--card); border-radius: 28px; padding: 28px 20px; text-align: center; box-shadow: 0 8px 28px rgba(0,0,0,0.07); }
+    .done-badge { display: inline-block; background: #e6fcf5; color: #0ca678; font-size: 13px; font-weight: 900; padding: 7px 14px; border-radius: 12px; }
+    .done-title { font-size: 24px; font-weight: 900; margin-top: 10px; }
+    .done-desc { font-size: 15px; color: var(--text-sub); font-weight: 700; margin-top: 6px; line-height: 1.5; }
+    .bank-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; }
+    .bank-pick {
+      min-height: 82px; border-radius: 20px; border: 3px solid var(--border); background: #fff;
+      font-size: 18px; font-weight: 900; cursor: pointer; padding: 10px;
+      display: flex; align-items: center; justify-content: center; text-align: center;
+    }
+    .bank-pick:active { transform: scale(0.97); }
+
+    .jl-banner { background: #1e293b; color: #fff; border-radius: 22px; padding: 22px; text-align: left; margin-top: 18px; }
+    .jl-tag { background: #38bdf8; color: #0f172a; font-size: 11px; font-weight: 900; padding: 4px 9px; border-radius: 7px; display: inline-block; margin-bottom: 8px; }
+    .jl-title { font-size: 18px; font-weight: 900; margin-bottom: 7px; }
+    .jl-desc { font-size: 14px; color: #94a3b8; line-height: 1.6; }
+
+    .foot { text-align: center; font-size: 12px; color: var(--text-sub); font-weight: 700; padding: 18px 0 calc(env(safe-area-inset-bottom) + 10px); }
   </style>
 </head>
 <body>
 
-  <div class="card">
-    <span class="bank-pill" id="bankPill">은행</span>
-    <h1 class="title" id="pageTitle">상담 대기표</h1>
+  <div class="brand-bar">
+    <div class="brand-name" id="brandName">상담 대기표</div>
+    <div class="brand-sub" id="brandSub">모바일 번호표</div>
+  </div>
 
-    <div id="ticketSection">
-      <div class="ticket-box">
-        <div class="ticket-label">내 대기 번호</div>
-        <div class="ticket-number" id="myNumDisplay">-</div>
-        <div class="wait-text" id="myWaitDisplay">내 앞 대기: 접수 중...</div>
-        <button id="reissueBtn" onclick="reissueTicket()" style="display: none; width: 100%; margin-top: 14px; height: 52px; border-radius: 14px; border: none; background: var(--primary); color: var(--btn-text); font-size: 16px; font-weight: 800; cursor: pointer;">다시 번호표 받기</button>
+  <main>
+    <!-- 대기 중 -->
+    <section id="ticketSection">
+      <div class="ticket-card">
+        <div class="t-label">내 대기번호</div>
+        <div class="t-number" id="myNumDisplay">-</div>
+        <div class="t-unit">번</div>
+
+        <div class="t-divider"></div>
+
+        <div class="t-rows">
+          <div class="t-cell">
+            <div class="c-label">내 앞 대기</div>
+            <div class="c-value" id="myWaitDisplay">-</div>
+          </div>
+          <div class="t-cell">
+            <div class="c-label">예상 대기시간</div>
+            <div class="c-value" id="myEtaDisplay">-</div>
+          </div>
+        </div>
+
+        <div class="t-hint" id="statusHint">번호표를 발급하고 있습니다.</div>
       </div>
 
-      <div class="call-alert" id="callBanner">
-        <h2>🔔 고객님 차례입니다!</h2>
-        <p id="deskNotice">창구로 방문해주세요.</p>
+      <button class="btn-big btn-sound" id="soundBtn" onclick="enableAlerts()">🔔 호출 알림 켜기 (꼭 눌러주세요)</button>
+      <button class="btn-big btn-brand" id="reissueBtn" style="display:none;" onclick="reissueTicket()">번호표 다시 받기</button>
+
+      <div class="t-hint" style="text-align:center;">
+        화면을 꺼두셔도 호출 시 알림음과 진동이 울립니다.<br>
+        소리가 안 나면 휴대폰 무음(진동) 모드를 해제해주세요.
       </div>
+    </section>
 
-      <p style="font-size: 13px; color: var(--text-sub); margin-top: 16px;">
-        ※ 화면을 켜두시면 순서에 맞춰 음성과 진동으로 호출됩니다.
-      </p>
-    </div>
-
-    <div id="completeSection">
-      <div style="text-align: center; margin-bottom: 18px;">
-        <span class="complete-badge">상담 완료</span>
-        <h2 style="font-size: 22px; font-weight: 800; margin-top: 4px;">상담이 완료되었습니다.</h2>
-        <p style="font-size: 14px; color: var(--text-sub);">추가 상담이 필요한 다른 은행을 선택하세요.</p>
+    <!-- 상담 완료 -->
+    <section id="completeSection">
+      <div class="done-card">
+        <span class="done-badge">상담 완료</span>
+        <div class="done-title">상담이 완료되었습니다.</div>
+        <div class="done-desc">추가 상담이 필요하시면<br>아래에서 기관을 선택해주세요.</div>
+        <div class="bank-grid" id="bankSelectGrid"></div>
       </div>
-
-      <div class="bank-select-grid" id="bankSelectGrid"></div>
 
       <div class="jl-banner">
         <span class="jl-tag">전문 법률 자문</span>
@@ -85,53 +157,71 @@
           공공임대 분양전환 권리분석, 소유권이전 집단등기 및 브릿지 대출 법률 자문 지원 창구입니다.
         </div>
       </div>
-    </div>
+    </section>
+
+    <div class="foot">법무법인 제이엘 현장 상담 안내 시스템</div>
+  </main>
+
+  <!-- 호출 전체화면 -->
+  <div id="callOverlay">
+    <div class="co-tag">🔔 고객님 차례입니다</div>
+    <div class="co-num" id="coNum">-</div>
+    <div class="co-desk" id="coDesk">창구로 오세요</div>
+    <div class="co-note" id="coNote">창구로 와주시기 바랍니다.</div>
+    <button onclick="closeOverlay()">확인했습니다</button>
   </div>
+
+  <!-- 백그라운드에서도 알림음이 나오도록 유지하는 오디오 -->
+  <audio id="keepAliveAudio" src="/silent.wav" loop preload="auto" playsinline></audio>
+  <audio id="alarmAudio" src="/chime.wav" preload="auto" playsinline></audio>
 
   <script>
     const urlParams = new URLSearchParams(window.location.search);
     let currentBank = (urlParams.get('bank') || 'kb').toLowerCase();
 
-    // 푸본현대생명 공식 그린 (#00A88F) 적용
+    // 은행별 고유 브랜드 컬러 (서버 연결 전에도 즉시 적용)
     const LOCAL_BANK_THEMES = {
-      kb: { name: '국민은행', color: '#ffbc00', sub: '#fff9e6', btnText: '#2b2b2b' },
-      shinhan: { name: '신한은행', color: '#0046ff', sub: '#e8f0fe', btnText: '#ffffff' },
-      woori: { name: '우리은행', color: '#0067ac', sub: '#e6f3fa', btnText: '#ffffff' },
-      fubon: { name: '푸본현대생명', color: '#00A88F', sub: '#e6f7f4', btnText: '#ffffff' }
+      kb:      { name: '국민은행',     color: '#ffbc00', sub: '#fff9e6', btnText: '#2b2b2b' },
+      shinhan: { name: '신한은행',     color: '#0046ff', sub: '#e8f0fe', btnText: '#ffffff' },
+      woori:   { name: '우리은행',     color: '#0067ac', sub: '#e6f3fa', btnText: '#ffffff' },
+      fubon:   { name: '푸본현대생명', color: '#00A88F', sub: '#e6f7f4', btnText: '#ffffff' },
+      hana:    { name: '하나은행',     color: '#008485', sub: '#e6f4f4', btnText: '#ffffff' },
+      jl:      { name: '법무법인 제이엘', color: '#8b0029', sub: '#fbe9ee', btnText: '#ffffff' }
     };
 
-    function applyThemeDirect(theme) {
-      if (!theme) return;
-      document.documentElement.style.setProperty('--primary', theme.color);
-      document.documentElement.style.setProperty('--primary-sub', theme.sub);
-      document.documentElement.style.setProperty('--btn-text', theme.btnText || '#fff');
-      document.getElementById('bankPill').innerText = theme.name;
+    function applyTheme(info) {
+      if (!info) return;
+      const root = document.documentElement.style;
+      root.setProperty('--brand', info.color);
+      root.setProperty('--brand-sub', info.sub || '#f2f4f6');
+      root.setProperty('--brand-text', info.btnText || '#ffffff');
+      document.getElementById('brandName').innerText = info.name;
+      document.getElementById('themeColorMeta').setAttribute('content', info.color);
+      document.title = info.name + ' 상담 번호표';
     }
-    applyThemeDirect(LOCAL_BANK_THEMES[currentBank] || LOCAL_BANK_THEMES.kb);
+    applyTheme(LOCAL_BANK_THEMES[currentBank] || LOCAL_BANK_THEMES.kb);
 
     const socket = io({ transports: ['websocket', 'polling'] });
     let myTicket = null;
-    let audioCtx = null;
+    let bankName = (LOCAL_BANK_THEMES[currentBank] || {}).name || '상담';
+    let alertsOn = false;
+    let announcedIssue = false;
+    let announcedSoon = false;
+    let lastPosition = null;
 
-    if ('wakeLock' in navigator) {
-      navigator.wakeLock.request('screen').catch(() => {});
-    }
+    /* ================= 음성 / 알림 ================= */
 
-    function unlockAudio() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-    }
+    const keepAliveAudio = document.getElementById('keepAliveAudio');
+    const alarmAudio = document.getElementById('alarmAudio');
 
-    // ===== 공통 음성 유틸 =====
-    // 숫자를 "일, 이, 삼..." 한자어 발음으로 변환 ("한번/두번" 오독 방지, 최대 9999)
+    // 숫자를 한자어 발음으로 ("한번"이 아니라 "일번")
     function numToKorean(n) {
       const num = parseInt(n, 10);
       if (isNaN(num)) return String(n);
       if (num === 0) return '영';
       const digits = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
       const units = ['', '십', '백', '천'];
-      let out = '';
-      let rest = num;
+      let out = '', rest = num;
       for (let i = 3; i >= 0; i--) {
         const div = Math.pow(10, i);
         const d = Math.floor(rest / div);
@@ -141,177 +231,299 @@
       }
       return out;
     }
-
-    // "1번 창구" -> "일번 창구", "단일 창구" -> 그대로
     function deskToKorean(deskName) {
       const m = String(deskName || '').match(/\d+/);
-      return m ? `${numToKorean(m[0])}번 창구` : String(deskName || '창구');
+      return m ? numToKorean(m[0]) + '번 창구' : String(deskName || '창구');
     }
 
-    // 표준 호출 안내 멘트
-    function callMessage(bankName, ticketNumber, deskName) {
-      return `${bankName}, ${numToKorean(ticketNumber)}번 고객님, ${deskToKorean(deskName)}로 오십시오.`;
-    }
-
-    // 음성 끊김 방지 큐: 이전 멘트가 끝난 뒤에 다음 멘트를 읽는다 (cancel 사용 안 함)
+    // 음성 큐 (앞 멘트가 끝난 뒤 다음 멘트 - 끊김 방지)
     const speechQueue = [];
-    let speaking = false;
-    let speechGuard = null;
+    let speaking = false, speechGuard = null;
 
-    function enqueueSpeech(text, withChime) {
-      speechQueue.push({ text, withChime: !!withChime });
+    function enqueueSpeech(text) {
+      speechQueue.push(text);
       processSpeechQueue();
     }
-
     function processSpeechQueue() {
       if (speaking || speechQueue.length === 0) return;
       if (!('speechSynthesis' in window)) { speechQueue.length = 0; return; }
       speaking = true;
-      const item = speechQueue.shift();
-
-      const start = () => {
-        const utter = new SpeechSynthesisUtterance(item.text);
-        utter.lang = 'ko-KR';
-        utter.rate = 0.92;
-        utter.pitch = 1.0;
-        utter.volume = 1.0;
-        const done = () => {
-          if (!speaking) return;
-          speaking = false;
-          clearTimeout(speechGuard);
-          setTimeout(processSpeechQueue, 300);
-        };
-        utter.onend = done;
-        utter.onerror = done;
-        speechGuard = setTimeout(done, 15000); // onend 가 오지 않는 브라우저 대비 안전장치
-        try { window.speechSynthesis.resume(); } catch (e) {}
-        window.speechSynthesis.speak(utter);
+      const text = speechQueue.shift();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'ko-KR';
+      utter.rate = 0.92;
+      utter.volume = 1.0;
+      const done = () => {
+        if (!speaking) return;
+        speaking = false;
+        clearTimeout(speechGuard);
+        setTimeout(processSpeechQueue, 250);
       };
-
-      if (item.withChime && typeof playChime === 'function') {
-        playChime();
-        setTimeout(start, 500);
-      } else {
-        start();
-      }
+      utter.onend = done;
+      utter.onerror = done;
+      speechGuard = setTimeout(done, 15000);
+      try { window.speechSynthesis.resume(); } catch (e) {}
+      window.speechSynthesis.speak(utter);
     }
 
-    function autoIssue() {
-      const saved = localStorage.getItem(`my_ticket_${currentBank}`);
-      if (saved) {
-        myTicket = JSON.parse(saved);
-        showTicket();
-      } else {
-        socket.emit('issue_ticket', { bank: currentBank, name: '고객' }, (res) => {
-          if (res && res.success) {
-            myTicket = res.ticket;
-            localStorage.setItem(`my_ticket_${currentBank}`, JSON.stringify(myTicket));
-            showTicket();
-          }
-        });
+    // 알림 켜기: 브라우저 오디오 잠금 해제 + 백그라운드 오디오 세션 유지 + 알림 권한
+    function enableAlerts() {
+      alertsOn = true;
+
+      // 무음 오디오를 계속 재생해 두면 화면이 꺼지거나 다른 앱을 보고 있어도
+      // 호출 시점에 알림음을 낼 수 있다 (모바일 브라우저의 오디오 세션 유지).
+      keepAliveAudio.volume = 0.01;
+      keepAliveAudio.play().catch(function () {});
+
+      // 알람 오디오도 사용자 터치 시점에 한 번 재생해 잠금을 풀어둔다.
+      alarmAudio.volume = 1.0;
+      alarmAudio.play().then(function () {
+        alarmAudio.pause();
+        alarmAudio.currentTime = 0;
+      }).catch(function () {});
+
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission().catch(function () {});
       }
+      if ('wakeLock' in navigator) {
+        navigator.wakeLock.request('screen').catch(function () {});
+      }
+      if ('mediaSession' in navigator) {
+        try {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: bankName + ' 상담 대기 알림',
+            artist: '법무법인 제이엘 현장 상담'
+          });
+        } catch (e) {}
+      }
+
+      const btn = document.getElementById('soundBtn');
+      btn.classList.add('on');
+      btn.innerText = '🔔 호출 알림이 켜졌습니다';
+
+      enqueueSpeech('호출 알림이 켜졌습니다. 순서가 되면 음성으로 안내해 드리겠습니다.');
+      announceTicketIfReady();
+    }
+
+    // 화면이 다시 보이면 오디오 세션을 되살린다.
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden && alertsOn) {
+        keepAliveAudio.play().catch(function () {});
+        if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(function () {});
+      }
+    });
+
+    function playAlarm() {
+      try {
+        alarmAudio.currentTime = 0;
+        alarmAudio.volume = 1.0;
+        alarmAudio.play().catch(function () {});
+      } catch (e) {}
+      if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 800]);
+    }
+
+    function showNotification(title, body) {
+      try {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(title, { body: body, tag: 'queue-call' });
+        }
+      } catch (e) {}
+    }
+
+    /* ================= 발권 / 상태 ================= */
+
+    function autoIssue() {
+      const saved = localStorage.getItem('my_ticket_' + currentBank);
+      if (saved) {
+        try {
+          myTicket = JSON.parse(saved);
+          showTicket();
+          return;
+        } catch (e) {}
+      }
+      socket.emit('issue_ticket', { bank: currentBank, name: '고객' }, function (res) {
+        if (res && res.success) {
+          myTicket = res.ticket;
+          localStorage.setItem('my_ticket_' + currentBank, JSON.stringify(myTicket));
+          announcedIssue = false;
+          announcedSoon = false;
+          showTicket();
+        }
+      });
     }
 
     function showTicket() {
       document.getElementById('ticketSection').style.display = 'block';
       document.getElementById('completeSection').style.display = 'none';
-      document.getElementById('myNumDisplay').innerText = `${myTicket.ticketNumber}번`;
+      document.getElementById('reissueBtn').style.display = 'none';
+      document.getElementById('myNumDisplay').innerText = myTicket.ticketNumber;
       socket.emit('get_state', { bank: currentBank });
     }
 
-    window.addEventListener('click', unlockAudio, { once: true });
-    window.addEventListener('touchstart', unlockAudio, { once: true });
+    // 발권 안내 멘트 (알림을 켠 뒤에 한 번만)
+    function announceTicketIfReady() {
+      if (!alertsOn || announcedIssue || !myTicket) return;
+      announcedIssue = true;
+      let msg = '번호표 ' + numToKorean(myTicket.ticketNumber) + '번이 발급되었습니다.';
+      if (lastPosition != null) {
+        msg += lastPosition === 0
+          ? ' 앞에 대기하시는 분이 없습니다. 곧 호출해 드리겠습니다.'
+          : ' 고객님 앞에 ' + numToKorean(lastPosition) + '분이 대기하고 계십니다.';
+      }
+      enqueueSpeech(msg);
+    }
 
-    socket.on('connect', () => {
+    socket.on('connect', function () {
       autoIssue();
       socket.emit('get_all_state');
     });
 
-    socket.on('all_state_update', (data) => {
+    socket.on('all_state_update', function (data) {
       renderBankSelection(data.bankInfo);
+      if (data.bankInfo && data.bankInfo[currentBank]) {
+        bankName = data.bankInfo[currentBank].name;
+      }
     });
 
-    socket.on('state_update', (data) => {
+    socket.on('state_update', function (data) {
       if (data.bank !== currentBank) return;
-      if (data.bankInfo) applyThemeDirect(data.bankInfo);
+      if (data.bankInfo) { applyTheme(data.bankInfo); bankName = data.bankInfo.name; }
       if (!myTicket) return;
 
-      const inQueue = data.queue.some(c => c.id === myTicket.id);
-      const isConsulting = data.desks.some(d => d.currentCustomer && d.currentCustomer.id === myTicket.id);
+      const inQueue = data.queue.some(function (c) { return c.id === myTicket.id; });
+      const isConsulting = data.desks.some(function (d) { return d.currentCustomer && d.currentCustomer.id === myTicket.id; });
 
+      // 상담이 끝나 대기열에서 빠지면 완료 화면으로
       if (!inQueue && !isConsulting && myTicket.status === 'called') {
         showCompleteView();
         return;
       }
 
-      const idx = data.queue.findIndex(c => c.id === myTicket.id);
-      if (idx >= 0) {
-        document.getElementById('myWaitDisplay').innerText = `내 앞 대기: ${idx} 명`;
+      const idx = data.queue.findIndex(function (c) { return c.id === myTicket.id; });
+      if (idx < 0) return;
+
+      const stdMin = (data.settings && data.settings.standardMinutes) || 15;
+      const deskCount = (data.desks || []).length || 1;
+      const eta = Math.ceil(idx / deskCount) * stdMin;
+
+      document.getElementById('myWaitDisplay').innerText = idx + '명';
+      document.getElementById('myEtaDisplay').innerText = idx === 0 ? '곧 호출' : '약 ' + eta + '분';
+
+      const hint = document.getElementById('statusHint');
+      if (myTicket.status === 'called') {
+        hint.innerText = '호출되었습니다. 창구로 와주세요.';
+      } else if (idx === 0) {
+        hint.innerText = '다음 차례입니다. 창구 앞에서 대기해주세요.';
+      } else {
+        hint.innerText = '현재 ' + idx + '분이 대기 중입니다. 순서가 되면 알려드립니다.';
       }
+
+      lastPosition = idx;
+      announceTicketIfReady();
+
+      // 내 차례가 임박하면 한 번만 안내
+      if (alertsOn && idx === 0 && !announcedSoon && myTicket.status !== 'called') {
+        announcedSoon = true;
+        playAlarm();
+        enqueueSpeech('곧 고객님 차례입니다. 창구 앞에서 대기해 주세요.');
+        showNotification(bankName + ' 대기 안내', '곧 고객님 차례입니다. 창구 앞에서 대기해주세요.');
+      }
+      if (idx > 0) announcedSoon = false;
     });
 
-    socket.on('customer_called', (data) => {
-      if (data.bank !== currentBank || !myTicket) return;
-      if (data.customer.id === myTicket.id) {
-        myTicket.status = 'called';
-        const banner = document.getElementById('callBanner');
-        banner.style.display = 'block';
-        document.getElementById('deskNotice').innerText = `${data.deskName}로 와주세요.`;
-
-        setTimeout(() => {
-          enqueueSpeech(`${numToKorean(myTicket.ticketNumber)}번 고객님, ${deskToKorean(data.deskName)}로 오십시오.`);
-        }, 300);
-
-        if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 600]);
-      }
-    });
-
-    socket.on('customer_passed', (data) => {
+    socket.on('customer_called', function (data) {
       if (data.bank !== currentBank || !myTicket) return;
       if (data.customer.id !== myTicket.id) return;
-      localStorage.removeItem(`my_ticket_${currentBank}`);
+
+      myTicket.status = 'called';
+      localStorage.setItem('my_ticket_' + currentBank, JSON.stringify(myTicket));
+
+      document.getElementById('coNum').innerText = myTicket.ticketNumber + '번';
+      document.getElementById('coDesk').innerText = data.deskName;
+      document.getElementById('coNote').innerText = data.bankName + ' ' + data.deskName + '로 와주시기 바랍니다.';
+      document.getElementById('callOverlay').style.display = 'flex';
+      document.getElementById('statusHint').innerText = '호출되었습니다. 창구로 와주세요.';
+
+      playAlarm();
+      showNotification(
+        data.bankName + ' ' + myTicket.ticketNumber + '번 고객님',
+        data.deskName + '로 와주시기 바랍니다.'
+      );
+
+      // 알림음이 먼저 울린 뒤 음성 안내 (2회)
+      const msg = data.bankName + ', ' + numToKorean(myTicket.ticketNumber) + '번 고객님, ' + deskToKorean(data.deskName) + '로 오십시오.';
+      setTimeout(function () { enqueueSpeech(msg); enqueueSpeech(msg); }, 1400);
+    });
+
+    function closeOverlay() {
+      document.getElementById('callOverlay').style.display = 'none';
+    }
+
+    // 호출에 응답하지 않아 창구에서 부재 처리된 경우
+    socket.on('customer_passed', function (data) {
+      if (data.bank !== currentBank || !myTicket) return;
+      if (data.customer.id !== myTicket.id) return;
+
+      localStorage.removeItem('my_ticket_' + currentBank);
       myTicket = null;
-      document.getElementById('callBanner').style.display = 'none';
+      lastPosition = null;
+      closeOverlay();
       document.getElementById('myNumDisplay').innerText = '-';
-      document.getElementById('myWaitDisplay').innerText = '호출에 응답하지 않아 순번이 취소되었습니다.';
-      document.getElementById('reissueBtn').style.display = 'block';
+      document.getElementById('myWaitDisplay').innerText = '-';
+      document.getElementById('myEtaDisplay').innerText = '-';
+      document.getElementById('statusHint').innerText = '호출에 응답하지 않아 순번이 취소되었습니다.';
+      document.getElementById('reissueBtn').style.display = 'flex';
+      if (alertsOn) enqueueSpeech('호출에 응답이 없어 순번이 취소되었습니다. 다시 번호표를 받아 주세요.');
     });
 
     function reissueTicket() {
       document.getElementById('reissueBtn').style.display = 'none';
-      document.getElementById('myWaitDisplay').innerText = '내 앞 대기: 접수 중...';
+      document.getElementById('statusHint').innerText = '번호표를 발급하고 있습니다.';
+      announcedIssue = false;
+      announcedSoon = false;
       autoIssue();
     }
 
+    // 상담 완료 -> 다른 기관 선택 화면
     function showCompleteView() {
-      localStorage.removeItem(`my_ticket_${currentBank}`);
+      localStorage.removeItem('my_ticket_' + currentBank);
       myTicket = null;
+      lastPosition = null;
+      closeOverlay();
       document.getElementById('ticketSection').style.display = 'none';
       document.getElementById('completeSection').style.display = 'block';
-      document.getElementById('bankPill').innerText = '상담 완료';
-      document.documentElement.style.setProperty('--primary', '#0f172a');
+      document.getElementById('brandName').innerText = '상담 완료';
+      document.getElementById('brandSub').innerText = '이용해 주셔서 감사합니다';
+      if (alertsOn) enqueueSpeech('상담이 완료되었습니다. 추가 상담이 필요하시면 기관을 선택해 주세요.');
     }
 
     function renderBankSelection(bankInfo) {
       const grid = document.getElementById('bankSelectGrid');
+      if (!bankInfo) return;
       grid.innerHTML = '';
-      Object.keys(bankInfo).forEach(b => {
+      Object.keys(bankInfo).forEach(function (b) {
         const info = bankInfo[b];
         const btn = document.createElement('button');
-        btn.className = 'btn-bank-pick';
+        btn.className = 'bank-pick';
         btn.style.borderColor = info.color;
         btn.style.color = info.color;
         btn.innerText = info.name;
-        btn.onclick = () => {
-          window.location.href = `/?bank=${b}`;
-        };
+        btn.onclick = function () { window.location.href = '/?bank=' + b; };
         grid.appendChild(btn);
       });
     }
 
-    socket.on('emergency_repaired', () => {
+    socket.on('emergency_repaired', function () {
       localStorage.clear();
       window.location.reload();
+    });
+
+    // 첫 터치에도 오디오 잠금을 풀어둔다 (버튼을 못 누른 경우 대비)
+    ['click', 'touchstart'].forEach(function (ev) {
+      window.addEventListener(ev, function () {
+        keepAliveAudio.volume = 0.01;
+        keepAliveAudio.play().catch(function () {});
+      }, { once: true });
     });
   </script>
 </body>

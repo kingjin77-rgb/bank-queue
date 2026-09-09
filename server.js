@@ -4,6 +4,7 @@ const { Server } = require('socket.io');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
+const httpMod = require('http');
 
 const app = express();
 const server = http.createServer(app);
@@ -47,12 +48,22 @@ const INITIAL_DESKS = {
   ]
 };
 
+// 현장 운영 기본 설정 (관리자 콘솔에서 실시간 변경)
+const INITIAL_SETTINGS = {
+  standardMinutes: 15,   // 표준 상담 시간(분) - 예상 대기시간 계산 및 지연 경고 기준
+  repeatCount: 2,        // 호출 방송 반복 횟수
+  openHour: 9,           // 일일보고 시간대 집계 시작
+  closeHour: 18          // 일일보고 시간대 집계 종료
+};
+
 let db = {
   bankInfo: JSON.parse(JSON.stringify(INITIAL_BANKS)),
   queues: { woori: [], fubon: [], shinhan: [], kb: [] },
   desks: JSON.parse(JSON.stringify(INITIAL_DESKS)),
   ticketSequence: { woori: 0, fubon: 0, shinhan: 0, kb: 0 },
-  completedLogs: []
+  completedLogs: [],
+  passedLogs: [],
+  settings: { ...INITIAL_SETTINGS }
 };
 
 function loadBackup() {
@@ -63,6 +74,10 @@ function loadBackup() {
       if (parsed && parsed.queues) {
         db = parsed;
         db.bankInfo = JSON.parse(JSON.stringify(INITIAL_BANKS));
+        // 이전 버전 백업 호환
+        if (!Array.isArray(db.completedLogs)) db.completedLogs = [];
+        if (!Array.isArray(db.passedLogs)) db.passedLogs = [];
+        db.settings = { ...INITIAL_SETTINGS, ...(db.settings || {}) };
       }
     }
   } catch (err) {}
@@ -75,6 +90,103 @@ function saveBackup() {
   } catch (err) {}
 }
 
+// 초 단위 차이 (안전하게 0 이상)
+function secBetween(fromIso, toIso) {
+  const a = new Date(fromIso).getTime();
+  const b2 = new Date(toIso).getTime();
+  if (isNaN(a) || isNaN(b2)) return 0;
+  return Math.max(0, Math.round((b2 - a) / 1000));
+}
+
+// 현장은 한국이고 Render 서버는 UTC로 돌아가므로, 시간대별 집계는 항상 한국시간 기준으로 계산한다.
+const SEOUL_HOUR_FMT = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', hour: 'numeric', hour12: false });
+function hourInSeoul(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return -1;
+  const h = parseInt(SEOUL_HOUR_FMT.format(d), 10);
+  return isNaN(h) ? -1 : (h === 24 ? 0 : h);
+}
+
+function avg(arr) {
+  if (!arr.length) return 0;
+  return Math.round(arr.reduce((x, y) => x + y, 0) / arr.length);
+}
+
+// 일일보고 통계: 은행별 / 창구별 / 시간대별 건수, 평균 상담시간, 평균 대기시간, 부재패스
+function buildReport() {
+  const logs = db.completedLogs || [];
+  const passes = db.passedLogs || [];
+  const openHour = db.settings.openHour;
+  const closeHour = db.settings.closeHour;
+
+  const hours = [];
+  for (let h = openHour; h <= closeHour; h++) hours.push(h);
+  // 설정한 영업시간 밖에 완료된 상담도 표에서 빠지지 않도록 실제 기록 시간대를 합친다.
+  logs.forEach(l => {
+    const h = hourInSeoul(l.completedAt);
+    if (h >= 0 && !hours.includes(h)) hours.push(h);
+  });
+  hours.sort((a, b) => a - b);
+
+  const banks = Object.keys(db.bankInfo).map(b => {
+    const bankLogs = logs.filter(l => l.bank === b);
+    const bankPasses = passes.filter(l => l.bank === b);
+    const desks = (db.desks[b] || []).map(d => {
+      const deskLogs = bankLogs.filter(l => l.desk === d.desk);
+      return {
+        desk: d.desk,
+        name: d.name,
+        count: deskLogs.length,
+        avgDurationSec: avg(deskLogs.map(l => l.durationSec || 0)),
+        totalDurationSec: deskLogs.reduce((x, l) => x + (l.durationSec || 0), 0)
+      };
+    });
+
+    const hourly = hours.map(h => ({
+      hour: h,
+      count: bankLogs.filter(l => hourInSeoul(l.completedAt) === h).length
+    }));
+
+    return {
+      bank: b,
+      bankName: db.bankInfo[b].name,
+      color: db.bankInfo[b].color,
+      count: bankLogs.length,
+      passCount: bankPasses.length,
+      waitingCount: (db.queues[b] || []).filter(c => c.status === 'waiting').length,
+      deskCount: (db.desks[b] || []).length,
+      avgDurationSec: avg(bankLogs.map(l => l.durationSec || 0)),
+      maxDurationSec: bankLogs.reduce((m, l) => Math.max(m, l.durationSec || 0), 0),
+      avgWaitSec: avg(bankLogs.map(l => l.waitSec || 0)),
+      maxWaitSec: bankLogs.reduce((m, l) => Math.max(m, l.waitSec || 0), 0),
+      desks,
+      hourly
+    };
+  });
+
+  const hourlyTotal = hours.map(h => ({
+    hour: h,
+    count: logs.filter(l => hourInSeoul(l.completedAt) === h).length
+  }));
+
+  const peak = hourlyTotal.reduce((m, x) => (x.count > m.count ? x : m), { hour: openHour, count: 0 });
+
+  return {
+    generatedAt: new Date().toISOString(),
+    standardMinutes: db.settings.standardMinutes,
+    totalCount: logs.length,
+    totalPassCount: passes.length,
+    totalWaiting: Object.keys(db.queues).reduce((n, b) => n + (db.queues[b] || []).filter(c => c.status === 'waiting').length, 0),
+    avgDurationSec: avg(logs.map(l => l.durationSec || 0)),
+    avgWaitSec: avg(logs.map(l => l.waitSec || 0)),
+    peakHour: peak.count > 0 ? peak.hour : null,
+    peakCount: peak.count,
+    banks,
+    hourlyTotal,
+    logs
+  };
+}
+
 function sanitizeBank(b) {
   const bank = (b || 'kb').toLowerCase().trim();
   return db.bankInfo[bank] ? bank : 'kb';
@@ -85,9 +197,29 @@ function broadcastAll() {
     bankInfo: db.bankInfo,
     queues: db.queues,
     desks: db.desks,
-    logs: db.completedLogs
+    logs: db.completedLogs,
+    passes: db.passedLogs,
+    settings: db.settings,
+    serverTime: new Date().toISOString()
   });
   saveBackup();
+}
+
+// 설정 변경처럼 전 화면에 영향을 주는 변경은 은행별 state_update 까지 함께 보낸다.
+// (상담사앱과 고객화면은 state_update 로 동작하므로 이게 없으면 설정이 늦게 반영된다)
+function broadcastEverywhere() {
+  Object.keys(db.bankInfo).forEach((b) => {
+    io.emit('state_update', {
+      bank: b,
+      bankInfo: db.bankInfo[b],
+      queue: db.queues[b] || [],
+      desks: db.desks[b] || [],
+      settings: db.settings,
+      logs: (db.completedLogs || []).filter(l => l.bank === b),
+      serverTime: new Date().toISOString()
+    });
+  });
+  broadcastAll();
 }
 
 function broadcastBank(bank) {
@@ -96,7 +228,10 @@ function broadcastBank(bank) {
     bank: b,
     bankInfo: db.bankInfo[b],
     queue: db.queues[b] || [],
-    desks: db.desks[b] || []
+    desks: db.desks[b] || [],
+    settings: db.settings,
+    logs: (db.completedLogs || []).filter(l => l.bank === b),
+    serverTime: new Date().toISOString()
   });
   broadcastAll();
 }
@@ -108,7 +243,10 @@ io.on('connection', (socket) => {
       bank: b,
       bankInfo: db.bankInfo[b],
       queue: db.queues[b] || [],
-      desks: db.desks[b] || []
+      desks: db.desks[b] || [],
+      settings: db.settings,
+      logs: (db.completedLogs || []).filter(l => l.bank === b),
+      serverTime: new Date().toISOString()
     });
   });
 
@@ -117,7 +255,10 @@ io.on('connection', (socket) => {
       bankInfo: db.bankInfo,
       queues: db.queues,
       desks: db.desks,
-      logs: db.completedLogs
+      logs: db.completedLogs,
+      passes: db.passedLogs,
+      settings: db.settings,
+      serverTime: new Date().toISOString()
     });
   });
 
@@ -140,6 +281,15 @@ io.on('connection', (socket) => {
     };
 
     db.queues[b].push(ticket);
+
+    // 상담사 앱 접수 알림용 (자기 은행만 골라 쓰도록 bank 를 함께 보낸다)
+    io.emit('ticket_issued', {
+      bank: b,
+      bankName: db.bankInfo[b] ? db.bankInfo[b].name : b.toUpperCase(),
+      ticket,
+      waitingCount: db.queues[b].filter(c => c.status === 'waiting').length
+    });
+
     broadcastBank(b);
     if (callback) callback({ success: true, ticket });
   });
@@ -190,13 +340,19 @@ io.on('connection', (socket) => {
     if (!desk || !desk.currentCustomer) return;
 
     const completedCust = desk.currentCustomer;
+    const completedAt = new Date().toISOString();
     db.completedLogs.push({
       bank: b,
       bankName: db.bankInfo[b] ? db.bankInfo[b].name : b.toUpperCase(),
       desk: desk.desk,
       deskName: desk.name,
       ticketNumber: completedCust.ticketNumber,
-      completedAt: new Date().toISOString()
+      createdAt: completedCust.createdAt,
+      calledAt: completedCust.calledAt,
+      completedAt,
+      // 상담 소요시간(호출 -> 완료), 대기시간(발권 -> 호출)
+      durationSec: completedCust.calledAt ? secBetween(completedCust.calledAt, completedAt) : 0,
+      waitSec: completedCust.createdAt && completedCust.calledAt ? secBetween(completedCust.createdAt, completedCust.calledAt) : 0
     });
 
     db.queues[b] = (db.queues[b] || []).filter(c => c.id !== completedCust.id);
@@ -235,6 +391,15 @@ io.on('connection', (socket) => {
     if (!desk || !desk.currentCustomer) return;
 
     const passed = desk.currentCustomer;
+    if (!Array.isArray(db.passedLogs)) db.passedLogs = [];
+    db.passedLogs.push({
+      bank: b,
+      bankName: db.bankInfo[b] ? db.bankInfo[b].name : b.toUpperCase(),
+      desk: desk.desk,
+      deskName: desk.name,
+      ticketNumber: passed.ticketNumber,
+      passedAt: new Date().toISOString()
+    });
     db.queues[b] = (db.queues[b] || []).filter(c => c.id !== passed.id);
     desk.status = 'idle';
     desk.currentCustomer = null;
@@ -281,12 +446,33 @@ io.on('connection', (socket) => {
     if (!db.desks[b]) db.desks[b] = [];
     const list = db.desks[b];
 
+    let removedDesk = null;
     if (action === 'add') {
-      const nextNum = list.length + 1;
+      // 번호가 겹치지 않도록 현재 최대 번호 다음으로 만든다.
+      const nextNum = list.reduce((m, d) => Math.max(m, d.desk), 0) + 1;
       list.push({ desk: nextNum, name: `${nextNum}번 창구`, status: 'idle', currentCustomer: null });
     } else if (action === 'remove' && list.length > 1) {
+      const last = list[list.length - 1];
+      // 상담 중인 고객이 있으면 대기열 맨 앞으로 되돌린 뒤 창구를 없앤다.
+      if (last.currentCustomer) {
+        const cust = last.currentCustomer;
+        cust.status = 'waiting';
+        delete cust.desk;
+        delete cust.deskName;
+        delete cust.calledAt;
+        db.queues[b] = (db.queues[b] || []).filter(c => c.id !== cust.id);
+        db.queues[b].unshift(cust);
+      }
+      removedDesk = last.desk;
       list.pop();
     }
+
+    io.emit('desks_changed', {
+      bank: b,
+      action,
+      removedDesk,
+      desks: list.map(d => ({ desk: d.desk, name: d.name }))
+    });
     broadcastBank(b);
   });
 
@@ -305,7 +491,35 @@ io.on('connection', (socket) => {
       { desk: 1, name: '1번 창구', status: 'idle', currentCustomer: null }
     ];
     db.ticketSequence[c] = 0;
-    broadcastAll();
+    broadcastEverywhere();
+  });
+
+  // 표준 상담시간 등 현장 설정 변경
+  socket.on('admin_set_settings', (patch) => {
+    const next = { ...db.settings };
+    if (patch && patch.standardMinutes != null) {
+      const m = parseInt(patch.standardMinutes, 10);
+      if (!isNaN(m) && m >= 1 && m <= 180) next.standardMinutes = m;
+    }
+    if (patch && patch.repeatCount != null) {
+      const r = parseInt(patch.repeatCount, 10);
+      if (!isNaN(r) && r >= 1 && r <= 3) next.repeatCount = r;
+    }
+    if (patch && patch.openHour != null) {
+      const h = parseInt(patch.openHour, 10);
+      if (!isNaN(h) && h >= 0 && h <= 23) next.openHour = h;
+    }
+    if (patch && patch.closeHour != null) {
+      const h = parseInt(patch.closeHour, 10);
+      if (!isNaN(h) && h >= 0 && h <= 23) next.closeHour = h;
+    }
+    db.settings = next;
+    broadcastEverywhere();
+  });
+
+  // 마감 전에도 언제든 중간 보고서 조회
+  socket.on('admin_get_report', () => {
+    socket.emit('report_data', buildReport());
   });
 
   socket.on('admin_reset_tickets', ({ bank }) => {
@@ -321,32 +535,59 @@ io.on('connection', (socket) => {
   socket.on('admin_emergency_repair', () => {
     db.bankInfo = JSON.parse(JSON.stringify(INITIAL_BANKS));
     db.desks = JSON.parse(JSON.stringify(INITIAL_DESKS));
+    db.completedLogs = [];
+    db.passedLogs = [];
+    db.settings = { ...INITIAL_SETTINGS, ...db.settings };
     Object.keys(db.bankInfo).forEach(b => {
       db.queues[b] = [];
       db.ticketSequence[b] = 0;
     });
     io.emit('emergency_repaired');
-    broadcastAll();
+    broadcastEverywhere();
   });
 
   socket.on('admin_day_close', () => {
-    const report = {
-      closedAt: new Date().toISOString(),
-      totalCount: db.completedLogs.length,
-      logs: db.completedLogs
-    };
+    const report = buildReport();
+    report.closedAt = new Date().toISOString();
+
+    // 대기열과 창구만 비우고, 보고 통계(로그)는 유지한다.
     Object.keys(db.bankInfo).forEach(b => {
       db.queues[b] = [];
       (db.desks[b] || []).forEach(d => { d.status = 'idle'; d.currentCustomer = null; });
     });
-    broadcastAll();
+    broadcastEverywhere();
     io.emit('day_closed', report);
+  });
+
+  // 마감 보고까지 끝낸 뒤 통계를 완전히 비우는 별도 동작
+  socket.on('admin_clear_logs', () => {
+    db.completedLogs = [];
+    db.passedLogs = [];
+    broadcastEverywhere();
   });
 });
 
+// Render 무료 플랜 슬립 방지 (15분 무접속 시 서버가 잠들어 현장에서 첫 접속이 느려짐)
+const SELF_URL = process.env.SELF_URL || 'https://bank-queue.onrender.com';
 setInterval(() => {
-  https.get('https://bank-queue.onrender.com', () => {}).on('error', () => {});
+  try {
+    const client = SELF_URL.startsWith('https:') ? https : httpMod;
+    const req = client.get(SELF_URL, (res) => res.resume());
+    req.on('error', () => {});
+    req.setTimeout(15000, () => req.destroy());
+  } catch (err) {
+    // 현장 운영 중에는 어떤 경우에도 서버가 죽으면 안 된다.
+  }
 }, 10 * 60 * 1000);
+
+// 현장 운영 중 예기치 못한 오류로 서버가 내려가는 것을 막는 안전장치.
+// (상담 대기열은 메모리에 있으므로 프로세스가 죽으면 전체 현장이 멈춘다)
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err && err.stack ? err.stack : err);
+});
+process.on('unhandledRejection', (err) => {
+  console.error('[unhandledRejection]', err && err.stack ? err.stack : err);
+});
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
