@@ -12,7 +12,7 @@ const io = new Server(server, {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-// 신한은행 포함 모든 은행 데이터 완벽 정의 (1번부터 시작)
+// 은행별 대기열 및 창구 관리 객체 (국민, 우리, 신한, 푸본 완벽 지원, 1번부터 시작)
 const banks = {
   kb: { name: '국민은행', prefix: 'KB', currentNumber: 0, waiting: [], counters: {} },
   woori: { name: '우리은행', prefix: 'WOORI', currentNumber: 0, waiting: [], counters: {} },
@@ -21,12 +21,16 @@ const banks = {
 };
 
 io.on('connection', (socket) => {
+  console.log(`클라이언트 접속: ${socket.id}`);
   socket.emit('sync_state', banks);
 
   // 번호표 발권
   socket.on('issue_ticket', (data, callback) => {
     const { bank, name } = data;
-    if (!banks[bank]) return;
+    if (!banks[bank]) {
+      if (typeof callback === 'function') callback({ success: false, message: '잘못된 은행 코드입니다.' });
+      return;
+    }
 
     banks[bank].currentNumber++;
     const ticketNumber = banks[bank].currentNumber;
@@ -76,6 +80,10 @@ io.on('connection', (socket) => {
 
     delete banks[bank].counters[deskNumber];
     io.emit('sync_state', banks);
+  });
+
+  socket.on('disconnect', () => {
+    console.log(`클라이언트 해제: ${socket.id}`);
   });
 });
 

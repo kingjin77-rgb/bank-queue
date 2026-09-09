@@ -32,25 +32,18 @@
       alert('음성 시스템이 활성화되었습니다.');
     }
 
-    // "한번" 발음 오류를 완벽하게 잡은 한글 숫자 변환 함수
     function convertNumberToKorean(numStr) {
       let n = parseInt(numStr);
       if (isNaN(n)) return numStr;
       if (n === 0) return '영';
 
       const units = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
-      const teens = ['십', '십일', '십이', '십삼', '십사', '십오', '십육', '십칠', '십팔', '십구'];
-
       if (n < 10) return units[n];
-      if (n < 20) return teens[n - 10];
+      if (n < 20) return '십' + (n % 10 > 0 ? units[n % 10] : '');
       
       let ten = Math.floor(n / 10);
       let one = n % 10;
-      
-      let tenStr = (ten > 1 ? units[ten] : '') + '십';
-      let oneStr = units[one];
-      
-      return tenStr + oneStr;
+      return (ten > 1 ? units[ten] : '') + '십' + (one > 0 ? units[one] : '');
     }
 
     let speechQueue = [];
