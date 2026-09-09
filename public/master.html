@@ -29,7 +29,6 @@
     .btn-link { display: flex; justify-content: space-between; align-items: center; background: #0f172a; border: 1px solid var(--border); color: #fff; text-decoration: none; padding: 14px 18px; border-radius: 14px; font-size: 15px; font-weight: 700; }
     .btn-link:hover { border-color: var(--primary); }
 
-    /* 자동배포 폼 */
     .deploy-box { display: flex; flex-direction: column; gap: 12px; }
     .input-box { width: 100%; height: 50px; background: #0f172a; border: 1px solid var(--border); border-radius: 12px; color: #fff; padding: 0 14px; font-size: 15px; }
     .btn-auto-deploy { width: 100%; height: 60px; background: var(--accent); color: #000; font-size: 18px; font-weight: 900; border: none; border-radius: 16px; cursor: pointer; }
@@ -50,7 +49,7 @@
     </div>
 
     <div class="grid">
-      <!-- 1. 스마트폰 원터치 GitHub 자동 배포 (토큰 입력 및 배포 버튼) -->
+      <!-- 스마트폰 원터치 배포 상자 -->
       <div class="card" style="border: 2px solid var(--accent);">
         <h2 style="color: var(--accent);">🚀 스마트폰 원터치 GitHub 자동 배포</h2>
         <div class="deploy-box">
@@ -62,7 +61,7 @@
         </div>
       </div>
 
-      <!-- 2. 전체 바로가기 마스터 링크 -->
+      <!-- 전체 바로가기 링크 -->
       <div class="card">
         <h2>🔗 전체 바로가기 링크</h2>
         <div class="link-group">
@@ -79,7 +78,7 @@
         </div>
       </div>
 
-      <!-- 3. 1인 단독 가상 테스트 툴 -->
+      <!-- 1인 단독 가상 테스트 툴 -->
       <div class="card">
         <h2>🛠 1인 단독 가상 테스트 툴</h2>
         <div style="display: flex; flex-direction: column; gap: 8px;">
@@ -106,7 +105,6 @@
       logBox.innerText = `[${new Date().toLocaleTimeString()}] ${msg}\n` + logBox.innerText;
     }
 
-    // 로컬에 저장된 토큰 자동 불러오기
     const savedToken = localStorage.getItem('gh_master_token');
     if (savedToken) document.getElementById('ghToken').value = savedToken;
 
