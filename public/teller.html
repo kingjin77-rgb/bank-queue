@@ -68,7 +68,13 @@
     .btn-done { background: #191f28; color: #fff; }
     .btn-recall { background: #ffb020; color: #1a1a1a; }
     .btn-pass { background: #fff; color: var(--danger); border: 3px solid var(--danger); }
-    .btn-issue { background: #fff; color: var(--text); border: 3px solid var(--border); }
+    .btn-transfer { background: #fff; color: var(--text); border: 3px solid var(--border); }
+    .btn-undo { background: #fff; color: #7a5b00; border: 3px solid #ffe08a; }
+    .btn-away { background: #fff; color: var(--text-sub); border: 3px solid var(--border); }
+    .btn-away.on { background: #4e5968; color: #fff; border-color: #4e5968; }
+    .q-chip { cursor: pointer; }
+    .q-chip.passed { background: #ffeaec; color: var(--danger); }
+    .away-banner { background: #4e5968; color: #fff; border-radius: 18px; padding: 14px; font-size: 16px; font-weight: 900; text-align: center; margin-top: 14px; display: none; }
 
     /* ===== 대기열 ===== */
     .queue-card { background: var(--card); border-radius: 24px; padding: 20px 18px; margin-top: 16px; box-shadow: 0 4px 14px rgba(0,0,0,0.05); }
@@ -144,8 +150,15 @@
 
     <div class="btn-row">
       <button class="btn btn-mid btn-pass" onclick="passCustomer()">부재 패스</button>
-      <button class="btn btn-mid btn-issue" onclick="issueTicketHere()">🎫 대리 발권</button>
+      <button class="btn btn-mid btn-transfer" onclick="openTransfer()">창구 전달</button>
     </div>
+
+    <div class="btn-row">
+      <button class="btn btn-mid btn-undo" onclick="undoComplete()">↩️ 실수 취소</button>
+      <button class="btn btn-mid btn-away" id="awayBtn" onclick="toggleAway()">☕ 자리 비움</button>
+    </div>
+
+    <div class="away-banner" id="awayBanner">☕ 자리 비움 중입니다. 호출을 누르면 자동으로 복귀합니다.</div>
 
     <div class="audio-warn" id="audioWarn" onclick="unlockAudio(true)">
       🔊 음성 안내가 꺼져 있습니다. 여기를 눌러 켜주세요.
@@ -156,8 +169,22 @@
         <span>실시간 대기열</span>
         <span id="queueCount" style="color: var(--brand);">대기 0명</span>
       </div>
+      <div style="font-size: 13px; color: var(--text-sub); font-weight: 700; margin-top: 6px;">
+        번호를 누르면 그 손님을 바로 호출합니다.
+      </div>
       <div class="queue-list" id="queueList"></div>
       <div id="issueLog" style="font-size: 14px; color: var(--text-sub); font-weight: 700; text-align: center; margin-top: 6px;"></div>
+    </div>
+
+    <div class="queue-card" id="passedCard" style="display: none;">
+      <div class="queue-head">
+        <span>부재 처리한 손님</span>
+        <span id="passedCount" style="color: var(--danger);">0명</span>
+      </div>
+      <div style="font-size: 13px; color: var(--text-sub); font-weight: 700; margin-top: 6px;">
+        다시 오시면 번호를 눌러 대기열 맨 앞으로 되돌립니다.
+      </div>
+      <div class="queue-list" id="passedList"></div>
     </div>
   </main>
 
@@ -176,6 +203,15 @@
       <p id="sheetDesc">선택한 창구는 새로고침을 해도 그대로 유지됩니다.</p>
       <div class="desk-options" id="deskOptions"></div>
       <button class="btn-cancel" id="sheetCancel" onclick="closeDeskSheet()">취소</button>
+    </div>
+  </div>
+
+  <div class="modal" id="transferModal">
+    <div class="sheet">
+      <h2>창구 전달</h2>
+      <p>지금 상담 중인 손님을 다른 창구로 넘깁니다.</p>
+      <div class="desk-options" id="transferOptions"></div>
+      <button class="btn-cancel" onclick="closeTransfer()">취소</button>
     </div>
   </div>
 
@@ -441,9 +477,10 @@
       document.getElementById('queueCount').innerText = '대기 ' + waiting.length + '명';
       document.getElementById('myDoneCount').innerText =
         logs.filter(function (l) { return l.desk === myDesk; }).length + '건';
-      const deskCount = allDesks.length || 1;
+      // 자리 비운 창구는 예상 대기시간 계산에서 뺀다
+      const activeDesks = allDesks.filter(function (d) { return !d.away; }).length || 1;
       document.getElementById('estWait').innerText = waiting.length > 0
-        ? Math.ceil(waiting.length / deskCount) * standardMinutes + '분' : '없음';
+        ? Math.ceil(waiting.length / activeDesks) * standardMinutes + '분' : '없음';
 
       // 대기열 목록
       const qBox = document.getElementById('queueList');
@@ -455,13 +492,33 @@
           const chip = document.createElement('div');
           chip.className = 'q-chip' + (i === 0 ? ' first' : '');
           chip.innerText = c.ticketNumber + '번';
+          chip.onclick = function () { callSpecific(c.id, c.ticketNumber); };
           qBox.appendChild(chip);
+        });
+      }
+
+      // 부재 처리한 손님 목록 (다시 오시면 되돌릴 수 있게)
+      const passedList = (data.passed || []).slice(-8).reverse();
+      const pCard = document.getElementById('passedCard');
+      const pBox = document.getElementById('passedList');
+      if (passedList.length === 0) {
+        pCard.style.display = 'none';
+      } else {
+        pCard.style.display = 'block';
+        document.getElementById('passedCount').innerText = passedList.length + '명';
+        pBox.innerHTML = '';
+        passedList.forEach(function (l) {
+          const chip = document.createElement('div');
+          chip.className = 'q-chip passed';
+          chip.innerText = l.ticketNumber + '번';
+          chip.onclick = function () { restorePassed(l.ticketNumber); };
+          pBox.appendChild(chip);
         });
       }
 
       // 내 창구 상태
       const mine = allDesks.find(function (d) { return d.desk === myDesk; });
-      if (mine) renderDesk(mine);
+      if (mine) { renderDesk(mine); renderAway(mine.away); }
     });
 
     function renderDesk(d) {
@@ -554,16 +611,84 @@
       }
     }
 
-    function issueTicketHere() {
-      if (!bankValid) { document.getElementById('bankErrorModal').classList.add('show'); return; }
+    function showInfo(msg) {
+      document.getElementById('issueLog').innerText = msg + ' · ' + new Date().toLocaleTimeString('ko-KR');
+    }
+
+    // 지정 호출: 대기열에서 특정 손님을 바로 부른다
+    function callSpecific(customerId, ticketNumber) {
+      if (!requireDesk()) return;
       unlockAudio(false);
-      socket.emit('issue_ticket', { bank: bank, name: '창구발권' }, function (res) {
-        if (res && res.success) {
-          document.getElementById('issueLog').innerText =
-            '[발권 완료] ' + res.ticket.ticketNumber + '번 · ' + new Date().toLocaleTimeString('ko-KR');
-        } else {
-          alert('발권 실패: ' + (res && res.message ? res.message : '알 수 없는 오류'));
-        }
+      socket.emit('call_customer', { bank: bank, deskNumber: myDesk, customerId: customerId });
+      showInfo(ticketNumber + '번 손님 호출');
+    }
+
+    // 상담 완료를 잘못 눌렀을 때 되돌리기
+    function undoComplete() {
+      if (!requireDesk()) return;
+      socket.emit('undo_complete', { bank: bank, deskNumber: myDesk }, function (res) {
+        if (res && res.success) showInfo(res.ticketNumber + '번 손님 되돌림');
+        else alert(res && res.message ? res.message : '되돌릴 수 없습니다.');
+      });
+    }
+
+    // 부재 처리했던 손님 되살리기
+    function restorePassed(ticketNumber) {
+      if (!requireDesk()) return;
+      socket.emit('restore_passed', { bank: bank, ticketNumber: ticketNumber }, function (res) {
+        if (res && res.success) showInfo(res.ticketNumber + '번 손님 대기열 복귀');
+        else alert(res && res.message ? res.message : '되돌릴 수 없습니다.');
+      });
+    }
+
+    // 자리 비움 / 복귀
+    var isAway = false;
+    function toggleAway() {
+      if (!requireDesk()) return;
+      if (!isAway && currentCalledAt) {
+        alert('상담 중에는 자리를 비울 수 없습니다.\n상담을 완료한 뒤 눌러주세요.');
+        return;
+      }
+      socket.emit('set_desk_away', { bank: bank, deskNumber: myDesk, away: !isAway });
+    }
+    function renderAway(away) {
+      isAway = !!away;
+      var btn = document.getElementById('awayBtn');
+      btn.className = 'btn btn-mid btn-away' + (isAway ? ' on' : '');
+      btn.innerText = isAway ? '↩️ 자리 복귀' : '☕ 자리 비움';
+      document.getElementById('awayBanner').style.display = isAway ? 'block' : 'none';
+    }
+
+    // 창구 전달
+    function openTransfer() {
+      if (!requireDesk()) return;
+      if (!currentCalledAt) { alert('지금 상담 중인 손님이 없습니다.'); return; }
+      renderTransferOptions();
+      document.getElementById('transferModal').classList.add('show');
+    }
+    function closeTransfer() {
+      document.getElementById('transferModal').classList.remove('show');
+    }
+    function renderTransferOptions() {
+      var box = document.getElementById('transferOptions');
+      box.innerHTML = '';
+      var targets = allDesks.filter(function (d) { return d.desk !== myDesk; });
+      if (targets.length === 0) {
+        box.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#8b95a1;font-weight:800;">전달할 다른 창구가 없습니다.</div>';
+        return;
+      }
+      targets.forEach(function (d) {
+        var busy = d.status === 'consulting' && d.currentCustomer;
+        var btn = document.createElement('button');
+        btn.className = 'desk-opt' + (busy ? ' busy' : '');
+        btn.innerHTML = '<span>' + d.name + '</span><span class="d-sub">' +
+          (d.away ? '자리 비움' : (busy ? d.currentCustomer.ticketNumber + '번 상담 중' : '비어 있음')) + '</span>';
+        btn.onclick = function () {
+          socket.emit('transfer_customer', { bank: bank, fromDesk: myDesk, toDesk: d.desk });
+          closeTransfer();
+          showInfo(d.name + '으로 전달');
+        };
+        box.appendChild(btn);
       });
     }
 

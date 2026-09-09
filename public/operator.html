@@ -125,7 +125,30 @@
         requestAnimationFrame(loop);
       })();
     }
-    if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(function () {});
+
+
+    // ===== 화면 꺼짐 / 서버 절전 방지 =====
+    // 현장에서 계속 띄워두는 화면이므로 잠금을 계속 붙잡고, 서버도 깨워둔다.
+    var wakeLockRef = null;
+    function keepScreenAwake() {
+      if (!('wakeLock' in navigator)) return;
+      navigator.wakeLock.request('screen').then(function (lock) {
+        wakeLockRef = lock;
+      }).catch(function () {});
+    }
+    keepScreenAwake();
+    setInterval(function () {
+      if (!document.hidden && (!wakeLockRef || wakeLockRef.released)) keepScreenAwake();
+    }, 30000);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) keepScreenAwake();
+    });
+
+    function pingServer() {
+      fetch('/healthz', { cache: 'no-store' }).catch(function () {});
+    }
+    pingServer();
+    setInterval(pingServer, 4 * 60 * 1000);
 
     socket.on('connect', function () { socket.emit('get_all_state'); });
 

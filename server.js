@@ -20,6 +20,11 @@ app.get(['/kiosk', '/kiosk.html'], (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// 관리 화면이 열려 있는 동안 서버가 절전으로 내려가지 않도록 하는 확인용 주소
+app.get('/healthz', (req, res) => {
+  res.json({ ok: true, time: new Date().toISOString(), uptimeSec: Math.round(process.uptime()) });
+});
+
 // ===== 홈 화면 앱 설치용 매니페스트 =====
 // 역할과 은행에 따라 앱 이름/아이콘/시작주소가 달라지므로 서버에서 만들어 준다.
 const ROLE_MANIFEST = {
@@ -199,6 +204,7 @@ function buildReport() {
       passCount: bankPasses.length,
       waitingCount: (db.queues[b] || []).filter(c => c.status === 'waiting').length,
       deskCount: (db.desks[b] || []).length,
+      activeDeskCount: activeDeskCount(b),
       avgDurationSec: avg(bankLogs.map(l => l.durationSec || 0)),
       maxDurationSec: bankLogs.reduce((m, l) => Math.max(m, l.durationSec || 0), 0),
       avgWaitSec: avg(bankLogs.map(l => l.waitSec || 0)),
@@ -233,6 +239,11 @@ function buildReport() {
   };
 }
 
+// 자리를 비우지 않고 실제로 응대 가능한 창구 수 (예상 대기시간 계산 기준)
+function activeDeskCount(b) {
+  return (db.desks[b] || []).filter(d => !d.away).length;
+}
+
 function sanitizeBank(b) {
   const bank = (b || 'kb').toLowerCase().trim();
   return db.bankInfo[bank] ? bank : 'kb';
@@ -262,6 +273,7 @@ function broadcastEverywhere() {
       desks: db.desks[b] || [],
       settings: db.settings,
       logs: (db.completedLogs || []).filter(l => l.bank === b),
+      passed: (db.passedLogs || []).filter(l => l.bank === b),
       serverTime: new Date().toISOString()
     });
   });
@@ -277,6 +289,7 @@ function broadcastBank(bank) {
     desks: db.desks[b] || [],
     settings: db.settings,
     logs: (db.completedLogs || []).filter(l => l.bank === b),
+    passed: (db.passedLogs || []).filter(l => l.bank === b),
     serverTime: new Date().toISOString()
   });
   broadcastAll();
@@ -292,6 +305,7 @@ io.on('connection', (socket) => {
       desks: db.desks[b] || [],
       settings: db.settings,
       logs: (db.completedLogs || []).filter(l => l.bank === b),
+      passed: (db.passedLogs || []).filter(l => l.bank === b),
       serverTime: new Date().toISOString()
     });
   });
@@ -354,6 +368,7 @@ io.on('connection', (socket) => {
     target.calledAt = new Date().toISOString();
 
     desk.status = 'consulting';
+    desk.away = false;
     desk.currentCustomer = target;
 
     io.emit('customer_called', {
@@ -398,7 +413,8 @@ io.on('connection', (socket) => {
       completedAt,
       // 상담 소요시간(호출 -> 완료), 대기시간(발권 -> 호출)
       durationSec: completedCust.calledAt ? secBetween(completedCust.calledAt, completedAt) : 0,
-      waitSec: completedCust.createdAt && completedCust.calledAt ? secBetween(completedCust.createdAt, completedCust.calledAt) : 0
+      waitSec: completedCust.createdAt && completedCust.calledAt ? secBetween(completedCust.createdAt, completedCust.calledAt) : 0,
+      customer: JSON.parse(JSON.stringify(completedCust))   // 실수로 완료했을 때 되돌리기 위해 보관
     });
 
     db.queues[b] = (db.queues[b] || []).filter(c => c.id !== completedCust.id);
@@ -444,7 +460,8 @@ io.on('connection', (socket) => {
       desk: desk.desk,
       deskName: desk.name,
       ticketNumber: passed.ticketNumber,
-      passedAt: new Date().toISOString()
+      passedAt: new Date().toISOString(),
+      customer: JSON.parse(JSON.stringify(passed))          // 손님이 다시 오면 되살리기 위해 보관
     });
     db.queues[b] = (db.queues[b] || []).filter(c => c.id !== passed.id);
     desk.status = 'idle';
@@ -458,6 +475,90 @@ io.on('connection', (socket) => {
       customer: passed
     });
     broadcastBank(b);
+  });
+
+  // 자리 비움 / 복귀. 비운 창구는 예상 대기시간 계산에서 빠진다.
+  socket.on('set_desk_away', ({ bank, deskNumber, away }) => {
+    const b = sanitizeBank(bank);
+    const desk = (db.desks[b] || []).find(d => d.desk === parseInt(deskNumber));
+    if (!desk) return;
+    // 상담 중에는 자리를 비울 수 없다.
+    if (away && desk.currentCustomer) return;
+    desk.away = !!away;
+    broadcastBank(b);
+  });
+
+  // 상담 완료를 잘못 눌렀을 때 되돌리기 (기본 5분 이내)
+  socket.on('undo_complete', ({ bank, deskNumber }, callback) => {
+    const b = sanitizeBank(bank);
+    const desk = (db.desks[b] || []).find(d => d.desk === parseInt(deskNumber));
+    const done = (typeof callback === 'function') ? callback : () => {};
+    if (!desk) return done({ success: false, message: '창구를 찾을 수 없습니다.' });
+
+    // 이 창구에서 가장 최근에 완료된 건 찾기
+    let idx = -1;
+    for (let i = db.completedLogs.length - 1; i >= 0; i--) {
+      const l = db.completedLogs[i];
+      if (l.bank === b && l.desk === desk.desk) { idx = i; break; }
+    }
+    if (idx < 0) return done({ success: false, message: '되돌릴 완료 내역이 없습니다.' });
+
+    const log = db.completedLogs[idx];
+    if (!log.customer) return done({ success: false, message: '되돌릴 수 없는 내역입니다.' });
+    if (secBetween(log.completedAt, new Date().toISOString()) > 300) {
+      return done({ success: false, message: '완료한 지 5분이 지나 되돌릴 수 없습니다.' });
+    }
+
+    // 완료 후 자동으로 다음 고객을 부른 상태라면 그 고객을 대기열 맨 앞으로 돌려놓는다.
+    if (desk.currentCustomer) {
+      const cur = desk.currentCustomer;
+      cur.status = 'waiting';
+      delete cur.desk; delete cur.deskName; delete cur.calledAt;
+      db.queues[b] = (db.queues[b] || []).filter(c => c.id !== cur.id);
+      db.queues[b].unshift(cur);
+    }
+
+    const restored = log.customer;
+    restored.status = 'called';
+    restored.desk = desk.desk;
+    restored.deskName = desk.name;
+
+    db.queues[b] = (db.queues[b] || []).filter(c => c.id !== restored.id);
+    db.queues[b].unshift(restored);
+    desk.status = 'consulting';
+    desk.away = false;
+    desk.currentCustomer = restored;
+
+    db.completedLogs.splice(idx, 1);
+    broadcastBank(b);
+    done({ success: true, ticketNumber: restored.ticketNumber });
+  });
+
+  // 부재 처리했던 손님이 다시 왔을 때 대기열 맨 앞으로 되살리기
+  socket.on('restore_passed', ({ bank, ticketNumber }, callback) => {
+    const b = sanitizeBank(bank);
+    const done = (typeof callback === 'function') ? callback : () => {};
+
+    let idx = -1;
+    for (let i = db.passedLogs.length - 1; i >= 0; i--) {
+      const l = db.passedLogs[i];
+      if (l.bank === b && l.ticketNumber === parseInt(ticketNumber)) { idx = i; break; }
+    }
+    if (idx < 0) return done({ success: false, message: '부재 내역을 찾을 수 없습니다.' });
+
+    const log = db.passedLogs[idx];
+    if (!log.customer) return done({ success: false, message: '되살릴 수 없는 내역입니다.' });
+
+    const cust = log.customer;
+    cust.status = 'waiting';
+    delete cust.desk; delete cust.deskName; delete cust.calledAt;
+
+    db.queues[b] = (db.queues[b] || []).filter(c => c.id !== cust.id);
+    db.queues[b].unshift(cust);   // 기다리셨던 분이므로 맨 앞으로
+    db.passedLogs.splice(idx, 1);
+
+    broadcastBank(b);
+    done({ success: true, ticketNumber: cust.ticketNumber });
   });
 
   socket.on('transfer_customer', ({ bank, fromDesk, toDesk }) => {
@@ -496,7 +597,7 @@ io.on('connection', (socket) => {
     if (action === 'add') {
       // 번호가 겹치지 않도록 현재 최대 번호 다음으로 만든다.
       const nextNum = list.reduce((m, d) => Math.max(m, d.desk), 0) + 1;
-      list.push({ desk: nextNum, name: `${nextNum}번 창구`, status: 'idle', currentCustomer: null });
+      list.push({ desk: nextNum, name: `${nextNum}번 창구`, status: 'idle', currentCustomer: null, away: false });
     } else if (action === 'remove' && list.length > 1) {
       const last = list[list.length - 1];
       // 상담 중인 고객이 있으면 대기열 맨 앞으로 되돌린 뒤 창구를 없앤다.
