@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>김사무장 전용 마스터 콘솔</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --primary: #38bdf8;
+      --accent: #22c55e;
+      --danger: #ef4444;
+      --text: #f8fafc;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: clamp(12px, 3vw, 24px); }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    .head { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border); padding-bottom: 16px; margin-bottom: 24px; flex-wrap: wrap; gap: 10px; }
+    .badge-master { background: #e11d48; color: #fff; font-size: 13px; font-weight: 900; padding: 4px 12px; border-radius: 20px; }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+    .card { background: var(--card); border-radius: 24px; padding: 24px; border: 1px solid var(--border); box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+    h2 { font-size: 20px; font-weight: 800; margin-bottom: 16px; color: var(--primary); }
+
+    .link-group { display: flex; flex-direction: column; gap: 8px; }
+    .btn-link { display: flex; justify-content: space-between; align-items: center; background: #0f172a; border: 1px solid var(--border); color: #fff; text-decoration: none; padding: 14px 18px; border-radius: 14px; font-size: 15px; font-weight: 700; }
+    .btn-link:hover { border-color: var(--primary); }
+
+    /* 자동배포 폼 */
+    .deploy-box { display: flex; flex-direction: column; gap: 12px; }
+    .input-box { width: 100%; height: 50px; background: #0f172a; border: 1px solid var(--border); border-radius: 12px; color: #fff; padding: 0 14px; font-size: 15px; }
+    .btn-auto-deploy { width: 100%; height: 60px; background: var(--accent); color: #000; font-size: 18px; font-weight: 900; border: none; border-radius: 16px; cursor: pointer; }
+    .btn-auto-deploy:active { transform: scale(0.98); }
+
+    .live-monitor { font-family: monospace; font-size: 13px; color: #94a3b8; background: #020617; padding: 16px; border-radius: 14px; height: 160px; overflow-y: auto; white-space: pre-wrap; margin-top: 10px; }
+  </style>
+</head>
+<body>
+
+  <div class="wrap">
+    <div class="head">
+      <div>
+        <span class="badge-master">김사무장 전용 MASTER KEY</span>
+        <h1 style="font-size: 28px; font-weight: 900; margin-top: 6px;">현장 통합 마스터 컨트롤러</h1>
+      </div>
+      <div id="connStatus" style="color: var(--accent); font-weight: 800;">● 실시간 정상 연결</div>
+    </div>
+
+    <div class="grid">
+      <!-- 1. 스마트폰 원터치 GitHub 자동 배포 (토큰 입력 및 배포 버튼) -->
+      <div class="card" style="border: 2px solid var(--accent);">
+        <h2 style="color: var(--accent);">🚀 스마트폰 원터치 GitHub 자동 배포</h2>
+        <div class="deploy-box">
+          <input type="password" id="ghToken" class="input-box" placeholder="GitHub 토큰 (ghp_... 복사한 키 붙여넣기)">
+          <button class="btn-auto-deploy" onclick="triggerAutoDeploy()">⚡ 원클릭 실시간 GitHub 배포</button>
+          <div style="font-size: 12px; color: #94a3b8; line-height: 1.5;">
+            ※ 복사한 토큰을 넣고 이 버튼을 누르면 브라우저에 자동 기억되며 즉시 실서버 배포가 실행됩니다.
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. 전체 바로가기 마스터 링크 -->
+      <div class="card">
+        <h2>🔗 전체 바로가기 링크</h2>
+        <div class="link-group">
+          <a href="/admin.html" target="_blank" class="btn-link"><span>현장 총괄 관리자 (스피커/창구)</span> <span>열기 ↗</span></a>
+          <a href="/woori_leader.html" target="_blank" class="btn-link"><span>우리은행 팀장 원격관제</span> <span>열기 ↗</span></a>
+          <a href="/display.html" target="_blank" class="btn-link"><span>현장 종합 전광판 (TV용)</span> <span>열기 ↗</span></a>
+          <div style="margin-top: 4px; font-size: 13px; color: #64748b; font-weight: 700;">상담사 창구:</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+            <a href="/teller.html?bank=kb" target="_blank" class="btn-link" style="font-size: 13px; padding: 10px;">국민 창구</a>
+            <a href="/teller.html?bank=woori" target="_blank" class="btn-link" style="font-size: 13px; padding: 10px;">우리 창구</a>
+            <a href="/teller.html?bank=shinhan" target="_blank" class="btn-link" style="font-size: 13px; padding: 10px;">신한 창구</a>
+            <a href="/teller.html?bank=fubon" target="_blank" class="btn-link" style="font-size: 13px; padding: 10px;">푸본 창구</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. 1인 단독 가상 테스트 툴 -->
+      <div class="card">
+        <h2>🛠 1인 단독 가상 테스트 툴</h2>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <select id="testBank" style="height: 48px; border-radius: 12px; background:#0f172a; color:#fff; border:1px solid var(--border); font-size:15px; padding:0 10px;">
+            <option value="kb">국민은행 테스트</option>
+            <option value="woori">우리은행 테스트</option>
+            <option value="shinhan">신한은행 테스트</option>
+            <option value="fubon">푸본현대 테스트</option>
+          </select>
+          <button style="height: 44px; background: var(--primary); color: #000; border:none; border-radius:12px; font-weight:800; cursor:pointer;" onclick="testIssue()">1. 가상 번호표 발권</button>
+          <button style="height: 44px; background: var(--accent); color: #000; border:none; border-radius:12px; font-weight:800; cursor:pointer;" onclick="testCall()">2. 1번 창구 호출 (스피커 테스트)</button>
+          <button style="height: 44px; background: #334155; color: #fff; border:none; border-radius:12px; font-weight:800; cursor:pointer;" onclick="testComplete()">3. 상담 완료 처리</button>
+        </div>
+        <div class="live-monitor" id="logBox">마스터 콘솔 대기 중...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const socket = io({ transports: ['websocket', 'polling'] });
+    const logBox = document.getElementById('logBox');
+
+    function addLog(msg) {
+      logBox.innerText = `[${new Date().toLocaleTimeString()}] ${msg}\n` + logBox.innerText;
+    }
+
+    // 로컬에 저장된 토큰 자동 불러오기
+    const savedToken = localStorage.getItem('gh_master_token');
+    if (savedToken) document.getElementById('ghToken').value = savedToken;
+
+    async function triggerAutoDeploy() {
+      const token = document.getElementById('ghToken').value.trim();
+      if (!token) return alert('GitHub 토큰(ghp_...)을 입력해주세요!');
+      localStorage.setItem('gh_master_token', token);
+
+      addLog('🚀 GitHub에 자동 배포 트리거 전송 중...');
+
+      try {
+        const repo = 'kingjin77-rgb/bank-queue';
+        const res = await fetch(`https://api.github.com/repos/${repo}/dispatches`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            event_type: 'mobile_deploy_trigger',
+            client_payload: { timestamp: new Date().toISOString() }
+          })
+        });
+
+        if (res.status === 204 || res.ok) {
+          addLog('✅ GitHub 신호 전송 성공! Render가 자동 재빌드를 시작합니다.');
+          alert('GitHub 배포 신호 전송 완료!\nRender 실서버가 20초 안에 자동 업데이트됩니다.');
+        } else {
+          addLog(`신호 전송 응답: ${res.status}`);
+          alert('신호가 전송되었습니다. Render 로그를 확인하세요.');
+        }
+      } catch (err) {
+        addLog(`❌ 오류 발생: ${err.message}`);
+        alert('배포 중 오류: ' + err.message);
+      }
+    }
+
+    socket.on('connect', () => {
+      addLog('서버와 실시간 소켓 연결됨');
+    });
+
+    socket.on('customer_called', (data) => {
+      addLog(`[호출 발생] ${data.bankName} ${data.customer.ticketNumber}번 -> ${data.deskName}`);
+    });
+
+    function testIssue() {
+      const bank = document.getElementById('testBank').value;
+      socket.emit('issue_ticket', { bank, name: '테스트고객' }, (res) => {
+        if (res && res.success) addLog(`[가상발권] ${bank} ${res.ticket.ticketNumber}번 발권됨`);
+      });
+    }
+
+    function testCall() {
+      const bank = document.getElementById('testBank').value;
+      socket.emit('call_customer', { bank, deskNumber: 1 });
+      addLog(`[가상호출] ${bank} 1번 창구 호출 신호`);
+    }
+
+    function testComplete() {
+      const bank = document.getElementById('testBank').value;
+      socket.emit('complete_consultation', { bank, deskNumber: 1, autoCall: false });
+      addLog(`[가상완료] ${bank} 1번 창구 상담 완료`);
+    }
+  </script>
+</body>
+</html>

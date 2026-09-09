@@ -16,11 +16,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const BACKUP_FILE = path.join(__dirname, 'queue_db_backup.json');
 
+// 푸본현대생명 공식 그린(#00A88F) 적용
 const INITIAL_BANKS = {
   kb: { name: '국민은행', color: '#ffbc00', sub: '#fff9e6', btnText: '#2b2b2b' },
   shinhan: { name: '신한은행', color: '#0046ff', sub: '#e8f0fe', btnText: '#ffffff' },
   woori: { name: '우리은행', color: '#0067ac', sub: '#e6f3fa', btnText: '#ffffff' },
-  fubon: { name: '푸본현대생명', color: '#e83828', sub: '#fdeeed', btnText: '#ffffff' }
+  fubon: { name: '푸본현대생명', color: '#00A88F', sub: '#e6f7f4', btnText: '#ffffff' }
 };
 
 const INITIAL_DESKS = {
@@ -56,7 +57,7 @@ function loadBackup() {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.queues) {
         db = parsed;
-        if (!db.bankInfo) db.bankInfo = JSON.parse(JSON.stringify(INITIAL_BANKS));
+        db.bankInfo = JSON.parse(JSON.stringify(INITIAL_BANKS));
       }
     }
   } catch (err) {}
@@ -269,7 +270,7 @@ io.on('connection', (socket) => {
 
     db.bankInfo[c] = {
       name: name.trim() || c.toUpperCase(),
-      color: color || '#3182f6',
+      color: color || '#38bdf8',
       sub: '#f2f4f6',
       btnText: '#ffffff'
     };

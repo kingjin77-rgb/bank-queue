@@ -3,44 +3,97 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>우리은행 팀장 현장 지휘 콘솔</title>
+  <title>우리은행 원격 현황 관제 콘솔</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    :root { --primary: #0067ac; --bg: #f0f4f8; --card: #ffffff; --border: #d0d7de; --text: #1f2328; }
+    :root {
+      --primary: #0067ac;
+      --bg: #f2f4f6;
+      --card: #ffffff;
+      --text: #191f28;
+      --text-sub: #8b95a1;
+      --border: #e5e8eb;
+      --success: #04b071;
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif; }
     body { background: var(--bg); color: var(--text); padding: 20px; }
-    .wrap { max-width: 800px; margin: 0 auto; }
-    .card { background: var(--card); border-radius: 20px; padding: 24px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; border-top: 6px solid var(--primary); }
-    h2 { font-size: 20px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
-    
-    .desk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
-    .desk-box { background: #f8fafc; border: 1px solid var(--border); border-radius: 16px; padding: 16px; text-align: center; }
-    .desk-num { font-size: 36px; font-weight: 900; color: var(--primary); margin: 6px 0; }
+    .wrap { max-width: 900px; margin: 0 auto; }
 
-    .ctrl-row { display: flex; gap: 10px; align-items: center; margin-top: 14px; }
-    .btn-ctrl { padding: 12px 20px; border-radius: 12px; font-size: 15px; font-weight: 800; border: none; cursor: pointer; background: var(--primary); color: #fff; }
-    
-    .queue-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-    .queue-item { display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border: 1px solid var(--border); padding: 12px 18px; border-radius: 12px; }
-    .btn-assign { background: #1f2328; color: #fff; border: none; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .title { font-size: 26px; font-weight: 900; color: var(--primary); }
+
+    /* 토스형 초대형 지표 카드 */
+    .hero-card { background: var(--card); border-radius: 28px; padding: 30px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); margin-bottom: 20px; border-top: 8px solid var(--primary); }
+    .hero-label { font-size: 16px; font-weight: 700; color: var(--text-sub); }
+    .hero-val { font-size: 72px; font-weight: 900; color: var(--primary); letter-spacing: -2px; margin: 10px 0; }
+
+    .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+    .sub-stat { background: #f9fafb; padding: 18px; border-radius: 18px; border: 1px solid var(--border); }
+    .sub-stat .num { font-size: 32px; font-weight: 900; color: var(--text); margin-top: 6px; }
+
+    .card { background: var(--card); border-radius: 28px; padding: 26px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); margin-bottom: 20px; }
+    h2 { font-size: 20px; font-weight: 800; margin-bottom: 16px; }
+
+    /* 창구별 현황 */
+    .desk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+    .desk-card { background: #f9fafb; border: 2px solid var(--border); border-radius: 20px; padding: 20px; text-align: center; }
+    .desk-title { font-size: 16px; font-weight: 800; color: var(--text-sub); }
+    .desk-stat { font-size: 40px; font-weight: 900; color: var(--primary); margin: 8px 0; }
+
+    /* 시간대별 완료 추이 */
+    .timeline-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 10px; }
+    .time-slot { background: #f9fafb; border: 1px solid var(--border); border-radius: 14px; padding: 12px; text-align: center; }
+    .time-hour { font-size: 13px; font-weight: 700; color: var(--text-sub); }
+    .time-count { font-size: 22px; font-weight: 900; color: var(--primary); margin-top: 4px; }
+
+    /* 실시간 대기 명단 */
+    .queue-chip-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .queue-pill { background: #e6f3fa; color: var(--primary); font-size: 16px; font-weight: 800; padding: 10px 18px; border-radius: 14px; border: 1px solid #cce3ff; }
   </style>
 </head>
 <body>
 
   <div class="wrap">
-    <div class="card">
-      <h2>우리은행 창구 실시간 지휘 본부 <span style="font-size: 13px; color: var(--primary);">팀장 전용 모드</span></h2>
-      <div class="desk-grid" id="deskGrid"></div>
-      <div class="ctrl-row">
-        <span style="font-weight: 700;">창구 실시간 조절:</span>
-        <button class="btn-ctrl" onclick="modDesk('remove')">- 창구 축소</button>
-        <button class="btn-ctrl" onclick="modDesk('add')">+ 창구 즉시 증설</button>
+    <div class="header">
+      <div>
+        <div style="font-size: 13px; font-weight: 800; color: var(--primary);">원격 현황 모니터링</div>
+        <div class="title">우리은행 상담 관제 본부</div>
+      </div>
+      <div style="font-size: 14px; font-weight: 800; color: var(--success);">● 원격 실시간 집계 중</div>
+    </div>
+
+    <!-- 1. 토스 스타일 총 상담 실적 -->
+    <div class="hero-card">
+      <div class="hero-label">오늘 우리은행 총 누적 상담 완료</div>
+      <div class="hero-val" id="totalCompleted">0<span style="font-size: 32px; font-weight: 700;">건</span></div>
+      <div class="stats-row">
+        <div class="sub-stat">
+          <div style="font-size: 14px; font-weight: 700; color: var(--text-sub);">현재 실시간 대기인원</div>
+          <div class="num" id="currentWait" style="color: #ef4444;">0명</div>
+        </div>
+        <div class="sub-stat">
+          <div style="font-size: 14px; font-weight: 700; color: var(--text-sub);">운영 중인 창구 수</div>
+          <div class="num" id="activeDesks">0개</div>
+        </div>
       </div>
     </div>
 
+    <!-- 2. 각 창구별 완료 건수 및 현재 상태 -->
     <div class="card">
-      <h2>실시간 고객 대기 명단 <span id="queueTotal">0명 대기</span></h2>
-      <div class="queue-list" id="queueList"></div>
+      <h2>창구별 상담 실적 및 현재 상황</h2>
+      <div class="desk-grid" id="deskGrid"></div>
+    </div>
+
+    <!-- 3. 시간대별 상담 완료 추이 -->
+    <div class="card">
+      <h2>시간대별 상담 완료 건수 (1시간 단위)</h2>
+      <div class="timeline-grid" id="timelineGrid"></div>
+    </div>
+
+    <!-- 4. 실시간 대기열 -->
+    <div class="card">
+      <h2>실시간 대기 고객 순번 명단</h2>
+      <div class="queue-chip-list" id="queueList"></div>
     </div>
   </div>
 
@@ -49,70 +102,80 @@
     const bank = 'woori';
 
     socket.on('connect', () => {
-      socket.emit('get_state', { bank });
+      socket.emit('get_all_state');
     });
 
-    socket.on('state_update', (data) => {
-      if (data.bank !== bank) return;
-      renderDesks(data.desks);
-      renderQueue(data.queue, data.desks);
-    });
+    socket.on('all_state_update', (data) => {
+      const q = data.queues[bank] || [];
+      const desks = data.desks[bank] || [];
+      const logs = (data.logs || []).filter(l => l.bank === bank);
 
-    function renderDesks(desks) {
-      const box = document.getElementById('deskGrid');
-      box.innerHTML = '';
+      // 1. 총괄 지표
+      document.getElementById('totalCompleted').innerHTML = `${logs.length}<span style="font-size: 32px; font-weight: 700;">건</span>`;
+      document.getElementById('currentWait').innerText = `${q.length}명`;
+      document.getElementById('activeDesks').innerText = `${desks.length}개`;
+
+      // 2. 창구별 완료 건수
+      const deskCounts = {};
+      desks.forEach(d => deskCounts[d.desk] = 0);
+      logs.forEach(l => {
+        if (deskCounts[l.desk] !== undefined) deskCounts[l.desk]++;
+      });
+
+      const deskGrid = document.getElementById('deskGrid');
+      deskGrid.innerHTML = '';
       desks.forEach(d => {
         const isBusy = d.status === 'consulting' && d.currentCustomer;
-        box.innerHTML += `
-          <div class="desk-box">
-            <div style="font-size: 14px; font-weight: 700; color: #64748b;">${d.name}</div>
-            <div class="desk-num">${isBusy ? d.currentCustomer.ticketNumber + '번' : '대기'}</div>
-            <div style="font-size: 12px; font-weight: 700; color: ${isBusy ? '#ef4444' : '#10b981'};">
-              ${isBusy ? '상담 진행 중' : '비어 있음'}
-            </div>
+        const box = document.createElement('div');
+        box.className = 'desk-card';
+        box.innerHTML = `
+          <div class="desk-title">${d.name}</div>
+          <div class="desk-stat">${deskCounts[d.desk]}<span style="font-size: 18px;">건 완료</span></div>
+          <div style="font-size: 13px; font-weight: 800; color: ${isBusy ? '#ef4444' : '#04b071'};">
+            ${isBusy ? `${d.currentCustomer.ticketNumber}번 상담 중` : '대기 중'}
           </div>
         `;
+        deskGrid.appendChild(box);
       });
-    }
 
-    function renderQueue(queue, desks) {
-      document.getElementById('queueTotal').innerText = `${queue.length}명 대기`;
-      const list = document.getElementById('queueList');
-      list.innerHTML = '';
+      // 3. 시간대별 분석 (09시~18시)
+      const hours = ['09', '10', '11', '12', '13', '14', '15', '16', '17', '18'];
+      const hourCounts = {};
+      hours.forEach(h => hourCounts[h] = 0);
 
-      if (queue.length === 0) {
-        list.innerHTML = '<div style="text-align:center; padding: 20px; color:#94a3b8;">현재 대기 중인 고객이 없습니다.</div>';
-        return;
+      logs.forEach(l => {
+        if (l.completedAt) {
+          const h = new Date(l.completedAt).getHours().toString().padStart(2, '0');
+          if (hourCounts[h] !== undefined) hourCounts[h]++;
+        }
+      });
+
+      const timeGrid = document.getElementById('timelineGrid');
+      timeGrid.innerHTML = '';
+      hours.forEach(h => {
+        const slot = document.createElement('div');
+        slot.className = 'time-slot';
+        slot.innerHTML = `
+          <div class="time-hour">${h}시</div>
+          <div class="time-count">${hourCounts[h]}건</div>
+        `;
+        timeGrid.appendChild(slot);
+      });
+
+      // 4. 대기 명단
+      const qBox = document.getElementById('queueList');
+      qBox.innerHTML = '';
+      if (q.length === 0) {
+        qBox.innerHTML = '<div style="color: var(--text-sub); font-size: 14px;">현재 대기 중인 고객이 없습니다.</div>';
+      } else {
+        q.forEach((c, idx) => {
+          const pill = document.createElement('div');
+          pill.className = 'queue-pill';
+          pill.innerText = `${idx + 1}등: ${c.ticketNumber}번`;
+          qBox.appendChild(pill);
+        });
       }
-
-      queue.forEach((c, idx) => {
-        const item = document.createElement('div');
-        item.className = 'queue-item';
-        item.innerHTML = `
-          <div>
-            <span style="font-size: 18px; font-weight: 900; color: var(--primary);">${c.ticketNumber}번</span>
-            <span style="font-size: 13px; color: #64748b; margin-left: 8px;">(순번: ${idx + 1}번째)</span>
-          </div>
-          <div>
-            <select id="sel-desk-${c.id}" style="padding: 6px; border-radius: 8px;">
-              ${desks.map(d => `<option value="${d.desk}">${d.name}</option>`).join('')}
-            </select>
-            <button class="btn-assign" onclick="forceAssign('${c.id}')">강제 호출</button>
-          </div>
-        `;
-        list.appendChild(item);
-      });
-    }
-
-    function modDesk(action) {
-      socket.emit('modify_desk_count', { bank, action });
-    }
-
-    function forceAssign(customerId) {
-      const sel = document.getElementById(`sel-desk-${customerId}`);
-      const deskNumber = sel.value;
-      socket.emit('call_customer', { bank, deskNumber, customerId });
-    }
+    });
   </script>
 </body>
 </html>

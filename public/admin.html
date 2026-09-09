@@ -7,111 +7,115 @@
   <script src="/socket.io/socket.io.js"></script>
   <style>
     :root {
-      --bg: #f8fafc;
-      --card: #ffffff;
-      --primary: #3182f6;
+      --bg: #0f172a;
+      --card: #1e293b;
+      --primary: #38bdf8;
       --danger: #ef4444;
-      --border: #e2e8f0;
-      --text: #0f172a;
-      --success: #10b981;
+      --border: #334155;
+      --text: #f8fafc;
+      --success: #22c55e;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif; }
-    body { background: var(--bg); color: var(--text); padding: 20px; }
-    .wrap { max-width: 960px; margin: 0 auto; }
-    .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    body { background: var(--bg); color: var(--text); padding: clamp(12px, 3vw, 24px); min-height: 100vh; }
+    .wrap { max-width: 1080px; margin: 0 auto; width: 100%; }
     
-    .card { background: var(--card); border-radius: 24px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); margin-bottom: 20px; }
-    h2 { font-size: 20px; font-weight: 800; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+    .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+    .title { font-size: clamp(22px, 4vw, 32px); font-weight: 900; }
 
-    /* 현장 스피커 허브 */
-    .speaker-box { background: #0f172a; color: #fff; border-radius: 20px; padding: 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .btn-speaker { background: var(--success); color: #fff; border: none; padding: 14px 24px; font-size: 16px; font-weight: 800; border-radius: 14px; cursor: pointer; }
+    .card { background: var(--card); border-radius: 28px; padding: clamp(18px, 3vw, 28px); border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.3); margin-bottom: 20px; }
+    h2 { font-size: clamp(18px, 2.5vw, 22px); font-weight: 800; margin-bottom: 16px; }
 
-    /* 은행별 창구 관리 (+, -) */
-    .bank-manage-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 14px; }
-    .bank-ctrl-card { background: #f8fafc; border: 2px solid var(--border); border-radius: 20px; padding: 18px; }
-    .bank-ctrl-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-    .ctrl-group { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
-    .btn-step { width: 44px; height: 44px; font-size: 24px; font-weight: 900; border: none; border-radius: 12px; background: #fff; border: 1px solid var(--border); cursor: pointer; display: flex; justify-content: center; align-items: center; }
-    .btn-step:active { background: #e2e8f0; }
+    /* 1. 상단 실시간 미니 전광판 */
+    .mini-display-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+    .mini-display-box { background: #0b1120; border-radius: 20px; padding: 18px; border-top: 6px solid var(--primary); text-align: center; }
+    .disp-bank { font-size: 20px; font-weight: 900; }
+    .disp-num { font-size: clamp(48px, 8vw, 64px); font-weight: 900; color: var(--success); letter-spacing: -1px; margin: 6px 0; }
 
-    /* 은행 추가 & 링크 */
-    .input-row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
-    .input-field { flex: 1; min-width: 140px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; font-size: 15px; }
-    .btn-add { background: var(--primary); color: #fff; border: none; padding: 14px 22px; font-weight: 800; border-radius: 12px; cursor: pointer; }
+    /* 2. 스피커 방송 앰프 박스 */
+    .speaker-box { background: #020617; border-radius: 22px; padding: 20px; display: flex; justify-content: space-between; align-items: center; border: 2px solid var(--border); margin-bottom: 20px; flex-wrap: wrap; gap: 14px; }
+    .btn-speaker { background: var(--success); color: #000; border: none; padding: 16px 28px; font-size: clamp(16px, 2vw, 19px); font-weight: 900; border-radius: 16px; cursor: pointer; transition: all 0.2s; }
+    .btn-speaker:active { transform: scale(0.98); }
+    .btn-test-sound { background: #334155; color: #fff; border: 1px solid var(--border); padding: 16px 20px; font-size: 15px; font-weight: 800; border-radius: 16px; cursor: pointer; }
 
-    .link-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-    .chip-link { background: #e8f3ff; color: var(--primary); padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 700; text-decoration: none; cursor: pointer; border: 1px solid #cce3ff; }
+    /* 3. 창구 조절 (+ / -) */
+    .bank-ctrl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+    .ctrl-card { background: #0b1120; border-radius: 20px; padding: 18px; border: 1px solid var(--border); }
+    .ctrl-group { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+    .btn-step { width: 52px; height: 52px; font-size: 28px; font-weight: 900; border: none; border-radius: 14px; background: #334155; color: #fff; cursor: pointer; }
+    .btn-step:active { background: #475569; }
 
+    /* 4. 은행 추가 및 링크 */
+    .input-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+    .input-field { flex: 1; min-width: 140px; height: 52px; padding: 0 14px; border-radius: 14px; background: #0b1120; border: 1px solid var(--border); color: #fff; font-size: 16px; }
+    .btn-add { height: 52px; padding: 0 24px; border-radius: 14px; font-size: 16px; font-weight: 800; background: var(--primary); color: #000; border: none; cursor: pointer; }
+    .link-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .chip-link { background: #0b1120; color: var(--primary); padding: 10px 16px; border-radius: 12px; font-size: 14px; font-weight: 800; cursor: pointer; border: 1px solid var(--border); }
+
+    /* 5. 비상 제어 */
     .btn-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
-    .btn-action { height: 52px; border-radius: 14px; font-size: 15px; font-weight: 800; border: none; cursor: pointer; }
+    .btn-act { height: 56px; border-radius: 16px; font-size: 16px; font-weight: 800; border: none; cursor: pointer; }
     .btn-danger { background: var(--danger); color: #fff; }
-    .btn-secondary { background: #475569; color: #fff; }
-    .btn-dark { background: #0f172a; color: #fff; }
-
-    #reportBox { display: none; background: #0f172a; color: #38bdf8; padding: 20px; border-radius: 16px; font-family: monospace; white-space: pre-wrap; margin-top: 14px; }
+    .btn-dark { background: #334155; color: #fff; }
   </style>
 </head>
 <body>
 
   <div class="wrap">
     <div class="head">
-      <h1 style="font-size: 26px; font-weight: 900;">현장 통합 총괄 관리자</h1>
-      <span style="color: var(--success); font-weight: 800;">● 실시간 연동 중</span>
+      <div class="title">현장 통합 총괄 콘솔</div>
+      <div style="color: var(--success); font-weight: 800;">● 중앙 관제 정상 작동</div>
     </div>
 
-    <!-- 스피커 방송 앰프 -->
+    <!-- 1. 스피커 방송 앰프 -->
     <div class="speaker-box">
       <div>
-        <h3 style="font-size: 18px; margin-bottom: 4px;">📢 현장 스피커 오디오 방송 앰프</h3>
-        <p style="font-size: 13px; color: #94a3b8;">이 기기에 스피커를 꽂아두고 버튼을 켜면 모든 은행 창구 호출이 자동 방송됩니다.</p>
+        <h3 style="font-size: 19px; margin-bottom: 4px;">📢 현장 스피커 오디오 방송 앰프</h3>
+        <p style="font-size: 14px; color: #94a3b8;">스피커를 연결하고 켜두면 모든 은행 호출 음성이 자동 방송됩니다.</p>
       </div>
-      <button class="btn-speaker" id="speakerBtn" onclick="toggleSpeaker()">스피커 방송 켜기</button>
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <button class="btn-test-sound" onclick="testSoundDirect()">🔔 소리 시험</button>
+        <button class="btn-speaker" id="speakerBtn" onclick="toggleSpeaker()">🔊 스피커 방송 켜기</button>
+      </div>
     </div>
 
-    <!-- 은행별 창구 +, - -->
+    <!-- 2. 관리자 내장형 실시간 전광판 뷰 -->
     <div class="card">
-      <h2>은행별 창구 실시간 증설 및 축소 (+ / -)</h2>
-      <p style="font-size: 13px; color: #64748b;">버튼을 누르면 상담사 앱과 전광판에 즉시 창구가 추가/제거됩니다.</p>
-      <div class="bank-manage-grid" id="bankDesksGrid"></div>
+      <h2>실시간 호출 현황 전광판 (내장 뷰)</h2>
+      <div class="mini-display-grid" id="miniDisplayGrid"></div>
     </div>
 
-    <!-- 은행 추가 -->
+    <!-- 3. 은행별 창구 실시간 +, - 조절 -->
     <div class="card">
-      <h2>신규 은행 즉시 추가</h2>
+      <h2>은행별 창구 실시간 조절 (+ / -)</h2>
+      <div class="bank-ctrl-grid" id="bankCtrlGrid"></div>
+    </div>
+
+    <!-- 4. 은행 추가 및 발권 링크 -->
+    <div class="card">
+      <h2>신규 은행 추가 & QR 링크</h2>
       <div class="input-row">
         <input type="text" id="newBankName" class="input-field" placeholder="은행명 (예: 하나은행)">
         <input type="text" id="newBankCode" class="input-field" placeholder="영문코드 (예: hana)">
-        <input type="color" id="newBankColor" value="#008485" style="width: 60px; height: 48px; border-radius: 10px; cursor: pointer;">
+        <input type="color" id="newBankColor" value="#008485" style="width: 60px; height: 52px; border-radius: 12px; cursor: pointer;">
         <button class="btn-add" onclick="addNewBank()">은행 추가</button>
       </div>
-      <div style="margin-top: 14px;">
-        <span style="font-size: 13px; font-weight: 700; color: #64748b;">은행별 발권 QR 링크 (클릭 시 URL 복사):</span>
-        <div class="link-chips" id="qrLinksList"></div>
-      </div>
+      <div class="link-chips" id="qrLinksList"></div>
     </div>
 
-    <!-- 비상 제어 -->
+    <!-- 5. 비상 제어 & 일마감 -->
     <div class="card" style="border: 2px solid var(--danger);">
       <h2 style="color: var(--danger);">🚨 비상 긴급 제어</h2>
       <div class="btn-grid">
-        <button class="btn-action btn-danger" onclick="emergencyRepair()">비상 시스템 원클릭 복구</button>
-        <button class="btn-action btn-secondary" onclick="resetAll()">전체 번호표 리셋</button>
-        <button class="btn-action btn-dark" onclick="closeDay()">일마감 및 보고서 생성</button>
+        <button class="btn-act btn-danger" onclick="emergencyRepair()">비상 시스템 원클릭 복구</button>
+        <button class="btn-act btn-dark" onclick="resetAll()">전체 번호표 리셋</button>
+        <button class="btn-act btn-dark" onclick="closeDay()">일마감 및 통계</button>
       </div>
-    </div>
-
-    <!-- 일마감 -->
-    <div class="card" id="reportCard" style="display: none;">
-      <h2>📋 일마감 보고서</h2>
-      <button class="btn-action" style="background: var(--success); color:#fff; width:100%; margin-bottom:10px;" onclick="copyReport()">보고서 복사</button>
-      <div id="reportBox"></div>
+      <div id="reportBox" style="display: none; background: #020617; color: var(--primary); padding: 18px; border-radius: 16px; margin-top: 14px; white-space: pre-wrap; font-family: monospace;"></div>
     </div>
   </div>
 
   <script>
     const socket = io({ transports: ['websocket', 'polling'] });
-    let globalState = null;
     let audioUnlocked = false;
     let audioCtx = null;
 
@@ -119,24 +123,97 @@
       navigator.wakeLock.request('screen').catch(() => {});
     }
 
-    function toggleSpeaker() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      audioUnlocked = true;
-      const btn = document.getElementById('speakerBtn');
-      btn.innerText = '🔊 스피커 방송 켜짐 (정상 작동 중)';
-      btn.style.background = '#2563eb';
+    // 1. 오디오 컨텍스트 강제 활성화
+    function initAudioContext() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
     }
 
-    function speakBroadcast(text) {
-      if (!audioUnlocked) return;
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(text);
-        u.lang = 'ko-KR';
-        u.rate = 0.95;
-        window.speechSynthesis.speak(u);
+    // 2. 챠임벨 사운드 (딩-동 2음)
+    function playChime() {
+      try {
+        initAudioContext();
+        const now = audioCtx.currentTime;
+
+        const osc1 = audioCtx.createOscillator();
+        const gain1 = audioCtx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(659.25, now); // Mi (E5)
+        gain1.gain.setValueAtTime(0.3, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+        osc1.connect(gain1);
+        gain1.connect(audioCtx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.5);
+
+        const osc2 = audioCtx.createOscillator();
+        const gain2 = audioCtx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(523.25, now + 0.25); // Do (C5)
+        gain2.gain.setValueAtTime(0.35, now + 0.25);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.85);
+        osc2.connect(gain2);
+        gain2.connect(audioCtx.destination);
+        osc2.start(now + 0.25);
+        osc2.stop(now + 0.85);
+      } catch (e) {
+        console.error('Chime error:', e);
       }
+    }
+
+    // 3. 음성 발화 (TTS 엔진 잠금 해제 지원)
+    function speakText(text, onEndCallback) {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'ko-KR';
+      utter.rate = 1.0;
+      utter.pitch = 1.0;
+      utter.volume = 1.0;
+
+      if (onEndCallback) {
+        utter.onend = onEndCallback;
+      }
+      window.speechSynthesis.speak(utter);
+    }
+
+    // 스피커 켜기 버튼 동작 (누르자마자 즉시 소리 출력)
+    function toggleSpeaker() {
+      initAudioContext();
+      audioUnlocked = true;
+
+      const btn = document.getElementById('speakerBtn');
+      btn.innerText = '🔊 스피커 방송 켜짐 (정상)';
+      btn.style.background = '#38bdf8';
+
+      // 차단 해제 검증을 위해 즉시 벨과 안내 멘트 송출
+      playChime();
+      setTimeout(() => {
+        speakText('현장 스피커 방송 엔진이 정상 연결되었습니다.');
+      }, 400);
+    }
+
+    // 소리 시험 버튼
+    function testSoundDirect() {
+      initAudioContext();
+      playChime();
+      setTimeout(() => {
+        speakText('국민은행 백 이번 고객님, 일 번 창구로 와주시기 바랍니다.');
+      }, 500);
+    }
+
+    // 전체 호출 방송 브로드캐스트
+    function broadcastCall(bankName, ticketNum, deskName) {
+      if (!audioUnlocked) return;
+      playChime();
+      setTimeout(() => {
+        speakText(`${bankName}, ${ticketNum}번 고객님, ${deskName}로 와주시기 바랍니다.`);
+      }, 500);
     }
 
     socket.on('connect', () => {
@@ -144,37 +221,51 @@
     });
 
     socket.on('all_state_update', (data) => {
-      globalState = data;
-      renderDeskControls(data);
+      renderMiniDisplay(data);
+      renderCtrl(data);
       renderLinks(data.bankInfo);
     });
 
-    function renderDeskControls(data) {
-      const container = document.getElementById('bankDesksGrid');
-      container.innerHTML = '';
-
+    function renderMiniDisplay(data) {
+      const grid = document.getElementById('miniDisplayGrid');
+      grid.innerHTML = '';
       Object.keys(data.bankInfo).forEach(b => {
         const info = data.bankInfo[b];
         const desks = data.desks[b] || [];
-        const queue = data.queues[b] || [];
+        const currentCalling = desks.find(d => d.status === 'consulting' && d.currentCustomer);
 
         const box = document.createElement('div');
-        box.className = 'bank-ctrl-card';
-        box.style.borderTop = `6px solid ${info.color}`;
+        box.className = 'mini-display-box';
+        box.style.borderTopColor = info.color;
         box.innerHTML = `
-          <div class="bank-ctrl-head">
-            <span style="font-size: 18px; font-weight: 800; color: ${info.color};">${info.name}</span>
-            <span style="font-size: 13px; font-weight: 700; color: #64748b;">대기 ${queue.length}명</span>
-          </div>
-          <div style="font-size: 14px; font-weight: 600; color: #334155;">운영 창구: <b>${desks.length}개 창구</b></div>
+          <div class="disp-bank" style="color: ${info.color};">${info.name}</div>
+          <div class="disp-num">${currentCalling ? currentCalling.currentCustomer.ticketNumber + '번' : '대기'}</div>
+          <div style="font-size: 14px; color: #94a3b8;">${currentCalling ? currentCalling.name : '호출 대기 중'}</div>
+        `;
+        grid.appendChild(box);
+      });
+    }
+
+    function renderCtrl(data) {
+      const grid = document.getElementById('bankCtrlGrid');
+      grid.innerHTML = '';
+      Object.keys(data.bankInfo).forEach(b => {
+        const info = data.bankInfo[b];
+        const desks = data.desks[b] || [];
+
+        const box = document.createElement('div');
+        box.className = 'ctrl-card';
+        box.style.borderLeft = `6px solid ${info.color}`;
+        box.innerHTML = `
+          <div style="font-size: 18px; font-weight: 800; color: ${info.color};">${info.name}</div>
+          <div style="font-size: 14px; color: #94a3b8; margin-top: 4px;">운영 창구: <b>${desks.length}개</b></div>
           <div class="ctrl-group">
             <button class="btn-step" onclick="modDesk('${b}', 'remove')">-</button>
-            <span style="font-size: 20px; font-weight: 900; min-width: 34px; text-align: center;">${desks.length}</span>
+            <span style="font-size: 24px; font-weight: 900; min-width: 36px; text-align: center;">${desks.length}</span>
             <button class="btn-step" onclick="modDesk('${b}', 'add')">+</button>
-            <span style="font-size: 12px; color: #94a3b8; margin-left: 6px;">(실시간 변동)</span>
           </div>
         `;
-        container.appendChild(box);
+        grid.appendChild(box);
       });
     }
 
@@ -182,14 +273,13 @@
       const box = document.getElementById('qrLinksList');
       box.innerHTML = '';
       const base = window.location.origin;
-
       Object.keys(bankInfo).forEach(b => {
         const chip = document.createElement('div');
         chip.className = 'chip-link';
-        chip.innerText = `${bankInfo[b].name} 발권 URL 복사`;
+        chip.innerText = `${bankInfo[b].name} 발권링크 복사`;
         chip.onclick = () => {
           const url = `${base}/?bank=${b}`;
-          navigator.clipboard.writeText(url).then(() => alert(`${bankInfo[b].name} 발권 URL 복사 완료:\n${url}`));
+          navigator.clipboard.writeText(url).then(() => alert(`${bankInfo[b].name} URL 복사됨:\n${url}`));
         };
         box.appendChild(chip);
       });
@@ -203,20 +293,19 @@
       const name = document.getElementById('newBankName').value;
       const code = document.getElementById('newBankCode').value;
       const color = document.getElementById('newBankColor').value;
-
       if (!name || !code) return alert('은행명과 코드를 입력해주세요.');
       socket.emit('admin_add_bank', { name, code, color });
       document.getElementById('newBankName').value = '';
       document.getElementById('newBankCode').value = '';
-      alert(`${name} 등록 완료!`);
     }
 
+    // 실시간 호출 수신
     socket.on('customer_called', (data) => {
-      speakBroadcast(`${data.bankName} ${data.customer.ticketNumber}번 고객님, ${data.deskName}로 와주시기 바랍니다.`);
+      broadcastCall(data.bankName, data.customer.ticketNumber, data.deskName);
     });
 
     function emergencyRepair() {
-      if (confirm('전체 시스템을 비상 복구하시겠습니까?')) {
+      if (confirm('전체 시스템을 비상 초기화 복구하시겠습니까?')) {
         socket.emit('admin_emergency_repair');
       }
     }
@@ -234,23 +323,10 @@
     }
 
     socket.on('day_closed', (report) => {
-      const counts = {};
-      report.logs.forEach(l => { counts[l.bankName] = (counts[l.bankName] || 0) + 1; });
-
-      let text = `[현장 일마감 상담 보고서]\n마감 시각: ${new Date(report.closedAt).toLocaleString('ko-KR')}\n총 완료: ${report.totalCount}건\n\n■ 은행별 실적\n`;
-      for (const [k, v] of Object.entries(counts)) {
-        text += `- ${k}: ${v}건\n`;
-      }
-
-      document.getElementById('reportCard').style.display = 'block';
       const box = document.getElementById('reportBox');
       box.style.display = 'block';
-      box.innerText = text;
+      box.innerText = `[일마감 완료] ${new Date(report.closedAt).toLocaleString()}\n총 상담: ${report.totalCount}건`;
     });
-
-    function copyReport() {
-      navigator.clipboard.writeText(document.getElementById('reportBox').innerText).then(() => alert('보고서 복사 완료!'));
-    }
   </script>
 </body>
 </html>
