@@ -2,112 +2,183 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>입주상담 통합 포털 앱</title>
-  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
-  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0b101b">
+  <title>현장 접속 포털</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+  <script src="/socket.io/socket.io.js"></script>
   <style>
-    body { font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif; letter-spacing: -0.035em; }
-    .toss-card { background: #171f30; border: 1px solid rgba(255,255,255,0.08); }
-    .toss-btn { transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1); }
-    .toss-btn:active { transform: scale(0.96); }
-  </style>
-</head>
-<body class="bg-[#0b101b] text-white min-h-screen p-4 md:p-6 select-none pb-20">
+    :root {
+      --font-stack: "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+      --bg: #0b101b;
+      --panel: #1f293d;
+      --border: rgba(255,255,255,0.07);
+      --text-sub: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-stack); -webkit-tap-highlight-color: transparent; }
+    body { background: var(--bg); color: #fff; min-height: 100vh; font-weight: 700; letter-spacing: -0.4px; padding: 16px 14px calc(env(safe-area-inset-bottom) + 40px); }
 
-  <header class="pb-6 mb-6 border-b border-slate-800">
-    <div class="inline-flex items-center gap-2 px-3 py-1 bg-[#8b0029] rounded-xl text-xs font-black text-rose-200 mb-3">
-      <span>🏛️ 법무법인 제이엘</span>
-    </div>
-    <h1 class="text-3xl font-black text-white tracking-tight">현장 접속 포털</h1>
-    <p class="text-sm font-bold text-slate-400 mt-2">부여받은 권한 및 창구 버튼을 터치하여 접속하세요.</p>
+    header { padding-bottom: 20px; margin-bottom: 22px; border-bottom: 2px solid #1e293b; }
+    .tag { display: inline-block; background: #8b0029; color: #ffd7e0; font-size: 12px; font-weight: 900; padding: 6px 12px; border-radius: 12px; margin-bottom: 10px; }
+    h1 { font-size: 30px; font-weight: 900; letter-spacing: -1.2px; }
+    header p { font-size: 15px; font-weight: 700; color: var(--text-sub); margin-top: 8px; }
+
+    section { margin-bottom: 28px; }
+    h2 { font-size: 17px; font-weight: 900; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+
+    .link-btn {
+      width: 100%; min-height: 74px; border: 1px solid var(--border); border-radius: 22px;
+      background: var(--panel); color: #fff; font-size: 18px; font-weight: 900; cursor: pointer;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 20px; text-align: left;
+    }
+    .link-btn:active { transform: scale(0.97); }
+    .link-btn .go { font-size: 14px; font-weight: 900; background: rgba(0,0,0,0.22); padding: 8px 13px; border-radius: 13px; white-space: nowrap; }
+    .link-btn .lhs { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .link-btn .ico { font-size: 24px; }
+
+    .copy-note { font-size: 13px; font-weight: 700; color: var(--text-sub); margin-top: 10px; }
+    #hubToast {
+      position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + 20px);
+      background: #fff; color: #111; border-radius: 20px; padding: 15px 24px; font-size: 16px; font-weight: 900;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4); display: none; z-index: 900; max-width: 92vw; text-align: center;
+    }
+  </style>
+  <link rel="stylesheet" href="/type.css">
+</head>
+<body>
+
+  <header>
+    <span class="tag">🏛️ 법무법인 제이엘</span>
+    <h1>현장 접속 포털</h1>
+    <p>맡으신 역할의 버튼을 눌러 접속하세요.</p>
   </header>
 
-  <main class="flex flex-col gap-6">
+  <section>
+    <h2><span>⚙️</span> 현장 본부 관제 (관리자용)</h2>
+    <div class="row" id="adminRow"></div>
+  </section>
 
-    <!-- 1. 현장 총괄 및 관제 그룹 -->
-    <section>
-      <h2 class="text-base font-black text-amber-400 mb-3 ml-2 flex items-center gap-2">
-        <span>⚙️</span> 현장 본부 관제 (관리자용)
-      </h2>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <button onclick="location.href='/admin.html'" class="toss-btn w-full h-16 bg-[#1f293d] border border-white/5 rounded-2xl flex items-center justify-between px-5 shadow-lg">
-          <div class="flex items-center gap-3">
-            <span class="text-2xl">📢</span>
-            <span class="text-lg font-black text-white">앰프/총괄 마스터 콘솔</span>
-          </div>
-          <span class="text-slate-500 font-black">접속 ➔</span>
-        </button>
-        <button onclick="location.href='/operator.html'" class="toss-btn w-full h-16 bg-[#1f293d] border border-white/5 rounded-2xl flex items-center justify-between px-5 shadow-lg">
-          <div class="flex items-center gap-3">
-            <span class="text-2xl">⚡</span>
-            <span class="text-lg font-black text-white">제이엘 진행요원 패널</span>
-          </div>
-          <span class="text-slate-500 font-black">접속 ➔</span>
-        </button>
-        <button onclick="location.href='/display.html'" class="toss-btn w-full h-16 bg-[#1f293d] border border-white/5 rounded-2xl flex items-center justify-between px-5 shadow-lg">
-          <div class="flex items-center gap-3">
-            <span class="text-2xl">📺</span>
-            <span class="text-lg font-black text-white">초대형 종합 전광판</span>
-          </div>
-          <span class="text-slate-500 font-black">접속 ➔</span>
-        </button>
-        <button onclick="location.href='/woori_leader.html'" class="toss-btn w-full h-16 bg-[#0067ac]/20 border border-[#0067ac]/40 rounded-2xl flex items-center justify-between px-5 shadow-lg">
-          <div class="flex items-center gap-3">
-            <span class="text-2xl">📈</span>
-            <span class="text-lg font-black text-blue-200">우리은행 팀장 모니터링</span>
-          </div>
-          <span class="text-blue-400 font-black">접속 ➔</span>
-        </button>
-      </div>
-    </section>
+  <section>
+    <h2><span>👨‍💻</span> 각 기관 창구 단말기 (상담사용)</h2>
+    <div class="row" id="tellerRow"></div>
+  </section>
 
-    <!-- 2. 각 기관 상담사 단말기 그룹 -->
-    <section>
-      <h2 class="text-base font-black text-[#3182f6] mb-3 ml-2 flex items-center gap-2">
-        <span>👨‍💻</span> 각 기관 창구 단말기 (상담사용)
-      </h2>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <button onclick="location.href='/teller.html?b=jl'" class="toss-btn w-full h-16 bg-[#8b0029] hover:bg-[#6c0020] text-white rounded-2xl flex items-center justify-between px-5 shadow-lg">
-          <span class="text-lg font-black tracking-tight">법무법인 제이엘 단말기</span>
-          <span class="text-xs bg-black/20 px-3 py-1.5 rounded-xl font-bold">실행 ➔</span>
-        </button>
-        <button onclick="location.href='/teller.html?b=kb'" class="toss-btn w-full h-16 bg-[#ffbc00] hover:bg-[#e5a900] text-slate-950 rounded-2xl flex items-center justify-between px-5 shadow-lg">
-          <span class="text-lg font-black tracking-tight">KB국민은행 단말기</span>
-          <span class="text-xs bg-black/10 px-3 py-1.5 rounded-xl font-bold">실행 ➔</span>
-        </button>
-        <button onclick="location.href='/teller.html?b=woori'" class="toss-btn w-full h-16 bg-[#0067ac] hover:bg-[#005a96] text-white rounded-2xl flex items-center justify-between px-5 shadow-lg">
-          <span class="text-lg font-black tracking-tight">우리은행 단말기</span>
-          <span class="text-xs bg-black/20 px-3 py-1.5 rounded-xl font-bold">실행 ➔</span>
-        </button>
-        <button onclick="location.href='/teller.html?b=shinhan'" class="toss-btn w-full h-16 bg-[#0046ff] hover:bg-[#003de6] text-white rounded-2xl flex items-center justify-between px-5 shadow-lg">
-          <span class="text-lg font-black tracking-tight">신한은행 단말기</span>
-          <span class="text-xs bg-black/20 px-3 py-1.5 rounded-xl font-bold">실행 ➔</span>
-        </button>
-        <button onclick="location.href='/teller.html?b=hana'" class="toss-btn w-full h-16 bg-[#008485] hover:bg-[#007475] text-white rounded-2xl flex items-center justify-between px-5 shadow-lg">
-          <span class="text-lg font-black tracking-tight">하나은행 단말기</span>
-          <span class="text-xs bg-black/20 px-3 py-1.5 rounded-xl font-bold">실행 ➔</span>
-        </button>
-        <button onclick="location.href='/teller.html?b=fubon'" class="toss-btn w-full h-16 bg-[#002f6c] hover:bg-[#002657] text-white rounded-2xl flex items-center justify-between px-5 shadow-lg">
-          <span class="text-lg font-black tracking-tight">푸본현대생명 단말기</span>
-          <span class="text-xs bg-black/20 px-3 py-1.5 rounded-xl font-bold">실행 ➔</span>
-        </button>
-      </div>
-    </section>
+  <section>
+    <h2><span>📱</span> 고객 발권 링크 (QR용 · 길게 눌러 복사)</h2>
+    <div class="row" id="customerRow"></div>
+    <div class="copy-note">버튼을 누르면 발권 화면이 열리고, "복사" 를 누르면 QR 제작용 주소가 복사됩니다.</div>
+  </section>
 
-    <!-- 3. 고객 발권 화면 -->
-    <section>
-      <h2 class="text-base font-black text-emerald-400 mb-3 ml-2 flex items-center gap-2">
-        <span>📱</span> 고객용 
-      </h2>
-      <button onclick="location.href='/index.html'" class="toss-btn w-full h-16 bg-emerald-600 hover:bg-emerald-500 rounded-2xl flex items-center justify-between px-5 shadow-lg">
-        <div class="flex items-center gap-3">
-          <span class="text-xl font-black text-white">고객용 번호표 발권 메인</span>
-        </div>
-        <span class="text-xs bg-black/20 px-3 py-1.5 rounded-xl text-white font-bold">오픈 ➔</span>
-      </button>
-    </section>
+  <div id="hubToast"></div>
 
-  </main>
+  <script>
+    // 서버에 실제로 등록된 기관만 노출한다.
+    // (등록되지 않은 은행 주소로 접속하면 엉뚱한 은행 고객을 호출하게 되므로)
+    var BANKS = [
+      { id: 'kb',      name: 'KB국민은행',   color: '#ffbc00', text: '#2b2b2b' },
+      { id: 'woori',   name: '우리은행',     color: '#0067ac', text: '#ffffff' },
+      { id: 'shinhan', name: '신한은행',     color: '#0046ff', text: '#ffffff' },
+      { id: 'fubon',   name: '푸본현대생명', color: '#00A88F', text: '#ffffff' }
+    ];
+
+    var ADMIN_LINKS = [
+      { ico: '📢', label: '앰프 / 총괄 관리자 콘솔', url: '/admin.html' },
+      { ico: '⚡', label: '제이엘 진행요원 패널',    url: '/operator.html' },
+      { ico: '📺', label: '대형 종합 전광판',        url: '/display.html' },
+      { ico: '📈', label: '우리은행 팀장 모니터링',  url: '/woori_leader.html' }
+    ];
+
+    function toast(msg) {
+      var t = document.getElementById('hubToast');
+      t.innerText = msg;
+      t.style.display = 'block';
+      clearTimeout(toast._t);
+      toast._t = setTimeout(function () { t.style.display = 'none'; }, 2600);
+    }
+
+    function makeBtn(opts) {
+      var b = document.createElement('button');
+      b.className = 'link-btn';
+      if (opts.bg) { b.style.background = opts.bg; b.style.color = opts.fg || '#fff'; }
+      b.innerHTML = '<span class="lhs">' +
+        (opts.ico ? '<span class="ico">' + opts.ico + '</span>' : '') +
+        '<span>' + opts.label + '</span></span>' +
+        '<span class="go">' + (opts.go || '접속') + '</span>';
+      b.onclick = opts.onClick;
+      return b;
+    }
+
+    var adminRow = document.getElementById('adminRow');
+    ADMIN_LINKS.forEach(function (l) {
+      adminRow.appendChild(makeBtn({
+        ico: l.ico, label: l.label, go: '접속 ➔',
+        onClick: function () { location.href = l.url; }
+      }));
+    });
+
+    function renderBanks() {
+      document.getElementById('tellerRow').innerHTML = '';
+      document.getElementById('customerRow').innerHTML = '';
+      renderTellerRow();
+      renderCustomerRow();
+    }
+
+    function renderTellerRow() {
+    var tellerRow = document.getElementById('tellerRow');
+    BANKS.forEach(function (bank) {
+      tellerRow.appendChild(makeBtn({
+        label: bank.name + ' 창구 단말기', go: '실행 ➔', bg: bank.color, fg: bank.text,
+        onClick: function () { location.href = '/teller.html?b=' + bank.id; }
+      }));
+    });
+    }
+
+    function renderCustomerRow() {
+    var customerRow = document.getElementById('customerRow');
+    BANKS.forEach(function (bank) {
+      var url = location.origin + '/kiosk.html?b=' + bank.id;
+      var b = makeBtn({
+        label: bank.name + ' 발권 화면', go: '복사', bg: bank.color, fg: bank.text,
+        onClick: function () { location.href = '/kiosk.html?b=' + bank.id; }
+      });
+      b.querySelector('.go').onclick = function (e) {
+        e.stopPropagation();
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(url)
+            .then(function () { toast(bank.name + ' 발권 주소가 복사되었습니다.'); })
+            .catch(function () { prompt('아래 주소를 길게 눌러 복사하세요.', url); });
+        } else {
+          prompt('아래 주소를 길게 눌러 복사하세요.', url);
+        }
+      };
+      customerRow.appendChild(b);
+    });
+    }
+
+    renderBanks();
+
+    // 서버가 알려주는 실제 기관 목록으로 교체 (관리자가 추가한 기관도 자동 반영)
+    try {
+      var socket = io({ transports: ['websocket', 'polling'] });
+      socket.on('connect', function () { socket.emit('get_all_state'); });
+      socket.on('all_state_update', function (data) {
+        if (!data.bankInfo || Object.keys(data.bankInfo).length === 0) return;
+        BANKS = Object.keys(data.bankInfo).map(function (id) {
+          return {
+            id: id,
+            name: data.bankInfo[id].name,
+            color: data.bankInfo[id].color,
+            text: data.bankInfo[id].btnText || '#ffffff'
+          };
+        });
+        renderBanks();
+      });
+    } catch (e) {
+      // 소켓 연결이 안 되면 기본 목록을 그대로 사용한다.
+    }
+  </script>
+  <script src="/pwa.js" data-role="hub"></script>
 </body>
 </html>

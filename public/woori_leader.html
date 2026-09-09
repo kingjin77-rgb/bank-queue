@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>우리은행 원격 현황 관제 콘솔</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
   <script src="/socket.io/socket.io.js"></script>
   <style>
     :root {
@@ -15,7 +17,7 @@
       --border: #e5e8eb;
       --success: #04b071;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; }
     body { background: var(--bg); color: var(--text); padding: 20px; }
     .wrap { max-width: 900px; margin: 0 auto; }
 
@@ -49,7 +51,11 @@
     /* 실시간 대기 명단 */
     .queue-chip-list { display: flex; flex-wrap: wrap; gap: 8px; }
     .queue-pill { background: #e6f3fa; color: var(--primary); font-size: 16px; font-weight: 800; padding: 10px 18px; border-radius: 14px; border: 1px solid #cce3ff; }
+
+    .leader-summary { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(0,0,0,0.06); font-size: 15px; font-weight: 700; color: var(--text-sub); }
+    .leader-summary b { font-weight: 900; }
   </style>
+  <link rel="stylesheet" href="/type.css">
 </head>
 <body>
 
@@ -76,6 +82,7 @@
           <div class="num" id="activeDesks">0개</div>
         </div>
       </div>
+      <div id="leaderSummary" class="leader-summary">집계 중...</div>
     </div>
 
     <!-- 2. 각 창구별 완료 건수 및 현재 상태 -->
@@ -101,14 +108,52 @@
     const socket = io({ transports: ['websocket', 'polling'] });
     const bank = 'woori';
 
+    let standardMinutes = 15;
+    let serverOffsetMs = 0;
+    function elapsedSec(iso) {
+      if (!iso) return 0;
+      return Math.max(0, Math.round((Date.now() + serverOffsetMs - new Date(iso).getTime()) / 1000));
+    }
+    function fmtMs(sec) {
+      const m = Math.floor(sec / 60);
+      return `${m}:${String(sec % 60).padStart(2, '0')}`;
+    }
+
+    function fmtMin(sec) {
+      if (!sec) return '-';
+      const m = Math.floor(sec / 60);
+      return m > 0 ? `${m}분 ${sec % 60}초` : `${sec}초`;
+    }
+    function avg(arr) {
+      if (!arr.length) return 0;
+      return Math.round(arr.reduce((x, y) => x + y, 0) / arr.length);
+    }
+
     socket.on('connect', () => {
       socket.emit('get_all_state');
     });
 
     socket.on('all_state_update', (data) => {
-      const q = data.queues[bank] || [];
+      if (data.serverTime) serverOffsetMs = new Date(data.serverTime).getTime() - Date.now();
+      if (data.settings) standardMinutes = data.settings.standardMinutes;
+
+      const q = (data.queues[bank] || []).filter(c => c.status === 'waiting');
       const desks = data.desks[bank] || [];
       const logs = (data.logs || []).filter(l => l.bank === bank);
+      const passes = (data.passes || []).filter(l => l.bank === bank);
+
+      // 평균 상담시간 / 평균 대기시간 요약 줄
+      const summary = document.getElementById('leaderSummary');
+      if (summary) {
+        const avgDur = avg(logs.map(l => l.durationSec || 0));
+        const avgWait = avg(logs.map(l => l.waitSec || 0));
+        summary.innerHTML = `
+          <span>평균 상담 <b style="color:#04b071;">${fmtMin(avgDur)}</b></span>
+          <span>평균 대기 <b style="color:#0067ac;">${fmtMin(avgWait)}</b></span>
+          <span>부재 패스 <b style="color:#ef4444;">${passes.length}건</b></span>
+          <span>예상 대기 <b>${desks.length ? Math.ceil(q.length / desks.length) * standardMinutes : 0}분</b></span>
+        `;
+      }
 
       // 1. 총괄 지표
       document.getElementById('totalCompleted').innerHTML = `${logs.length}<span style="font-size: 32px; font-weight: 700;">건</span>`;
@@ -128,11 +173,20 @@
         const isBusy = d.status === 'consulting' && d.currentCustomer;
         const box = document.createElement('div');
         box.className = 'desk-card';
+        const deskLogs = logs.filter(l => l.desk === d.desk);
+        const deskAvg = avg(deskLogs.map(l => l.durationSec || 0));
+        const sec = isBusy ? elapsedSec(d.currentCustomer.calledAt) : 0;
+        const over = isBusy && sec > standardMinutes * 60;
+
         box.innerHTML = `
           <div class="desk-title">${d.name}</div>
           <div class="desk-stat">${deskCounts[d.desk]}<span style="font-size: 18px;">건 완료</span></div>
-          <div style="font-size: 13px; font-weight: 800; color: ${isBusy ? '#ef4444' : '#04b071'};">
+          <div style="font-size: 13px; font-weight: 800; color: ${isBusy ? (over ? '#ef4444' : '#0067ac') : '#04b071'};">
             ${isBusy ? `${d.currentCustomer.ticketNumber}번 상담 중` : '대기 중'}
+          </div>
+          <div class="desk-elapsed" data-called="${isBusy ? d.currentCustomer.calledAt : ''}"
+               style="font-size: 13px; font-weight: 800; margin-top: 4px; color: ${over ? '#ef4444' : '#8b95a1'};">
+            ${isBusy ? '상담 ' + fmtMs(sec) + (over ? ' 지연' : '') : '평균 ' + fmtMin(deskAvg)}
           </div>
         `;
         deskGrid.appendChild(box);
@@ -177,5 +231,6 @@
       }
     });
   </script>
+  <script src="/pwa.js" data-role="leader"></script>
 </body>
 </html>
