@@ -9,9 +9,14 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="/socket.io/socket.io.js"></script>
   <style>
+    * {
+      font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif !important;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
     html, body { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; word-break: keep-all; }
     body {
-      font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background-color: #0b101b;
       letter-spacing: -0.035em;
       min-height: 100dvh;
       padding-bottom: env(safe-area-inset-bottom, 20px);
@@ -21,21 +26,21 @@
     .toss-btn:active { transform: scale(0.96); }
   </style>
 </head>
-<body class="bg-[#0b101b] text-white flex justify-center p-3 sm:p-5 select-none">
+<body class="text-white flex justify-center p-3 sm:p-5 select-none">
 
   <canvas id="keepAliveCanvas" width="2" height="2" class="opacity-0 pointer-events-none fixed top-0 left-0"></canvas>
 
-  <!-- 1. 본인 창구 선택 및 이동 모달 -->
+  <!-- 창구 선택 및 이동 모달 -->
   <div id="deskSelectModal" style="display:none;" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
     <div class="toss-card p-6 rounded-[32px] max-w-sm w-full text-center border border-white/10 shadow-2xl">
       <div class="text-4xl mb-2">🏢</div>
       <h2 class="text-xl font-black text-white mb-1" id="modalBankTitle">창구 선택 및 이동</h2>
-      <p class="text-xs font-bold text-slate-400 mb-5">내가 상담할 창구를 터치하세요.<br>선택 완료 시 다른 창구는 안전하게 잠깁니다.</p>
+      <p class="text-xs font-bold text-slate-400 mb-5">내가 상담할 창구를 터치하세요.<br>선택 완료 시 해당 창구로 즉시 고정됩니다.</p>
       <div id="modalDeskButtons" class="flex flex-col gap-2.5 max-h-60 overflow-y-auto pr-1"></div>
     </div>
   </div>
 
-  <!-- 2. 고객 옆 창구로 넘기기 모달 -->
+  <!-- 고객 옆 창구로 넘기기 모달 -->
   <div id="transferDeskModal" style="display:none;" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
     <div class="toss-card p-6 rounded-[32px] max-w-sm w-full text-center border border-indigo-500/40 shadow-2xl">
       <div class="text-4xl mb-2">👥</div>
@@ -46,40 +51,40 @@
     </div>
   </div>
 
-  <!-- 메인 모바일 컨테이너 -->
+  <!-- 메인 모바일 박스 -->
   <div class="w-full max-w-md flex flex-col justify-between h-full gap-3">
 
     <main class="flex flex-col gap-3">
 
-      <!-- 상단 헤더: 기관명 + 창구이동 버튼 -->
+      <!-- 상단 헤더 -->
       <div class="flex justify-between items-center pb-2.5 border-b border-slate-800">
         <div>
           <span id="bankBadge" class="px-3 py-1 bg-[#3182f6] text-white font-black text-xs rounded-xl shadow">
             기관 확인
           </span>
-          <h1 class="text-xl font-black text-white mt-1" id="deskTitleHeader">창구 미지정</h1>
+          <h1 class="text-xl font-black text-white mt-1" id="deskTitleHeader">1번 창구</h1>
         </div>
         <button onclick="openDeskSelectModal()" class="toss-btn px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-2xl shadow-lg flex items-center gap-1.5">
           <span>🔄</span> 내 자리 이동
         </button>
       </div>
 
-      <!-- 단말기 음성 알람 켜기 버튼 -->
+      <!-- 단말기 가동 버튼 -->
       <button id="btnActivate" onclick="activateTellerTerminal()" class="toss-btn w-full h-14 bg-[#3182f6] text-white font-black text-base rounded-2xl shadow-lg flex items-center justify-center gap-2">
         <span>🔔</span> 단말기 음성 알람 켜기 (터치)
       </button>
 
-      <!-- 우리 기관 실시간 대기 인원 카드 -->
+      <!-- 실시간 대기 인원 카드 -->
       <div class="toss-card rounded-[28px] p-5 text-center shadow-xl">
-        <div class="text-xs font-black text-slate-400 mb-1" id="waitCardTitle">우리 기관 실시간 대기 인원</div>
+        <div class="text-xs font-black text-slate-400 mb-1" id="waitCardTitle">실시간 대기 인원</div>
         <div id="waitCount" class="text-6xl sm:text-7xl font-black text-amber-400 my-1 tracking-tight">0</div>
         <p class="text-xs font-bold text-slate-500">새 손님 접수 시 이 단말기에서만 알람이 울립니다</p>
       </div>
 
-      <!-- 현재 진행 고객 카드 + 옆 창구로 넘기기 버튼 -->
+      <!-- 현재 진행 고객 카드 + 고객 넘기기 -->
       <div class="toss-card rounded-[28px] p-5 text-center shadow-xl">
         <div class="flex justify-between items-center mb-1">
-          <span id="currentDeskLabel" class="text-xs font-black text-[#3182f6]">창구 선택 필요</span>
+          <span id="currentDeskLabel" class="text-xs font-black text-[#3182f6]">1번 창구 진행 중</span>
           <button id="btnTransferDesk" onclick="openTransferDeskModal()" disabled class="toss-btn px-3 py-1.5 bg-indigo-600/30 border border-indigo-400/40 disabled:opacity-30 disabled:border-slate-800 disabled:text-slate-600 text-indigo-200 text-xs font-black rounded-xl flex items-center gap-1">
             <span>👉</span> 옆 창구로 고객 넘기기
           </button>
@@ -90,20 +95,20 @@
         </div>
       </div>
 
-      <!-- 간이 전광판 모니터 -->
+      <!-- 동료 창구 간이 모니터 -->
       <div class="toss-card rounded-[24px] p-4">
         <div class="flex justify-between items-center mb-2 pb-1 border-b border-white/5">
           <span class="text-xs font-black text-slate-300 flex items-center gap-1.5">
-            <span>📺</span> 창구별 실시간 상황
+            <span>📺</span> 동료 창구 진행 상황
           </span>
-          <span class="text-[10px] text-slate-500 font-bold">동료 창구 모니터</span>
+          <span class="text-[10px] text-slate-500 font-bold">실시간 연동</span>
         </div>
         <div id="miniDisplayGrid" class="grid grid-cols-2 gap-2 text-xs"></div>
       </div>
 
     </main>
 
-    <!-- 하단 4대 초대형 박스 버튼 -->
+    <!-- 하단 4대 대형 버튼: [상담종료] 반영 -->
     <footer class="grid grid-cols-4 gap-2 pt-2 border-t border-slate-800 shrink-0">
       <button id="btnCallNext" onclick="callNextCustomer()" class="toss-btn h-16 sm:h-20 bg-[#3182f6] hover:bg-[#286cd0] disabled:bg-slate-800 disabled:text-slate-600 disabled:opacity-50 text-white font-black text-lg rounded-2xl flex flex-col items-center justify-center shadow-lg">
         <span>호출</span>
@@ -114,8 +119,8 @@
       <button onclick="passCustomer()" class="toss-btn h-16 sm:h-20 bg-rose-500/20 border border-rose-500/40 text-rose-300 hover:bg-rose-500 hover:text-white font-black text-sm rounded-2xl flex flex-col items-center justify-center">
         <span>부재패스</span>
       </button>
-      <button onclick="completeCurrent()" class="toss-btn h-16 sm:h-20 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-lg rounded-2xl flex flex-col items-center justify-center shadow-lg">
-        <span>완료</span>
+      <button onclick="completeCurrent()" class="toss-btn h-16 sm:h-20 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-base sm:text-lg rounded-2xl flex flex-col items-center justify-center shadow-lg">
+        <span>상담종료</span>
       </button>
     </footer>
 
@@ -184,7 +189,7 @@
             ? 'bg-[#3182f6] text-white shadow-lg ring-2 ring-blue-400' 
             : 'bg-[#1f293d] text-slate-300 hover:bg-[#28354f]'
         }`;
-        btn.innerHTML = `<span>${d.name}</span><span class="text-xs ${isCurrent ? 'font-black text-white' : 'opacity-60'}">${isCurrent ? '현재 내 자리 (잠김)' : '이 창구로 변경 ➔'}</span>`;
+        btn.innerHTML = `<span>${d.name}</span><span class="text-xs ${isCurrent ? 'font-black text-white' : 'opacity-60'}">${isCurrent ? '현재 내 창구 (잠김)' : '이 창구로 변경 ➔'}</span>`;
         btn.onclick = () => selectAndLockDesk(d.id);
         container.appendChild(btn);
       });
@@ -208,7 +213,7 @@
         const isBusy = !!d.currentTicket;
         btn.className = 'toss-btn w-full h-14 rounded-2xl bg-[#1f293d] hover:bg-indigo-950/60 border border-indigo-500/20 text-white font-black text-sm flex items-center justify-between px-5';
         btn.innerHTML = `
-          <span>${d.name} ${isBusy ? `(${d.currentTicket}번 상담중)` : '(비어있음)'}</span>
+          <span>${d.name} ${isBusy ? `(${d.currentTicket}번 진행중)` : '(비어있음)'}</span>
           <span class="text-xs text-indigo-400 font-bold">이 창구로 전달 ➔</span>
         `;
         btn.onclick = () => {
@@ -286,7 +291,7 @@
       function loop() {
         f++;
         ctx.fillStyle = (f % 2 === 0) ? '#000000' : '#010101';
-        ctx.fillRect(0, 0, 2, 2);
+        ctx.fillRect(0, 2, 2, 2);
         requestAnimationFrame(loop);
       }
       loop();

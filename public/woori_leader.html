@@ -3,137 +3,161 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>우리은행 상담 관제 | 지점장·팀장용</title>
+  <title>우리은행 상담사 대시보드 관리</title>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    body { font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif; letter-spacing: -0.035em; }
-    .toss-card { background: #171f30; border: 1px solid rgba(255,255,255,0.08); }
-    .toss-btn { transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1); }
-    .toss-btn:active { transform: scale(0.96); }
+    * {
+      font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif !important;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    body {
+      background-color: #0b101b;
+      letter-spacing: -0.035em;
+    }
+    .toss-card {
+      background: #171f30;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    }
+    .toss-inner {
+      background: #101726;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
   </style>
 </head>
-<body class="bg-[#0b101b] text-white min-h-screen p-4 md:p-6 font-sans select-none pb-20">
+<body class="text-white min-h-screen p-4 md:p-8 select-none pb-24 flex justify-center">
 
-  <!-- 상단 헤더 -->
-  <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pb-5 mb-6 border-b border-slate-800">
-    <div>
-      <div class="flex items-center gap-2 mb-1">
-        <span class="px-3 py-1 bg-[#0067ac] text-white text-xs font-black rounded-xl">우리은행 전용</span>
-        <span class="text-xs text-slate-400 font-bold">현장 실시간 지휘 대시보드</span>
+  <div class="w-full max-w-5xl flex flex-col gap-6">
+
+    <!-- 상단 헤더 -->
+    <header class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 border-b border-slate-800/80 gap-4">
+      <div>
+        <div class="flex items-center gap-2 mb-1.5">
+          <span class="px-2.5 py-0.5 bg-[#0067ac] text-white text-[11px] font-black rounded-lg tracking-tight shadow-sm">
+            우리은행
+          </span>
+          <span class="text-xs text-slate-400 font-bold tracking-tight">창구 실시간 모니터링 시스템</span>
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-black text-white tracking-tight">우리은행 상담사 대시보드 관리</h1>
       </div>
-      <h1 class="text-3xl font-black text-white tracking-tight">우리은행 팀장·지점장 관제</h1>
-    </div>
-    <div id="realtimeClock" class="font-mono text-emerald-400 bg-[#171f30] border border-white/10 px-5 py-2.5 rounded-2xl text-sm font-black shadow w-fit">
-      KST --:--:--
-    </div>
-  </header>
+      <div id="realtimeClock" class="font-mono text-emerald-400 toss-card px-4 py-2 rounded-2xl text-xs sm:text-sm font-black w-fit tracking-wider border border-emerald-500/20">
+        KST --:--:--
+      </div>
+    </header>
 
-  <!-- 상단 총괄 지표 2종 카드 -->
-  <div class="grid grid-cols-2 gap-4 mb-6">
-    <div class="toss-card rounded-[32px] p-6 text-center shadow-xl">
-      <div class="text-xs font-black text-slate-400 mb-1">우리은행 실시간 총 대기</div>
-      <div id="wooriWaitCount" class="text-5xl md:text-6xl font-black text-amber-400 my-2 tracking-tight">0</div>
-      <div class="text-[11px] font-bold text-slate-500">대기 번호표 기준</div>
+    <!-- 실시간 요약 카드 -->
+    <div class="grid grid-cols-2 gap-3 sm:gap-5">
+      <div class="toss-card rounded-[28px] p-6 text-center">
+        <span class="text-xs font-black text-slate-400">우리은행 실시간 대기</span>
+        <div id="wooriWaitCount" class="text-5xl sm:text-6xl font-black text-amber-400 my-2 tracking-tight">0</div>
+        <span class="text-[11px] font-bold text-slate-500">현재 대기 중 고객</span>
+      </div>
+      <div class="toss-card rounded-[28px] p-6 text-center">
+        <span class="text-xs font-black text-slate-400">오늘 누적 상담종료 실적</span>
+        <div id="wooriDoneCount" class="text-5xl sm:text-6xl font-black text-[#3182f6] my-2 tracking-tight">0</div>
+        <span class="text-[11px] font-bold text-slate-500">정상 상담완료 기준</span>
+      </div>
     </div>
-    <div class="toss-card rounded-[32px] p-6 text-center shadow-xl">
-      <div class="text-xs font-black text-slate-400 mb-1">오늘 우리은행 총 상담 완료</div>
-      <div id="wooriDoneCount" class="text-5xl md:text-6xl font-black text-[#3182f6] my-2 tracking-tight">0</div>
-      <div class="text-[11px] font-bold text-slate-500">부재/취소 제외 실제 실적</div>
+
+    <!-- 창구별 개별 진행 현황 그리드 (1~4번 카드 기본 상시 출력) -->
+    <section>
+      <div class="flex justify-between items-center mb-3 px-1">
+        <h2 class="text-base sm:text-lg font-black text-white flex items-center gap-2">
+          <span>🏢</span> 창구별 실시간 진행 현황
+        </h2>
+        <span class="text-xs font-bold text-[#3182f6]" id="deskActiveSummary">운영 창구 연동 중</span>
+      </div>
+
+      <div id="wooriDesksGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <!-- 1번 창구 -->
+        <div id="card_desk_1" class="toss-card rounded-[26px] p-5 flex flex-col justify-between transition-all">
+          <div class="flex justify-between items-center pb-3 border-b border-white/5 mb-3">
+            <span class="font-black text-base text-slate-200 tracking-tight">1번 창구</span>
+            <span id="badge_desk_1" class="px-2.5 py-1 rounded-xl text-[11px] font-black bg-slate-800 text-slate-400">대기 중</span>
+          </div>
+          <div class="my-4 text-center">
+            <div class="text-[11px] font-bold text-slate-500 mb-1">상담 진행 고객</div>
+            <div id="ticket_desk_1" class="text-4xl sm:text-5xl font-black text-slate-600 tracking-tight">-</div>
+          </div>
+          <div class="toss-inner rounded-xl p-3 flex justify-between items-center text-xs font-bold">
+            <span class="text-slate-400 font-medium">상담종료</span>
+            <span id="done_desk_1" class="text-emerald-400 font-black text-sm">0건</span>
+          </div>
+        </div>
+
+        <!-- 2번 창구 -->
+        <div id="card_desk_2" class="toss-card rounded-[26px] p-5 flex flex-col justify-between transition-all">
+          <div class="flex justify-between items-center pb-3 border-b border-white/5 mb-3">
+            <span class="font-black text-base text-slate-200 tracking-tight">2번 창구</span>
+            <span id="badge_desk_2" class="px-2.5 py-1 rounded-xl text-[11px] font-black bg-slate-800 text-slate-400">대기 중</span>
+          </div>
+          <div class="my-4 text-center">
+            <div class="text-[11px] font-bold text-slate-500 mb-1">상담 진행 고객</div>
+            <div id="ticket_desk_2" class="text-4xl sm:text-5xl font-black text-slate-600 tracking-tight">-</div>
+          </div>
+          <div class="toss-inner rounded-xl p-3 flex justify-between items-center text-xs font-bold">
+            <span class="text-slate-400 font-medium">상담종료</span>
+            <span id="done_desk_2" class="text-emerald-400 font-black text-sm">0건</span>
+          </div>
+        </div>
+
+        <!-- 3번 창구 -->
+        <div id="card_desk_3" class="toss-card rounded-[26px] p-5 flex flex-col justify-between transition-all">
+          <div class="flex justify-between items-center pb-3 border-b border-white/5 mb-3">
+            <span class="font-black text-base text-slate-200 tracking-tight">3번 창구</span>
+            <span id="badge_desk_3" class="px-2.5 py-1 rounded-xl text-[11px] font-black bg-slate-800 text-slate-400">대기 중</span>
+          </div>
+          <div class="my-4 text-center">
+            <div class="text-[11px] font-bold text-slate-500 mb-1">상담 진행 고객</div>
+            <div id="ticket_desk_4" class="text-4xl sm:text-5xl font-black text-slate-600 tracking-tight">-</div>
+          </div>
+          <div class="toss-inner rounded-xl p-3 flex justify-between items-center text-xs font-bold">
+            <span class="text-slate-400 font-medium">상담종료</span>
+            <span id="done_desk_3" class="text-emerald-400 font-black text-sm">0건</span>
+          </div>
+        </div>
+
+        <!-- 4번 창구 -->
+        <div id="card_desk_4" class="toss-card rounded-[26px] p-5 flex flex-col justify-between transition-all">
+          <div class="flex justify-between items-center pb-3 border-b border-white/5 mb-3">
+            <span class="font-black text-base text-slate-200 tracking-tight">4번 창구</span>
+            <span id="badge_desk_4" class="px-2.5 py-1 rounded-xl text-[11px] font-black bg-slate-800 text-slate-400">대기 중</span>
+          </div>
+          <div class="my-4 text-center">
+            <div class="text-[11px] font-bold text-slate-500 mb-1">상담 진행 고객</div>
+            <div id="ticket_desk_4" class="text-4xl sm:text-5xl font-black text-slate-600 tracking-tight">-</div>
+          </div>
+          <div class="toss-inner rounded-xl p-3 flex justify-between items-center text-xs font-bold">
+            <span class="text-slate-400 font-medium">상담종료</span>
+            <span id="done_desk_4" class="text-emerald-400 font-black text-sm">0건</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 운영시간대 바 -->
+    <div class="toss-card rounded-2xl px-5 py-3.5 flex justify-between items-center text-xs font-bold border border-white/5">
+      <span class="text-slate-400">총괄 현장 운영시간대</span>
+      <span id="displayHoursText" class="text-amber-300 font-black">09:00 ~ 20:00 (자동 연동)</span>
     </div>
+
+    <!-- 시간대별 상담종료 현황 차트 -->
+    <section class="toss-card rounded-[28px] p-6">
+      <div class="flex justify-between items-center mb-5">
+        <h2 class="text-sm font-black text-white">📊 시간대별 상담종료 현황</h2>
+        <span class="text-xs font-bold text-slate-500">실시간 자동 집계</span>
+      </div>
+      <div id="hourlyChart" class="flex items-end gap-2.5 h-44 pt-5 pb-2 px-1 overflow-x-auto"></div>
+    </section>
+
   </div>
-
-  <!-- [창구별 개별 진행 현황 그리드: 데이터 없어도 1~4번 창구 기본 출력] -->
-  <section class="mb-6">
-    <div class="flex justify-between items-center mb-3 px-1">
-      <h2 class="text-lg font-black text-white flex items-center gap-2">
-        <span>👨‍💼</span> 우리은행 창구별 개별 진행 현황
-      </h2>
-      <span class="text-xs font-bold text-blue-400" id="deskActiveSummary">실시간 연동 중</span>
-    </div>
-    <div id="wooriDesksGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      <!-- 기본 1~4번 창구 카드 기본 렌더링 -->
-      <div id="card_desk_1" class="toss-card rounded-[28px] p-5 shadow-lg border border-white/5">
-        <div class="flex justify-between items-center pb-3 border-b border-white/5 mb-3">
-          <span class="font-black text-lg text-white">1번 창구</span>
-          <span id="badge_desk_1" class="px-3 py-1 rounded-xl text-xs font-black bg-slate-800 text-slate-400">대기 중</span>
-        </div>
-        <div class="my-3 text-center">
-          <div class="text-xs font-bold text-slate-500 mb-1">진행 중 고객 번호</div>
-          <div id="ticket_desk_1" class="text-5xl font-black text-slate-600 tracking-tight">-</div>
-        </div>
-        <div class="bg-[#1f293d] rounded-2xl p-3 flex justify-between items-center text-xs font-bold">
-          <span class="text-slate-400">완료 실적</span>
-          <span id="done_desk_1" class="text-emerald-400 font-black text-sm">0건</span>
-        </div>
-      </div>
-
-      <div id="card_desk_2" class="toss-card rounded-[28px] p-5 shadow-lg border border-white/5">
-        <div class="flex justify-between items-center pb-3 border-b border-white/5 mb-3">
-          <span class="font-black text-lg text-white">2번 창구</span>
-          <span id="badge_desk_2" class="px-3 py-1 rounded-xl text-xs font-black bg-slate-800 text-slate-400">대기 중</span>
-        </div>
-        <div class="my-3 text-center">
-          <div class="text-xs font-bold text-slate-500 mb-1">진행 중 고객 번호</div>
-          <div id="ticket_desk_2" class="text-5xl font-black text-slate-600 tracking-tight">-</div>
-        </div>
-        <div class="bg-[#1f293d] rounded-2xl p-3 flex justify-between items-center text-xs font-bold">
-          <span class="text-slate-400">완료 실적</span>
-          <span id="done_desk_2" class="text-emerald-400 font-black text-sm">0건</span>
-        </div>
-      </div>
-
-      <div id="card_desk_3" class="toss-card rounded-[28px] p-5 shadow-lg border border-white/5">
-        <div class="flex justify-between items-center pb-3 border-b border-white/5 mb-3">
-          <span class="font-black text-lg text-white">3번 창구</span>
-          <span id="badge_desk_3" class="px-3 py-1 rounded-xl text-xs font-black bg-slate-800 text-slate-400">대기 중</span>
-        </div>
-        <div class="my-3 text-center">
-          <div class="text-xs font-bold text-slate-500 mb-1">진행 중 고객 번호</div>
-          <div id="ticket_desk_3" class="text-5xl font-black text-slate-600 tracking-tight">-</div>
-        </div>
-        <div class="bg-[#1f293d] rounded-2xl p-3 flex justify-between items-center text-xs font-bold">
-          <span class="text-slate-400">완료 실적</span>
-          <span id="done_desk_3" class="text-emerald-400 font-black text-sm">0건</span>
-        </div>
-      </div>
-
-      <div id="card_desk_4" class="toss-card rounded-[28px] p-5 shadow-lg border border-white/5">
-        <div class="flex justify-between items-center pb-3 border-b border-white/5 mb-3">
-          <span class="font-black text-lg text-white">4번 창구</span>
-          <span id="badge_desk_4" class="px-3 py-1 rounded-xl text-xs font-black bg-slate-800 text-slate-400">대기 중</span>
-        </div>
-        <div class="my-3 text-center">
-          <div class="text-xs font-bold text-slate-500 mb-1">진행 중 고객 번호</div>
-          <div id="ticket_desk_4" class="text-5xl font-black text-slate-600 tracking-tight">-</div>
-        </div>
-        <div class="bg-[#1f293d] rounded-2xl p-3 flex justify-between items-center text-xs font-bold">
-          <span class="text-slate-400">완료 실적</span>
-          <span id="done_desk_4" class="text-emerald-400 font-black text-sm">0건</span>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- 운영시간대 안내 바 -->
-  <div class="toss-card rounded-2xl px-5 py-3.5 mb-6 flex justify-between items-center text-xs font-bold border border-amber-500/20">
-    <span class="text-slate-400">현장 총괄 운영시간대</span>
-    <span id="displayHoursText" class="text-amber-300 font-black">--:00 ~ --:00 (자동 연동)</span>
-  </div>
-
-  <!-- 시간대별 실적 차트 -->
-  <section class="toss-card rounded-[32px] p-6 shadow-xl">
-    <div class="flex justify-between items-center mb-5">
-      <h2 class="text-sm font-black text-white">📊 시간대별 우리은행 상담 실적</h2>
-      <span class="text-xs font-bold text-slate-500">총괄 관리자 시간대 자동 동기화</span>
-    </div>
-    <div id="hourlyChart" class="flex items-end gap-3 h-44 pt-6 pb-2 px-1 overflow-x-auto"></div>
-  </section>
 
   <script>
     const socket = io();
-    let currentOperatingHours = { startHour: 9, endHour: 21 };
+    let currentOperatingHours = { startHour: 9, endHour: 20 };
     let wooriStats = {};
 
     function updateClock() {
@@ -167,9 +191,8 @@
       wooriStats = state.hourlyStats || {};
 
       const desks = state.desks || [];
-      document.getElementById('deskActiveSummary').innerText = `운영 창구: ${desks.length}개`;
+      document.getElementById('deskActiveSummary').innerText = `운영 창구 ${desks.length}개 연동`;
 
-      // 1~4번 각 창구 상태 즉시 반영
       desks.forEach(d => {
         const card = document.getElementById(`card_desk_${d.id}`);
         const badge = document.getElementById(`badge_desk_${d.id}`);
@@ -181,16 +204,16 @@
 
           if (d.currentTicket) {
             ticketTxt.innerText = `${d.currentTicket}번`;
-            ticketTxt.className = 'text-5xl font-black text-amber-300 tracking-tight';
+            ticketTxt.className = 'text-4xl sm:text-5xl font-black text-amber-300 tracking-tight';
             badge.innerText = '상담 진행 중';
-            badge.className = 'px-3 py-1 rounded-xl text-xs font-black bg-amber-400 text-slate-950 animate-pulse';
-            card.className = 'toss-card rounded-[28px] p-5 shadow-lg border border-amber-400/60 bg-[#1c2333]';
+            badge.className = 'px-2.5 py-1 rounded-xl text-[11px] font-black bg-amber-400 text-slate-950 animate-pulse';
+            card.className = 'toss-card rounded-[26px] p-5 flex flex-col justify-between border border-amber-400/50 bg-[#192236]';
           } else {
             ticketTxt.innerText = '-';
-            ticketTxt.className = 'text-5xl font-black text-slate-600 tracking-tight';
-            badge.innerText = '호출 대기';
-            badge.className = 'px-3 py-1 rounded-xl text-xs font-black bg-slate-800 text-slate-400';
-            card.className = 'toss-card rounded-[28px] p-5 shadow-lg border border-white/5';
+            ticketTxt.className = 'text-4xl sm:text-5xl font-black text-slate-600 tracking-tight';
+            badge.innerText = '대기 중';
+            badge.className = 'px-2.5 py-1 rounded-xl text-[11px] font-black bg-slate-800 text-slate-400';
+            card.className = 'toss-card rounded-[26px] p-5 flex flex-col justify-between border border-white/5';
           }
         }
       });
@@ -222,14 +245,14 @@
 
       hoursToDisplay.forEach(h => {
         const count = wooriStats[h] || 0;
-        const heightPercent = Math.max(14, Math.round((count / maxVal) * 100));
+        const heightPercent = Math.max(16, Math.round((count / maxVal) * 100));
         const isCurrent = (h === nowHour);
 
         const col = document.createElement('div');
-        col.className = 'flex-1 flex flex-col items-center justify-end h-full min-w-[38px]';
+        col.className = 'flex-1 flex flex-col items-center justify-end h-full min-w-[34px]';
         col.innerHTML = `
-          <span class="text-xs font-black ${count > 0 ? 'text-[#3182f6]' : 'text-slate-600'} mb-1">${count}</span>
-          <div class="w-full rounded-2xl transition-all ${isCurrent ? 'bg-amber-400 ring-2 ring-amber-300' : (count > 0 ? 'bg-[#0067ac]' : 'bg-slate-800')}" style="height: ${heightPercent}%;"></div>
+          <span class="text-xs font-black ${count > 0 ? 'text-[#3182f6]' : 'text-slate-600'} mb-1.5">${count}</span>
+          <div class="w-full rounded-xl transition-all ${isCurrent ? 'bg-amber-400 ring-2 ring-amber-300' : (count > 0 ? 'bg-[#0067ac]' : 'bg-slate-800')}" style="height: ${heightPercent}%;"></div>
           <span class="text-[11px] font-black ${isCurrent ? 'text-amber-300' : 'text-slate-500'} mt-2">${h}시</span>
         `;
         container.appendChild(col);

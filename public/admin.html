@@ -2,118 +2,359 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>총괄 관리자 콘솔 | 입주상담 시스템</title>
-  <link rel="manifest" href="/manifest.json">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>현장 총괄 관리자 콘솔 | 스마트 큐</title>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    body { font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif; letter-spacing: -0.035em; }
-    .toss-card { background: #171f30; border: 1px solid rgba(255,255,255,0.08); }
+    * {
+      font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif !important;
+      -webkit-font-smoothing: antialiased;
+    }
+    body { background-color: #0b101b; letter-spacing: -0.03em; }
+    .toss-card { background: #171f30; border: 1px solid rgba(255, 255, 255, 0.08); }
     .toss-btn { transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1); }
     .toss-btn:active { transform: scale(0.96); }
   </style>
 </head>
-<body class="bg-[#0b101b] text-white min-h-screen p-4 md:p-6 select-none">
+<body class="text-white min-h-screen p-4 md:p-8 select-none flex justify-center pb-28">
 
-  <div id="audioUnlockModal" class="fixed inset-0 bg-[#0b101b]/95 z-50 flex flex-col items-center justify-center p-6 text-center backdrop-blur-md">
-    <div class="text-5xl mb-4">📢</div>
-    <h1 class="text-3xl font-black text-amber-400 mb-2">현장 총괄 관리자 콘솔</h1>
-    <p class="text-slate-400 text-sm mb-6">스피커 앰프 연결 전, 아래 버튼을 터치해 고출력 자동 방송을 활성화하세요.</p>
-    <button onclick="unlockMasterAudio()" class="toss-btn px-8 py-4 bg-[#3182f6] hover:bg-[#286cd0] text-white font-black text-xl rounded-2xl shadow-xl shadow-blue-500/30">
-      방송 엔진 및 콘솔 시작
-    </button>
+  <div class="w-full max-w-4xl flex flex-col gap-6">
+
+    <!-- 상단 헤더 -->
+    <header class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 border-b border-slate-800 gap-4">
+      <div>
+        <span class="px-2.5 py-0.5 bg-rose-600 text-white text-[11px] font-black rounded-lg">MASTER ADMIN</span>
+        <h1 class="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1">현장 총괄 관리자 콘솔</h1>
+      </div>
+      <div id="adminClock" class="font-mono text-emerald-400 toss-card px-4 py-2 rounded-2xl text-xs sm:text-sm font-black w-fit border border-emerald-500/20">
+        KST --:--:--
+      </div>
+    </header>
+
+    <!-- 1. 메인 스피커 방송 연결 -->
+    <div class="toss-card rounded-[26px] p-5 border border-blue-500/30">
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+          <h2 class="text-base font-black text-white flex items-center gap-2">
+            <span>🔊</span> 관제탑 메인 방송 스피커 연결
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">브라우저 오디오 보안을 해제해야 현장 전체 호출 음성 및 차임벨이 송출됩니다.</p>
+        </div>
+        <button id="btnSpeaker" onclick="unlockAudioSpeaker()" class="toss-btn w-full sm:w-auto px-6 py-3 bg-[#3182f6] hover:bg-blue-600 text-white font-black text-sm rounded-2xl shadow-lg flex items-center justify-center gap-2 shrink-0">
+          <span>🔔</span> 메인 스피커 켜기
+        </button>
+      </div>
+    </div>
+
+    <!-- 2. 신규 기관(은행) 추가 폼 -->
+    <div class="toss-card rounded-[26px] p-5 border border-white/10">
+      <h2 class="text-sm font-black text-white mb-3 flex items-center gap-2">
+        <span>➕</span> 신규 기관(은행) 추가
+      </h2>
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <input id="newBankName" type="text" placeholder="기관명 (예: 토스뱅크)" class="bg-[#101726] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 outline-none focus:border-blue-500" />
+        <input id="newBankId" type="text" placeholder="영문코드 (예: toss)" class="bg-[#101726] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 outline-none focus:border-blue-500" />
+        <div class="flex items-center gap-2 bg-[#101726] border border-white/10 rounded-xl px-3 py-2 text-xs">
+          <span class="text-slate-400">대표색</span>
+          <input id="newBankColor" type="color" value="#0067ac" class="w-7 h-7 bg-transparent rounded cursor-pointer" />
+        </div>
+        <button onclick="addNewBank()" class="toss-btn bg-[#3182f6] hover:bg-blue-600 text-white font-black text-xs rounded-xl shadow py-2.5">
+          기관 신규 등록
+        </button>
+      </div>
+    </div>
+
+    <!-- 3. 운영시간대 설정 & 전체 초기화 -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div class="toss-card rounded-[24px] p-5">
+        <h2 class="text-sm font-black text-white mb-3 flex items-center gap-2">
+          <span>⏰</span> 현장 운영시간대
+        </h2>
+        <div class="flex items-center gap-2">
+          <select id="selStartHour" class="bg-[#101726] text-white border border-white/10 rounded-xl px-3 py-2 text-xs font-black outline-none"></select>
+          <span class="text-slate-500 font-bold">~</span>
+          <select id="selEndHour" class="bg-[#101726] text-white border border-white/10 rounded-xl px-3 py-2 text-xs font-black outline-none"></select>
+          <button onclick="saveOperatingHours()" class="toss-btn px-4 py-2 bg-amber-500 text-slate-950 font-black text-xs rounded-xl shadow ml-auto">
+            적용
+          </button>
+        </div>
+      </div>
+
+      <div class="toss-card rounded-[24px] p-5 border border-rose-500/20 flex flex-col justify-between">
+        <div>
+          <h2 class="text-sm font-black text-rose-400 flex items-center gap-1.5">
+            <span>⚠️</span> 전체 대기 번호 일괄 리셋
+          </h2>
+          <p class="text-[11px] text-slate-400 mt-1">모든 기관의 대기열과 발권 번호를 100번으로 리셋합니다.</p>
+        </div>
+        <button onclick="resetAllQueues()" class="toss-btn mt-3 w-full py-2 bg-rose-600/30 hover:bg-rose-600 border border-rose-500 text-rose-200 hover:text-white font-black text-xs rounded-xl">
+          전체 일괄 리셋
+        </button>
+      </div>
+    </div>
+
+    <!-- 4. 기관 및 창구(상담사) 관리 리스트 -->
+    <section>
+      <div class="flex justify-between items-center mb-3 px-1">
+        <h2 class="text-base font-black text-white flex items-center gap-2">
+          <span>🏢</span> 기관별 창구(상담사) 관리 및 현황
+        </h2>
+        <span class="text-xs text-slate-400 font-bold" id="totalBankCount">0개 기관</span>
+      </div>
+      <div id="bankAdminList" class="flex flex-col gap-4"></div>
+    </section>
+
   </div>
-
-  <header class="flex justify-between items-center pb-4 mb-6 border-b border-slate-800">
-    <div class="flex items-center gap-3">
-      <span class="px-3 py-1 bg-[#8b0029] text-white font-black text-xs rounded-xl">법무법인 제이엘</span>
-      <h1 class="text-2xl font-black text-white">현장 총괄 마스터 콘솔</h1>
-    </div>
-    <div class="flex items-center gap-3">
-      <span id="audioStatusBadge" class="text-xs font-black px-3 py-1 bg-slate-800 text-slate-400 rounded-xl">방송 대기 중</span>
-      <button onclick="resetAllQueues()" class="toss-btn px-4 py-2 bg-rose-500/20 border border-rose-500/40 text-rose-300 font-bold text-xs rounded-xl hover:bg-rose-500 hover:text-white">
-        전체 대기열 리셋
-      </button>
-    </div>
-  </header>
-
-  <section id="bannerSection" class="toss-card rounded-[28px] p-6 mb-6 text-center border-2 border-slate-800 transition-all duration-300">
-    <div id="bannerSub" class="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">실시간 방송 대기</div>
-    <div id="bannerMain" class="text-2xl md:text-4xl font-black text-slate-500 py-1 tracking-tight">
-      대기 중인 안내 방송이 없습니다
-    </div>
-  </section>
-
-  <main class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="bankControlGrid"></main>
 
   <script>
     const socket = io();
     let audioCtx = null;
+    let isAudioActive = false;
     let bankList = [];
-    let fullState = {};
+    let queueStates = {};
 
-    function unlockMasterAudio() {
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('adminClock').innerText = `KST ${now.toLocaleTimeString('ko-KR', { hour12: false, timeZone: 'Asia/Seoul' })}`;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    const selStart = document.getElementById('selStartHour');
+    const selEnd = document.getElementById('selEndHour');
+    for (let i = 6; i <= 23; i++) {
+      selStart.appendChild(new Option(`${String(i).padStart(2,'0')}:00`, i, false, i === 9));
+      selEnd.appendChild(new Option(`${String(i).padStart(2,'0')}:00`, i, false, i === 20));
+    }
+
+    async function unlockAudioSpeaker() {
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         window.speechSynthesis.resume();
         window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
       }
-      document.getElementById('audioUnlockModal').style.display = 'none';
-      document.getElementById('audioStatusBadge').innerText = '⚡ 방송 엔진 정상 가동';
-      document.getElementById('audioStatusBadge').className = 'text-xs font-black px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-xl';
-      playChime(() => speakMaster('총괄 관리자 콘솔 음성 시스템이 활성화되었습니다.'));
+      isAudioActive = true;
+      const btn = document.getElementById('btnSpeaker');
+      btn.className = 'toss-btn w-full sm:w-auto px-6 py-3 bg-emerald-600 text-white font-black text-sm rounded-2xl shadow flex items-center justify-center gap-2 shrink-0';
+      btn.innerHTML = `<span>✅</span> 메인 스피커 연결됨`;
+      playDingDong(() => speakTTS("총괄 관리자 방송 스피커가 활성화되었습니다."));
     }
 
-    function playChime(cb) {
+    function playDingDong(cb) {
       if (!audioCtx) return cb && cb();
       const notes = [523.25, 659.25, 783.99, 1046.50];
       const now = audioCtx.currentTime;
       notes.forEach((freq, idx) => {
         const osc = audioCtx.createOscillator();
         const g = audioCtx.createGain();
-        osc.frequency.setValueAtTime(freq, now + idx * 0.15);
-        g.gain.setValueAtTime(0.4, now + idx * 0.15);
-        g.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.15 + 0.35);
+        osc.frequency.setValueAtTime(freq, now + idx * 0.12);
+        g.gain.setValueAtTime(0.4, now + idx * 0.12);
+        g.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.12 + 0.25);
         osc.connect(g);
         g.connect(audioCtx.destination);
-        osc.start(now + idx * 0.15);
-        osc.stop(now + idx * 0.15 + 0.36);
+        osc.start(now + idx * 0.12);
+        osc.stop(now + idx * 0.12 + 0.26);
       });
-      setTimeout(() => { if (cb) cb(); }, 700);
+      setTimeout(() => { if (cb) cb(); }, 600);
     }
 
-    function speakMaster(text) {
+    function speakTTS(txt) {
       if (!('speechSynthesis' in window)) return;
       window.speechSynthesis.cancel();
       if (window.speechSynthesis.paused) window.speechSynthesis.resume();
-      const u = new SpeechSynthesisUtterance(text);
+      const u = new SpeechSynthesisUtterance(txt);
       u.lang = 'ko-KR';
-      u.rate = 0.95;
-      u.pitch = 1.0;
+      u.rate = 1.0;
       window.speechSynthesis.speak(u);
     }
 
-    // [전 기관 등록 음성 안내 및 상단 배너 점등]
-    socket.on('new_ticket_issued', ({ bankName, ticketNo }) => {
-      const banner = document.getElementById('bannerSection');
-      const sub = document.getElementById('bannerSub');
-      const main = document.getElementById('bannerMain');
+    socket.on('bank_list_sync', (list) => {
+      bankList = list;
+      document.getElementById('totalBankCount').innerText = `${list.length}개 기관 등록`;
+      renderAdminList();
+    });
 
-      sub.innerText = '🔔 신규 대기 고객 접수';
-      sub.className = 'text-xs font-black text-cyan-400 uppercase tracking-widest mb-1';
-      banner.className = 'toss-card rounded-[28px] p-6 mb-6 text-center border-2 border-cyan-400 bg-cyan-950/40 shadow-xl';
-      main.className = 'text-2xl md:text-4xl font-black text-cyan-300 py-1 tracking-tight animate-pulse';
-      main.innerText = `[${bankName}] ${ticketNo}번 고객 대기 등록`;
+    socket.on('full_state_sync', (states) => {
+      queueStates = states;
+      renderAdminList();
+    });
 
-      playChime(() => {
-        speakMaster(`${bankName}, ${ticketNo}번 고객님이 대기 등록되었습니다.`);
+    socket.on('queue_update', ({ bankId, state }) => {
+      queueStates[bankId] = state;
+      renderAdminList();
+    });
+
+    socket.on('operating_hours_update', (hours) => {
+      if (hours) {
+        selStart.value = hours.startHour;
+        selEnd.value = hours.endHour;
+      }
+    });
+
+    socket.on('customer_called', (data) => {
+      if (isAudioActive) {
+        playDingDong(() => {
+          speakTTS(`${data.bankName}, ${data.ticketNo}번 고객님, ${data.deskId}번 창구로 오시기 바랍니다.`);
+        });
+      }
+    });
+
+    socket.on('customer_recalled', (data) => {
+      if (isAudioActive) {
+        playDingDong(() => {
+          speakTTS(`다시 안내 말씀 드립니다. ${data.bankName}, ${data.ticketNo}번 고객님, ${data.deskId}번 창구로 오시기 바랍니다.`);
+        });
+      }
+    });
+
+    function renderAdminList() {
+      const container = document.getElementById('bankAdminList');
+      if (!container) return;
+      container.innerHTML = '';
+
+      bankList.forEach(b => {
+        const st = queueStates[b.id] || { waiting: [], completedCount: 0, currentSeq: 100, desks: [] };
+        const waitCount = (st.waiting || []).length;
+        const doneCount = st.completedCount || 0;
+        const desks = st.desks || [];
+
+        const card = document.createElement('div');
+        card.className = `toss-card rounded-[24px] p-5 flex flex-col gap-4 border ${b.active ? 'border-white/10' : 'opacity-60 border-slate-800'}`;
+        card.innerHTML = `
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-white/5 gap-3">
+            <div class="flex items-center gap-3">
+              <span class="w-3.5 h-3.5 rounded-full shrink-0" style="background-color: ${b.color || '#3182f6'};"></span>
+              <div>
+                <span class="font-black text-white text-base">${b.name}</span>
+                <span class="text-xs text-slate-400 font-mono ml-2">(${b.id})</span>
+              </div>
+              <span class="px-2 py-0.5 rounded-md text-[10px] font-black ${b.active ? 'bg-blue-600/30 text-blue-300' : 'bg-slate-800 text-slate-500'}">
+                ${b.active ? '운영 중' : '숨김(비활성)'}
+              </span>
+            </div>
+
+            <div class="flex items-center gap-2 self-end sm:self-auto">
+              <span class="text-xs font-black text-amber-400">대기 ${waitCount}명</span>
+              <span class="text-slate-600 text-xs">|</span>
+              <span class="text-xs font-black text-blue-400">완료 ${doneCount}건</span>
+              <button onclick="toggleBankActive('${b.id}')" class="toss-btn px-2.5 py-1 text-[11px] font-bold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 ml-2">
+                ${b.active ? '숨기기' : '활성화'}
+              </button>
+              <button onclick="resetSingleBank('${b.id}', '${b.name}')" class="toss-btn px-2.5 py-1 text-[11px] font-bold rounded-lg bg-rose-950/40 text-rose-300 hover:bg-rose-900/60 border border-rose-800/40">
+                리셋
+              </button>
+              <button onclick="deleteBank('${b.id}', '${b.name}')" class="toss-btn px-2.5 py-1 text-[11px] font-bold rounded-lg bg-slate-800 hover:bg-rose-600 text-slate-400 hover:text-white">
+                삭제
+              </button>
+            </div>
+          </div>
+
+          <!-- 창구(상담사) 관리 구역 -->
+          <div>
+            <div class="flex justify-between items-center mb-2">
+              <span class="text-xs font-bold text-slate-400">배치된 창구 (상담사 ${desks.length}명)</span>
+              <div class="flex items-center gap-1.5">
+                <button onclick="removeDesk('${b.id}')" class="toss-btn px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-black rounded-lg">
+                  - 창구 축소
+                </button>
+                <button onclick="addDesk('${b.id}')" class="toss-btn px-2.5 py-1 bg-emerald-600/30 hover:bg-emerald-600 border border-emerald-500/40 text-emerald-300 hover:text-white text-xs font-black rounded-lg">
+                  + 상담사(창구) 추가
+                </button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              ${desks.map(d => `
+                <div class="bg-[#101726] border border-white/5 rounded-xl p-2.5 flex justify-between items-center text-xs">
+                  <span class="font-bold text-slate-300">${d.name}</span>
+                  <span class="font-black ${d.currentTicket ? 'text-amber-400 animate-pulse' : 'text-slate-600'}">
+                    ${d.currentTicket ? d.currentTicket + '번 진행' : '대기'}
+                  </span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+        container.appendChild(card);
       });
+    }
 
-      setTimeout(() => {
-        banner.className = 'toss-card rounded-[28px] p-6 mb-6 text-center border-2 border-slate-800';
-        sub.innerText = '실시간 방송 대기';
-        sub.className = 'text-xs font-black text-slate-400 uppercase tracking-widest mb-1';
+    // 신규 기관 등록
+    function addNewBank() {
+      const name = document.getElementById('newBankName').value.trim();
+      const id = document.getElementById('newBankId').value.trim().toLowerCase();
+      const color = document.getElementById('newBankColor').value;
+
+      if (!name || !id) {
+        alert("기관명과 영문 코드를 입력하세요.");
+        return;
+      }
+      if (bankList.some(b => b.id === id)) {
+        alert("이미 존재하는 영문 코드입니다.");
+        return;
+      }
+
+      const newBank = { id, name, color, active: true, order: bankList.length + 1 };
+      bankList.push(newBank);
+      socket.emit('update_bank_list', bankList);
+
+      document.getElementById('newBankName').value = '';
+      document.getElementById('newBankId').value = '';
+      alert(`[${name}] 기관이 새로 등록되었습니다.`);
+    }
+
+    // 기관 활성/비활성 토글
+    function toggleBankActive(bankId) {
+      const target = bankList.find(b => b.id === bankId);
+      if (target) {
+        target.active = !target.active;
+        socket.emit('update_bank_list', bankList);
+      }
+    }
+
+    // 기관 삭제
+    function deleteBank(bankId, bankName) {
+      if (confirm(`정말로 [${bankName}] 기관을 삭제하시겠습니까?`)) {
+        bankList = bankList.filter(b => b.id !== bankId);
+        socket.emit('update_bank_list', bankList);
+      }
+    }
+
+    // 창구(상담사) 1개 추가
+    function addDesk(bankId) {
+      socket.emit('admin_add_desk', { bank: bankId });
+    }
+
+    // 창구 1개 제거
+    function removeDesk(bankId) {
+      socket.emit('admin_remove_desk', { bank: bankId });
+    }
+
+    // 단일 기관 초기화
+    function resetSingleBank(bankId, bankName) {
+      if (confirm(`[${bankName}]의 대기열과 번호표를 초기화하시겠습니까?`)) {
+        socket.emit('reset_bank_queue', { bank: bankId });
+      }
+    }
+
+    // 전체 기관 일괄 초기화
+    function resetAllQueues() {
+      if (confirm("경고: 모든 기관의 순번표가 100번으로 일괄 리셋됩니다.")) {
+        socket.emit('reset_all_queues');
+      }
+    }
+
+    // 운영시간 저장
+    function saveOperatingHours() {
+      const s = parseInt(selStart.value, 10);
+      const e = parseInt(selEnd.value, 10);
+      socket.emit('update_operating_hours', { startHour: s, endHour: e });
+      alert(`운영시간이 ${String(s).padStart(2,'0')}:00 ~ ${String(e).padStart(2,'0')}:00 로 저장되었습니다.`);
+    }
+  </script>
+</body>
+</html>
