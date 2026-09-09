@@ -91,7 +91,12 @@
   <script>
     const socket = io({ transports: ['websocket', 'polling'] });
     const urlParams = new URLSearchParams(window.location.search);
-    const targetBank = urlParams.get('bank');
+    // 기존에 배포된 QR/링크가 ?b= 와 ?bank= 를 섞어 쓰므로 둘 다 받는다.
+    function urlBank(fallback) {
+      const v = urlParams.get('bank') || urlParams.get('b');
+      return (v || fallback || '').toLowerCase().trim();
+    }
+    const targetBank = urlBank('') || null;
 
     let standardMinutes = 15;
     let serverOffsetMs = 0;
@@ -261,5 +266,6 @@
       }
     });
   </script>
+  <script src="/pwa.js" data-role="board"></script>
 </body>
 </html>

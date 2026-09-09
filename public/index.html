@@ -177,7 +177,12 @@
 
   <script>
     const urlParams = new URLSearchParams(window.location.search);
-    let currentBank = (urlParams.get('bank') || 'kb').toLowerCase();
+    // 기존에 배포된 QR/링크가 ?b= 와 ?bank= 를 섞어 쓰므로 둘 다 받는다.
+    function urlBank(fallback) {
+      const v = urlParams.get('bank') || urlParams.get('b');
+      return (v || fallback || '').toLowerCase().trim();
+    }
+    let currentBank = urlBank('kb');
 
     // 은행별 고유 브랜드 컬러 (서버 연결 전에도 즉시 적용)
     const LOCAL_BANK_THEMES = {
@@ -508,7 +513,7 @@
         btn.style.borderColor = info.color;
         btn.style.color = info.color;
         btn.innerText = info.name;
-        btn.onclick = function () { window.location.href = '/?bank=' + b; };
+        btn.onclick = function () { window.location.href = '/index.html?b=' + b; };
         grid.appendChild(btn);
       });
     }
@@ -526,5 +531,6 @@
       }, { once: true });
     });
   </script>
+  <script src="/pwa.js" data-role="customer"></script>
 </body>
 </html>

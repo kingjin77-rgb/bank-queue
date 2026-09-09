@@ -75,6 +75,21 @@
     .desk-tile .dt-num { font-size: 30px; font-weight: 900; margin: 4px 0; }
     .desk-tile .dt-time { font-size: 14px; font-weight: 800; font-family: monospace; }
 
+    /* 운영시간 선택 */
+    .hours-row { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+    .hour-pick { display: flex; flex-direction: column; gap: 6px; }
+    .hour-label { font-size: 13px; font-weight: 800; color: #94a3b8; }
+    .hour-pick select {
+      background: #0b1120; color: #fff; border: 1px solid var(--border); border-radius: 14px;
+      padding: 14px 18px; font-size: 24px; font-weight: 900; outline: none; min-width: 116px;
+    }
+    .hour-pick select option { background: #0b1120; font-size: 17px; }
+    .hour-tilde { font-size: 26px; font-weight: 900; color: #475569; padding-bottom: 14px; }
+    .hour-summary { font-size: 17px; font-weight: 900; color: var(--success); padding-bottom: 16px; }
+    .preset-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .preset { background: #0b1120; border: 1px solid var(--border); color: #38bdf8; font-size: 14px; font-weight: 800; padding: 11px 16px; border-radius: 12px; cursor: pointer; }
+    .preset:active { background: #1e293b; }
+
     /* 설정 스텝퍼 */
     .setting-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
     .setting-value { font-size: 34px; font-weight: 900; color: var(--success); min-width: 92px; text-align: center; }
@@ -137,14 +152,38 @@
       </div>
     </div>
 
-    <!-- 2. 현장 운영 설정 (표준 상담시간) -->
+    <!-- 2. 당일 상담 운영시간 -->
     <div class="card">
-      <h2>현장 운영 설정</h2>
-      <div class="setting-row">
+      <h2>당일 상담 운영시간</h2>
+      <div style="font-size: 14px; color: #94a3b8; margin-bottom: 16px;">
+        오늘 상담을 진행할 시간대를 정합니다. 시간대별 상담 실적이 이 구간으로 정리됩니다.
+      </div>
+
+      <div class="hours-row">
+        <div class="hour-pick">
+          <div class="hour-label">시작</div>
+          <select id="openHourSel" onchange="applyHours()"></select>
+        </div>
+        <div class="hour-tilde">~</div>
+        <div class="hour-pick">
+          <div class="hour-label">종료</div>
+          <select id="closeHourSel" onchange="applyHours()"></select>
+        </div>
+        <div class="hour-summary" id="hourSummary">09시 ~ 18시 · 9시간</div>
+      </div>
+
+      <div class="preset-row">
+        <button class="preset" onclick="setHours(9, 18)">09 ~ 18시</button>
+        <button class="preset" onclick="setHours(10, 19)">10 ~ 19시</button>
+        <button class="preset" onclick="setHours(13, 20)">13 ~ 20시</button>
+        <button class="preset" onclick="setHours(16, 20)">16 ~ 20시</button>
+      </div>
+
+      <div class="setting-row" style="margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border);">
         <div>
-          <div style="font-size: 15px; font-weight: 800;">표준 상담 시간</div>
+          <div style="font-size: 15px; font-weight: 800;">1인당 예상 상담 소요시간</div>
           <div style="font-size: 13px; color: #94a3b8; margin-top: 4px;">
-            고객 화면 예상 대기시간 계산과 창구 지연 경고의 기준이 됩니다.
+            고객 화면의 "예상 대기시간" 계산과 창구 지연 표시에만 쓰입니다.
           </div>
         </div>
         <div style="display: flex; align-items: center; gap: 10px;">
@@ -449,6 +488,9 @@
       if (data.settings) {
         standardMinutes = data.settings.standardMinutes;
         document.getElementById('stdMinValue').innerText = standardMinutes;
+        if (data.settings.openHour != null) openHour = data.settings.openHour;
+        if (data.settings.closeHour != null) closeHour = data.settings.closeHour;
+        renderHourSummary();
         if (data.settings.repeatCount) {
           repeatCount = data.settings.repeatCount;
           document.getElementById('repeatSelect').value = String(repeatCount);
@@ -460,7 +502,48 @@
       renderLinks(data.bankInfo);
     });
 
-    // 표준 상담시간 조절
+    // 당일 운영시간
+    let openHour = 9, closeHour = 18;
+
+    (function initHourSelects() {
+      const o = document.getElementById('openHourSel');
+      const c = document.getElementById('closeHourSel');
+      for (let h = 0; h <= 23; h++) {
+        const label = String(h).padStart(2, '0') + '시';
+        const a = document.createElement('option'); a.value = h; a.innerText = label; o.appendChild(a);
+        const b = document.createElement('option'); b.value = h; b.innerText = label; c.appendChild(b);
+      }
+      o.value = openHour; c.value = closeHour;
+    })();
+
+    function renderHourSummary() {
+      document.getElementById('openHourSel').value = openHour;
+      document.getElementById('closeHourSel').value = closeHour;
+      document.getElementById('hourSummary').innerText =
+        String(openHour).padStart(2, '0') + '시 ~ ' + String(closeHour).padStart(2, '0') + '시 · ' +
+        (closeHour - openHour + 1) + '시간';
+    }
+
+    function applyHours() {
+      const o = parseInt(document.getElementById('openHourSel').value, 10);
+      const c = parseInt(document.getElementById('closeHourSel').value, 10);
+      if (c < o) {
+        alert('종료 시각은 시작 시각보다 늦어야 합니다.');
+        renderHourSummary();
+        return;
+      }
+      openHour = o; closeHour = c;
+      renderHourSummary();
+      socket.emit('admin_set_settings', { openHour: o, closeHour: c });
+    }
+
+    function setHours(o, c) {
+      openHour = o; closeHour = c;
+      renderHourSummary();
+      socket.emit('admin_set_settings', { openHour: o, closeHour: c });
+    }
+
+    // 1인당 예상 상담 소요시간
     function changeStandard(delta) {
       const next = Math.min(180, Math.max(1, standardMinutes + delta));
       standardMinutes = next;
@@ -595,7 +678,7 @@
         chip.className = 'chip-link';
         chip.innerText = `${bankInfo[b].name} 발권링크 복사`;
         chip.onclick = () => {
-          const url = `${base}/?bank=${b}`;
+          const url = `${base}/index.html?b=${b}`;
           navigator.clipboard.writeText(url).then(() => alert(`${bankInfo[b].name} URL 복사됨:\n${url}`));
         };
         box.appendChild(chip);
@@ -663,9 +746,11 @@
       const when = closed
         ? `일마감 완료 · ${new Date(report.closedAt).toLocaleString('ko-KR')}`
         : `중간 현황 · ${new Date(report.generatedAt).toLocaleString('ko-KR')}`;
+      const hoursLine = `당일 운영시간 ${String(report.openHour).padStart(2, '0')}시 ~ ${String(report.closeHour).padStart(2, '0')}시`;
 
       let html = `
         <div style="font-size: 15px; font-weight: 800; color: ${closed ? '#22c55e' : '#38bdf8'};">${when}</div>
+        <div style="font-size: 14px; font-weight: 800; color: #94a3b8; margin-top: 4px;">${hoursLine}</div>
         <div class="kpi-grid">
           <div class="kpi"><div class="k-label">총 상담 완료</div><div class="k-value">${report.totalCount}건</div></div>
           <div class="kpi"><div class="k-label">평균 상담시간</div><div class="k-value">${fmtMin(report.avgDurationSec)}</div></div>
@@ -724,11 +809,9 @@
         html += `<td style="font-weight: 800;">${h.count}</td></tr>`;
       });
       html += `</tbody></table></div>`;
-      if (report.outsideHoursCount > 0) {
-        html += `<div style="font-size: 13px; color: #94a3b8; margin-top: 8px;">
-          ※ 영업시간(${report.hourlyTotal[0].hour}시~${report.hourlyTotal[report.hourlyTotal.length - 1].hour}시) 밖에 완료된 ${report.outsideHoursCount}건은 위 표에 표시되지 않습니다. 총 건수에는 포함됩니다.
-        </div>`;
-      }
+      html += `<div style="font-size: 13px; color: #94a3b8; margin-top: 8px;">
+        ※ 설정한 운영시간 밖에 완료된 상담이 있으면 해당 시간대도 표에 함께 나옵니다.
+      </div>`;
 
       area.innerHTML = html;
       area.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -738,6 +821,7 @@
     function reportToText(report) {
       const d = new Date(report.closedAt || report.generatedAt);
       let t = `[현장 상담 실적] ${d.toLocaleDateString('ko-KR')} ${d.toLocaleTimeString('ko-KR')}\n`;
+      t += `운영시간 ${String(report.openHour).padStart(2, '0')}시~${String(report.closeHour).padStart(2, '0')}시\n`;
       t += `총 상담 ${report.totalCount}건 / 부재 ${report.totalPassCount}건\n`;
       t += `평균 상담시간 ${fmtMin(report.avgDurationSec)} / 평균 대기 ${fmtMin(report.avgWaitSec)}\n`;
       if (report.peakHour != null) t += `최다 시간대 ${report.peakHour}시 (${report.peakCount}건)\n`;
@@ -782,5 +866,6 @@
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
   </script>
+  <script src="/pwa.js" data-role="admin"></script>
 </body>
 </html>

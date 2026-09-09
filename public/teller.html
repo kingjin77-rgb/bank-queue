@@ -184,7 +184,12 @@
 
   <script>
     const urlParams = new URLSearchParams(window.location.search);
-    const bank = (urlParams.get('bank') || 'kb').toLowerCase();
+    // 기존에 배포된 QR/링크가 ?b= 와 ?bank= 를 섞어 쓰므로 둘 다 받는다.
+    function urlBank(fallback) {
+      const v = urlParams.get('bank') || urlParams.get('b');
+      return (v || fallback || '').toLowerCase().trim();
+    }
+    const bank = urlBank('kb');
 
     const LOCAL_BANK_THEMES = {
       kb:      { name: '국민은행',       color: '#ffbc00', sub: '#fff9e6', btnText: '#2b2b2b' },
@@ -565,5 +570,6 @@
       window.location.reload();
     });
   </script>
+  <script src="/pwa.js" data-role="teller"></script>
 </body>
 </html>

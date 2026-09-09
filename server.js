@@ -15,9 +15,51 @@ const io = new Server(server, {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 발권 전용 링크(/kiosk.html?bank=xx)는 고객 발권 화면(index.html)과 동일 - 기존 QR/주소 유지
+// 발권 전용 링크(/kiosk.html?b=xx)는 고객 발권 화면(index.html)과 동일 - 기존 QR/주소 유지
 app.get(['/kiosk', '/kiosk.html'], (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// ===== 홈 화면 앱 설치용 매니페스트 =====
+// 역할과 은행에 따라 앱 이름/아이콘/시작주소가 달라지므로 서버에서 만들어 준다.
+const ROLE_MANIFEST = {
+  teller:   { name: '창구 상담사', short: '창구', page: '/teller.html', icon: null,       theme: null,      bg: '#f2f4f6' },
+  customer: { name: '번호표',      short: '번호표', page: '/kiosk.html', icon: null,      theme: null,      bg: '#f2f4f6' },
+  admin:    { name: '관리자 콘솔', short: '관리자', page: '/admin.html', icon: 'admin',    theme: '#0f172a', bg: '#0f172a' },
+  operator: { name: '진행요원 패널', short: '진행요원', page: '/operator.html', icon: 'operator', theme: '#0b101b', bg: '#0b101b' },
+  board:    { name: '전광판',      short: '전광판', page: '/display.html', icon: 'board', theme: '#05080f', bg: '#05080f' },
+  leader:   { name: '우리은행 팀장', short: '팀장', page: '/woori_leader.html', icon: 'woori', theme: '#0067ac', bg: '#f2f4f6' },
+  hub:      { name: '현장 포털',   short: '포털',  page: '/hub.html',    icon: 'operator', theme: '#0b101b', bg: '#0b101b' }
+};
+
+app.get('/manifest.webmanifest', (req, res) => {
+  const role = ROLE_MANIFEST[req.query.role] ? req.query.role : 'hub';
+  const cfg = ROLE_MANIFEST[role];
+  const bankKey = String(req.query.b || req.query.bank || '').toLowerCase().trim();
+  const bank = db.bankInfo[bankKey];
+
+  const iconName = cfg.icon || (bank ? bankKey : 'default');
+  const themeColor = cfg.theme || (bank ? bank.color : '#3182f6');
+  const label = bank ? bank.name : '현장 상담';
+  const startUrl = cfg.page + (bank ? '?b=' + bankKey : '');
+
+  res.type('application/manifest+json').json({
+    name: label + ' ' + cfg.name,
+    short_name: bank ? bank.name.slice(0, 6) : cfg.short,
+    description: '법무법인 제이엘 현장 상담 대기·호출 시스템',
+    start_url: startUrl,
+    scope: '/',
+    display: 'standalone',
+    orientation: role === 'board' ? 'landscape' : 'portrait',
+    background_color: cfg.bg,
+    theme_color: themeColor,
+    lang: 'ko',
+    icons: [
+      { src: '/icons/' + iconName + '-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/icons/' + iconName + '-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: '/icons/' + iconName + '-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+    ]
+  });
 });
 
 const BACKUP_FILE = path.join(__dirname, 'queue_db_backup.json');
@@ -50,10 +92,12 @@ const INITIAL_DESKS = {
 
 // 현장 운영 기본 설정 (관리자 콘솔에서 실시간 변경)
 const INITIAL_SETTINGS = {
-  standardMinutes: 15,   // 표준 상담 시간(분) - 예상 대기시간 계산 및 지연 경고 기준
-  repeatCount: 2,        // 호출 방송 반복 횟수
-  openHour: 9,           // 일일보고 시간대 집계 시작
-  closeHour: 18          // 일일보고 시간대 집계 종료
+  // 당일 상담 운영시간 (예: 16시 ~ 20시). 시간대별 상담 실적 집계의 기준이 된다.
+  openHour: 9,
+  closeHour: 18,
+  // 대기 고객에게 보여줄 1인당 예상 상담 소요시간(분). 예상 대기시간 계산과 창구 지연 표시에 쓴다.
+  standardMinutes: 15,
+  repeatCount: 2         // 호출 방송 반복 횟수
 };
 
 let db = {
@@ -173,6 +217,8 @@ function buildReport() {
 
   return {
     generatedAt: new Date().toISOString(),
+    openHour: openHour,
+    closeHour: closeHour,
     standardMinutes: db.settings.standardMinutes,
     totalCount: logs.length,
     totalPassCount: passes.length,
@@ -513,6 +559,8 @@ io.on('connection', (socket) => {
       const h = parseInt(patch.closeHour, 10);
       if (!isNaN(h) && h >= 0 && h <= 23) next.closeHour = h;
     }
+    // 종료 시각이 시작보다 빠르면 설정을 받아들이지 않는다.
+    if (next.closeHour < next.openHour) return;
     db.settings = next;
     broadcastEverywhere();
   });

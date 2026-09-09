@@ -128,7 +128,7 @@
     BANKS.forEach(function (bank) {
       tellerRow.appendChild(makeBtn({
         label: bank.name + ' 창구 단말기', go: '실행 ➔', bg: bank.color, fg: bank.text,
-        onClick: function () { location.href = '/teller.html?bank=' + bank.id; }
+        onClick: function () { location.href = '/teller.html?b=' + bank.id; }
       }));
     });
     }
@@ -136,10 +136,10 @@
     function renderCustomerRow() {
     var customerRow = document.getElementById('customerRow');
     BANKS.forEach(function (bank) {
-      var url = location.origin + '/kiosk.html?bank=' + bank.id;
+      var url = location.origin + '/kiosk.html?b=' + bank.id;
       var b = makeBtn({
         label: bank.name + ' 발권 화면', go: '복사', bg: bank.color, fg: bank.text,
-        onClick: function () { location.href = '/kiosk.html?bank=' + bank.id; }
+        onClick: function () { location.href = '/kiosk.html?b=' + bank.id; }
       });
       b.querySelector('.go').onclick = function (e) {
         e.stopPropagation();
@@ -177,5 +177,6 @@
       // 소켓 연결이 안 되면 기본 목록을 그대로 사용한다.
     }
   </script>
+  <script src="/pwa.js" data-role="hub"></script>
 </body>
 </html>
