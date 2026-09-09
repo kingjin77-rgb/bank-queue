@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#0b101b">
   <title>현장 진행요원 패널</title>
-  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
   <script src="/socket.io/socket.io.js"></script>
   <style>
     :root {
@@ -45,7 +46,7 @@
     .desk-name { font-size: 19px; font-weight: 900; color: #e2e8f0; }
     .desk-state { font-size: 14px; font-weight: 900; padding: 7px 13px; border-radius: 14px; background: #0f172a; color: var(--text-sub); }
     .desk-state.busy { background: var(--amber); color: #1a1a1a; }
-    .desk-elapsed { font-size: 13px; font-weight: 900; font-family: monospace; color: var(--text-sub); margin-top: 6px; min-height: 17px; }
+    .desk-elapsed { font-size: 13px; font-weight: 900; color: var(--text-sub); margin-top: 6px; min-height: 17px; }
 
     .desk-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
     .btn-desk { min-height: 62px; font-size: 17px; }
@@ -71,6 +72,7 @@
       box-shadow: 0 10px 30px rgba(0,0,0,0.4); display: none; z-index: 950; max-width: 92vw; text-align: center;
     }
   </style>
+  <link rel="stylesheet" href="/type.css">
 </head>
 <body>
 

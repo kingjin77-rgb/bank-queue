@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>우리은행 원격 현황 관제 콘솔</title>
-  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
   <script src="/socket.io/socket.io.js"></script>
   <style>
     :root {
@@ -54,6 +55,7 @@
     .leader-summary { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(0,0,0,0.06); font-size: 15px; font-weight: 700; color: var(--text-sub); }
     .leader-summary b { font-weight: 900; }
   </style>
+  <link rel="stylesheet" href="/type.css">
 </head>
 <body>
 
@@ -183,7 +185,7 @@
             ${isBusy ? `${d.currentCustomer.ticketNumber}번 상담 중` : '대기 중'}
           </div>
           <div class="desk-elapsed" data-called="${isBusy ? d.currentCustomer.calledAt : ''}"
-               style="font-size: 13px; font-weight: 800; font-family: monospace; margin-top: 4px; color: ${over ? '#ef4444' : '#8b95a1'};">
+               style="font-size: 13px; font-weight: 800; margin-top: 4px; color: ${over ? '#ef4444' : '#8b95a1'};">
             ${isBusy ? '상담 ' + fmtMs(sec) + (over ? ' 지연' : '') : '평균 ' + fmtMin(deskAvg)}
           </div>
         `;

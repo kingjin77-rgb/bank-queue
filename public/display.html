@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>상담 창구 전광판</title>
-  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
   <script src="/socket.io/socket.io.js"></script>
   <style>
     :root {
@@ -22,7 +23,7 @@
 
     .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border); padding-bottom: 14px; margin-bottom: 18px; }
     .title { font-size: clamp(24px, 3vw, 38px); font-weight: 900; letter-spacing: -1px; }
-    .clock { font-size: clamp(22px, 2.6vw, 34px); font-weight: 900; color: var(--accent); font-family: monospace; }
+    .clock { font-size: clamp(22px, 2.6vw, 34px); font-weight: 900; color: var(--accent); }
 
     /* ===== 최근 호출 대형 표시 ===== */
     .hero {
@@ -35,7 +36,7 @@
       0%, 100% { background: var(--card-bg); }
       50% { background: #1e3a5f; }
     }
-    .hero-label { font-size: clamp(15px, 1.6vw, 21px); font-weight: 800; color: var(--text-sub); letter-spacing: 2px; }
+    .hero-label { font-size: clamp(15px, 1.6vw, 21px); font-weight: 800; color: var(--text-sub); letter-spacing: 0.06em; }
     .hero-main {
       display: flex; align-items: center; justify-content: center; gap: clamp(14px, 3vw, 46px);
       flex-wrap: wrap; margin-top: 10px;
@@ -56,7 +57,7 @@
     .desk-list { display: flex; flex-direction: column; gap: 12px; }
     .desk-row { display: flex; justify-content: space-between; align-items: center; background: #05080f; border-radius: 18px; padding: 16px 20px; border: 1px solid var(--border); }
     .desk-title { font-size: clamp(17px, 1.6vw, 22px); font-weight: 900; color: var(--text-sub); }
-    .desk-meta { font-size: 14px; font-weight: 800; font-family: monospace; color: #64748b; margin-top: 3px; }
+    .desk-meta { font-size: 14px; font-weight: 800; color: #64748b; margin-top: 3px; }
     .desk-meta.over { color: #ef4444; }
     .ticket-display { font-size: clamp(44px, 5vw, 72px); font-weight: 900; color: var(--success); letter-spacing: -2px; }
     .ticket-display.idle { font-size: clamp(20px, 2vw, 26px); color: #475569; }
@@ -68,6 +69,7 @@
       box-shadow: 0 8px 25px rgba(56,189,248,0.4); z-index: 100;
     }
   </style>
+  <link rel="stylesheet" href="/type.css">
 </head>
 <body>
 

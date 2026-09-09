@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" id="themeColorMeta" content="#3182f6">
   <title>상담사 창구 콘솔</title>
-  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
   <script src="/socket.io/socket.io.js"></script>
   <style>
     :root {
@@ -49,7 +50,7 @@
     .board-label { font-size: 17px; font-weight: 800; color: #94a3b8; }
     .board-num { font-size: 132px; font-weight: 900; line-height: 0.95; letter-spacing: -6px; margin: 8px 0 6px; color: var(--brand); }
     .board-num.idle { font-size: 62px; color: #475569; letter-spacing: -2px; }
-    .board-timer { font-size: 22px; font-weight: 900; font-family: monospace; color: #94a3b8; }
+    .board-timer { font-size: 22px; font-weight: 900; color: #94a3b8; }
     .board-timer.over { color: #ff6b6b; }
 
     /* ===== 지표 3칸 ===== */
@@ -108,6 +109,7 @@
       padding: 16px; font-size: 15px; font-weight: 800; text-align: center; margin-top: 14px; cursor: pointer;
     }
   </style>
+  <link rel="stylesheet" href="/type.css">
 </head>
 <body>
 

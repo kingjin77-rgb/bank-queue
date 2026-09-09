@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>현장 통합 총괄 관리자 콘솔</title>
-  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
   <script src="/socket.io/socket.io.js"></script>
   <style>
     :root {
@@ -73,7 +74,7 @@
     .desk-tile.over { border-color: var(--danger); background: #2a0f16; }
     .desk-tile .dt-name { font-size: 13px; font-weight: 800; color: #94a3b8; }
     .desk-tile .dt-num { font-size: 30px; font-weight: 900; margin: 4px 0; }
-    .desk-tile .dt-time { font-size: 14px; font-weight: 800; font-family: monospace; }
+    .desk-tile .dt-time { font-size: 14px; font-weight: 800; }
 
     /* 운영시간 선택 */
     .hours-row { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
@@ -105,6 +106,7 @@
     .kpi .k-label { font-size: 12px; color: #94a3b8; font-weight: 800; }
     .kpi .k-value { font-size: 26px; font-weight: 900; color: var(--primary); margin-top: 4px; }
   </style>
+  <link rel="stylesheet" href="/type.css">
 </head>
 <body>
 
