@@ -32,37 +32,25 @@
       alert('음성 시스템이 활성화되었습니다.');
     }
 
-    // 숫자를 완벽한 한글 발음으로 변환 (1 -> 일, 10 -> 일십이 아니라 십, 11 -> 일십일이 아니라 십일)
+    // "한번" 발음 오류를 완벽하게 잡은 한글 숫자 변환 함수
     function convertNumberToKorean(numStr) {
       let n = parseInt(numStr);
       if (isNaN(n)) return numStr;
       if (n === 0) return '영';
 
-      const nums = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
-      const tens = ['', '십', '백', '천'];
+      const units = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
+      const teens = ['십', '십일', '십이', '십삼', '십사', '십오', '십육', '십칠', '십팔', '십구'];
 
-      let result = '';
-      let 만 = Math.floor(n / 10000);
-      let 나머지 = n % 10000;
-
-      function formatChunk(chunk) {
-        let str = '';
-        let t = Math.floor(chunk / 1000);
-        let h = Math.floor((chunk % 1000) / 100);
-        let d = Math.floor((chunk % 100) / 10);
-        let u = chunk % 10;
-
-        if (t > 0) str += (t > 1 ? nums[t] : '') + '천';
-        if (h > 0) str += (h > 1 ? nums[h] : '') + '백';
-        if (d > 0) str += (d > 1 ? nums[d] : '') + '십';
-        if (u > 0) str += nums[u];
-        return str;
-      }
-
-      if (만 > 0) result += formatChunk(만) + '만 ';
-      if (나머지 > 0) result += formatChunk(나머지);
-
-      return result;
+      if (n < 10) return units[n];
+      if (n < 20) return teens[n - 10];
+      
+      let ten = Math.floor(n / 10);
+      let one = n % 10;
+      
+      let tenStr = (ten > 1 ? units[ten] : '') + '십';
+      let oneStr = units[one];
+      
+      return tenStr + oneStr;
     }
 
     let speechQueue = [];
@@ -84,7 +72,7 @@
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'ko-KR';
-        utterance.rate = 0.95;
+        utterance.rate = 0.92;
         utterance.pitch = 1.0;
 
         utterance.onend = () => {

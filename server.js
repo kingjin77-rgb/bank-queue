@@ -12,7 +12,7 @@ const io = new Server(server, {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-// 은행별 대기열 데이터 (1번부터 시작하도록 currentNumber: 0 설정)
+// 신한은행 포함 모든 은행 데이터 완벽 정의 (1번부터 시작)
 const banks = {
   kb: { name: '국민은행', prefix: 'KB', currentNumber: 0, waiting: [], counters: {} },
   woori: { name: '우리은행', prefix: 'WOORI', currentNumber: 0, waiting: [], counters: {} },
@@ -21,11 +21,9 @@ const banks = {
 };
 
 io.on('connection', (socket) => {
-  console.log(`클라이언트 접속: ${socket.id}`);
-
   socket.emit('sync_state', banks);
 
-  // 번호표 발권 (무조건 1번부터 차례대로 증가)
+  // 번호표 발권
   socket.on('issue_ticket', (data, callback) => {
     const { bank, name } = data;
     if (!banks[bank]) return;
@@ -78,10 +76,6 @@ io.on('connection', (socket) => {
 
     delete banks[bank].counters[deskNumber];
     io.emit('sync_state', banks);
-  });
-
-  socket.on('disconnect', () => {
-    console.log(`클라이언트 접속 해제: ${socket.id}`);
   });
 });
 
