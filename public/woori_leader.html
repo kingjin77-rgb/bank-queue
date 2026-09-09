@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0067ac">
   <title>우리은행 원격 현황 관제 콘솔</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
@@ -10,50 +11,88 @@
   <style>
     :root {
       --primary: #0067ac;
+      --primary-light: #cfe6f5;   /* 시퀀셜 램프의 밝은 쪽 (미터 트랙 등) */
       --bg: #f2f4f6;
       --card: #ffffff;
       --text: #191f28;
       --text-sub: #8b95a1;
+      --muted: #b0b8c1;           /* 축/그리드용 무채색 */
       --border: #e5e8eb;
-      --success: #04b071;
+      --success: #04b071;         /* 상담중(정상) */
+      --danger: #ef4444;          /* 지연 */
+      --away: #4e5968;            /* 자리비움 */
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; }
     body { background: var(--bg); color: var(--text); padding: 20px; }
-    .wrap { max-width: 900px; margin: 0 auto; }
+    .wrap { max-width: 960px; margin: 0 auto; }
 
-    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 8px; }
     .title { font-size: 26px; font-weight: 900; color: var(--primary); }
 
-    /* 토스형 초대형 지표 카드 */
-    .hero-card { background: var(--card); border-radius: 28px; padding: 30px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); margin-bottom: 20px; border-top: 8px solid var(--primary); }
-    .hero-label { font-size: 16px; font-weight: 700; color: var(--text-sub); }
-    .hero-val { font-size: 72px; font-weight: 900; color: var(--primary); letter-spacing: -2px; margin: 10px 0; }
-
-    .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
-    .sub-stat { background: #f9fafb; padding: 18px; border-radius: 18px; border: 1px solid var(--border); }
-    .sub-stat .num { font-size: 32px; font-weight: 900; color: var(--text); margin-top: 6px; }
-
     .card { background: var(--card); border-radius: 28px; padding: 26px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); margin-bottom: 20px; }
-    h2 { font-size: 20px; font-weight: 800; margin-bottom: 16px; }
+    h2 { font-size: 19px; font-weight: 800; margin-bottom: 4px; }
+    .card-sub { font-size: 13px; font-weight: 700; color: var(--text-sub); margin-bottom: 18px; }
 
-    /* 창구별 현황 */
-    .desk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
-    .desk-card { background: #f9fafb; border: 2px solid var(--border); border-radius: 20px; padding: 20px; text-align: center; }
-    .desk-title { font-size: 16px; font-weight: 800; color: var(--text-sub); }
-    .desk-stat { font-size: 40px; font-weight: 900; color: var(--primary); margin: 8px 0; }
+    /* ===== 헤로 카드 (오늘의 대표 숫자 하나) ===== */
+    .hero-card { background: var(--card); border-radius: 28px; padding: 30px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); margin-bottom: 20px; border-top: 8px solid var(--primary); }
+    .hero-label { font-size: 15px; font-weight: 700; color: var(--text-sub); }
+    .hero-val { font-size: 68px; font-weight: 900; color: var(--primary); letter-spacing: -1.5px; margin: 6px 0 20px; font-variant-numeric: normal; }
+    .hero-val .unit { font-size: 28px; font-weight: 700; color: var(--text-sub); margin-left: 4px; }
 
-    /* 시간대별 완료 추이 */
-    .timeline-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 10px; }
-    .time-slot { background: #f9fafb; border: 1px solid var(--border); border-radius: 14px; padding: 12px; text-align: center; }
-    .time-hour { font-size: 13px; font-weight: 700; color: var(--text-sub); }
-    .time-count { font-size: 22px; font-weight: 900; color: var(--primary); margin-top: 4px; }
+    /* ===== KPI 타일 ===== */
+    .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+    .kpi-tile { background: #f9fafb; border: 1px solid var(--border); border-radius: 18px; padding: 16px; }
+    .kpi-tile .k-label { font-size: 12.5px; font-weight: 700; color: var(--text-sub); }
+    .kpi-tile .k-val { font-size: 26px; font-weight: 900; margin-top: 6px; }
 
-    /* 실시간 대기 명단 */
-    .queue-chip-list { display: flex; flex-wrap: wrap; gap: 8px; }
-    .queue-pill { background: #e6f3fa; color: var(--primary); font-size: 16px; font-weight: 800; padding: 10px 18px; border-radius: 14px; border: 1px solid #cce3ff; }
+    /* ===== 미터 (표준 대비 평균 상담시간) ===== */
+    .meter-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+    .meter-head .m-now { font-size: 22px; font-weight: 900; color: var(--text); }
+    .meter-head .m-target { font-size: 13px; font-weight: 700; color: var(--text-sub); }
+    .meter-track { position: relative; height: 16px; background: var(--primary-light); border-radius: 10px; overflow: hidden; }
+    .meter-fill { position: absolute; inset: 0 auto 0 0; width: 0%; background: var(--primary); border-radius: 10px; transition: width 0.4s ease; }
+    .meter-fill.over { background: var(--danger); }
+    .meter-tick { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--text); opacity: 0.35; left: 100%; }
+    .meter-foot { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: var(--text-sub); margin-top: 6px; }
 
-    .leader-summary { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(0,0,0,0.06); font-size: 15px; font-weight: 700; color: var(--text-sub); }
-    .leader-summary b { font-weight: 900; }
+    /* ===== 창구별 막대그래프 (가로) ===== */
+    .barchart { display: flex; flex-direction: column; gap: 14px; }
+    .bar-row { display: grid; grid-template-columns: 108px 1fr 64px; align-items: center; gap: 10px; }
+    .bar-row .b-label { font-size: 14px; font-weight: 800; color: var(--text); }
+    .bar-row .b-status { font-size: 11.5px; font-weight: 800; margin-top: 2px; }
+    .bar-track { position: relative; height: 24px; background: #f1f3f5; border-radius: 6px; }
+    .bar-fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 4px; min-width: 4px; transition: width 0.4s ease; cursor: pointer; }
+    .bar-row .b-value { font-size: 17px; font-weight: 900; text-align: right; font-variant-numeric: normal; }
+
+    /* ===== 시간대별 컬럼차트 ===== */
+    .colchart-wrap { overflow-x: auto; }
+    .colchart { display: flex; align-items: flex-end; gap: 6px; height: 150px; padding-top: 22px; min-width: 100%; }
+    .col-item { flex: 1; min-width: 30px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; position: relative; }
+    .col-label-val { font-size: 12px; font-weight: 800; color: var(--text-sub); margin-bottom: 4px; }
+    .col-label-val.peak { color: var(--primary); font-weight: 900; }
+    .col-bar { width: 100%; max-width: 26px; background: var(--primary-light); border-radius: 4px 4px 0 0; cursor: pointer; transition: height 0.4s ease; min-height: 3px; }
+    .col-bar.has-data { background: var(--primary); }
+    .col-bar.peak { background: var(--primary); }
+    .col-hour { font-size: 11.5px; font-weight: 700; color: var(--text-sub); margin-top: 8px; }
+    .col-baseline { border-top: 1px solid var(--border); }
+
+    /* ===== 대기 명단 ===== */
+    .queue-table { display: flex; flex-direction: column; }
+    .queue-row { display: grid; grid-template-columns: 44px 1fr 90px; align-items: center; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--border); }
+    .queue-row:last-child { border-bottom: none; }
+    .queue-row .q-rank { font-size: 13px; font-weight: 800; color: var(--text-sub); }
+    .queue-row .q-num { font-size: 18px; font-weight: 900; }
+    .queue-row .q-wait { font-size: 13px; font-weight: 800; color: var(--text-sub); text-align: right; font-variant-numeric: tabular-nums; }
+    .queue-row .q-wait.long { color: var(--danger); }
+    .queue-empty { color: var(--text-sub); font-size: 14px; font-weight: 700; padding: 6px 0; }
+
+    /* ===== 마크 위 툴팁 ===== */
+    #vizTooltip {
+      position: fixed; z-index: 500; background: #191f28; color: #fff; font-size: 13px; font-weight: 700;
+      padding: 8px 12px; border-radius: 10px; pointer-events: none; display: none; white-space: nowrap;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+    }
+    #vizTooltip b { font-weight: 900; }
   </style>
   <link rel="stylesheet" href="/type.css">
 </head>
@@ -68,41 +107,60 @@
       <div style="font-size: 14px; font-weight: 800; color: var(--success);">● 원격 실시간 집계 중</div>
     </div>
 
-    <!-- 1. 토스 스타일 총 상담 실적 -->
+    <!-- 1. 오늘의 대표 숫자 + KPI -->
     <div class="hero-card">
       <div class="hero-label">오늘 우리은행 총 누적 상담 완료</div>
-      <div class="hero-val" id="totalCompleted">0<span style="font-size: 32px; font-weight: 700;">건</span></div>
-      <div class="stats-row">
-        <div class="sub-stat">
-          <div style="font-size: 14px; font-weight: 700; color: var(--text-sub);">현재 실시간 대기인원</div>
-          <div class="num" id="currentWait" style="color: #ef4444;">0명</div>
-        </div>
-        <div class="sub-stat">
-          <div style="font-size: 14px; font-weight: 700; color: var(--text-sub);">운영 중인 창구 수</div>
-          <div class="num" id="activeDesks">0개</div>
-        </div>
+      <div class="hero-val" id="totalCompleted">0<span class="unit">건</span></div>
+
+      <div class="kpi-row">
+        <div class="kpi-tile"><div class="k-label">실시간 대기</div><div class="k-val" id="currentWait" style="color: var(--danger);">0명</div></div>
+        <div class="kpi-tile"><div class="k-label">운영 창구</div><div class="k-val" id="activeDesks">0개</div></div>
+        <div class="kpi-tile"><div class="k-label">평균 대기시간</div><div class="k-val" id="avgWaitTile">-</div></div>
+        <div class="kpi-tile"><div class="k-label">부재 패스</div><div class="k-val" id="passTile" style="color: var(--danger);">0건</div></div>
+        <div class="kpi-tile"><div class="k-label">예상 대기</div><div class="k-val" id="etaTile">-</div></div>
       </div>
-      <div id="leaderSummary" class="leader-summary">집계 중...</div>
     </div>
 
-    <!-- 2. 각 창구별 완료 건수 및 현재 상태 -->
+    <!-- 2. 표준 상담시간 대비 미터 -->
+    <div class="card">
+      <h2>표준 상담시간 대비 평균 상담시간</h2>
+      <div class="card-sub" id="meterSub">관리자 콘솔에서 정한 표준 시간을 기준으로 오늘 평균 상담시간을 비교합니다.</div>
+      <div class="meter-head">
+        <span class="m-now" id="meterNow">0분</span>
+        <span class="m-target" id="meterTarget">표준 15분</span>
+      </div>
+      <div class="meter-track">
+        <div class="meter-fill" id="meterFill"></div>
+        <div class="meter-tick"></div>
+      </div>
+      <div class="meter-foot"><span>0분</span><span id="meterMaxLabel">30분</span></div>
+    </div>
+
+    <!-- 3. 창구별 실적 (가로 막대) -->
     <div class="card">
       <h2>창구별 상담 실적 및 현재 상황</h2>
-      <div class="desk-grid" id="deskGrid"></div>
+      <div class="card-sub">막대 길이는 오늘 완료 건수, 색은 지금 창구 상태를 나타냅니다.</div>
+      <div class="barchart" id="deskBarChart"></div>
     </div>
 
-    <!-- 3. 시간대별 상담 완료 추이 -->
+    <!-- 4. 시간대별 완료 추이 -->
     <div class="card">
-      <h2>시간대별 상담 완료 건수 (1시간 단위)</h2>
-      <div class="timeline-grid" id="timelineGrid"></div>
+      <h2>시간대별 상담 완료 건수</h2>
+      <div class="card-sub" id="hourlySub">당일 운영시간 기준 1시간 단위 집계입니다.</div>
+      <div class="colchart-wrap">
+        <div class="colchart" id="hourlyChart"></div>
+      </div>
     </div>
 
-    <!-- 4. 실시간 대기열 -->
+    <!-- 5. 실시간 대기 명단 -->
     <div class="card">
-      <h2>실시간 대기 고객 순번 명단</h2>
-      <div class="queue-chip-list" id="queueList"></div>
+      <h2>실시간 대기 고객 명단</h2>
+      <div class="card-sub">대기시간이 길어지는 손님을 순번 그대로 보여줍니다.</div>
+      <div class="queue-table" id="queueTable"></div>
     </div>
   </div>
+
+  <div id="vizTooltip"></div>
 
   <script>
     const socket = io({ transports: ['websocket', 'polling'] });
@@ -110,6 +168,7 @@
 
     let standardMinutes = 15;
     let serverOffsetMs = 0;
+
     function elapsedSec(iso) {
       if (!iso) return 0;
       return Math.max(0, Math.round((Date.now() + serverOffsetMs - new Date(iso).getTime()) / 1000));
@@ -118,7 +177,6 @@
       const m = Math.floor(sec / 60);
       return `${m}:${String(sec % 60).padStart(2, '0')}`;
     }
-
     function fmtMin(sec) {
       if (!sec) return '-';
       const m = Math.floor(sec / 60);
@@ -129,9 +187,23 @@
       return Math.round(arr.reduce((x, y) => x + y, 0) / arr.length);
     }
 
-    socket.on('connect', () => {
-      socket.emit('get_all_state');
-    });
+    // ===== 마크 위 툴팁 (막대/컬럼이 히트영역 자체) =====
+    const tooltip = document.getElementById('vizTooltip');
+    function showTooltip(el, html) {
+      tooltip.innerHTML = html; // 내부에서 만든 값만 넣으므로 안전
+      tooltip.style.display = 'block';
+      const r = el.getBoundingClientRect();
+      let x = r.left + r.width / 2;
+      let y = r.top - 10;
+      tooltip.style.left = Math.max(8, Math.min(window.innerWidth - 160, x)) + 'px';
+      tooltip.style.top = Math.max(8, y - tooltip.offsetHeight) + 'px';
+    }
+    function hideTooltip() { tooltip.style.display = 'none'; }
+
+    let lastDesks = [];
+    let lastLogs = [];
+
+    socket.on('connect', () => socket.emit('get_all_state'));
 
     socket.on('all_state_update', (data) => {
       if (data.serverTime) serverOffsetMs = new Date(data.serverTime).getTime() - Date.now();
@@ -141,95 +213,166 @@
       const desks = data.desks[bank] || [];
       const logs = (data.logs || []).filter(l => l.bank === bank);
       const passes = (data.passes || []).filter(l => l.bank === bank);
+      lastDesks = desks;
+      lastLogs = logs;
 
-      // 평균 상담시간 / 평균 대기시간 요약 줄
-      const summary = document.getElementById('leaderSummary');
-      if (summary) {
-        const avgDur = avg(logs.map(l => l.durationSec || 0));
-        const avgWait = avg(logs.map(l => l.waitSec || 0));
-        summary.innerHTML = `
-          <span>평균 상담 <b style="color:#04b071;">${fmtMin(avgDur)}</b></span>
-          <span>평균 대기 <b style="color:#0067ac;">${fmtMin(avgWait)}</b></span>
-          <span>부재 패스 <b style="color:#ef4444;">${passes.length}건</b></span>
-          <span>예상 대기 <b>${desks.length ? Math.ceil(q.length / desks.length) * standardMinutes : 0}분</b></span>
-        `;
-      }
+      const openHour = (data.settings && data.settings.openHour != null) ? data.settings.openHour : 9;
+      const closeHour = (data.settings && data.settings.closeHour != null) ? data.settings.closeHour : 18;
 
-      // 1. 총괄 지표
-      document.getElementById('totalCompleted').innerHTML = `${logs.length}<span style="font-size: 32px; font-weight: 700;">건</span>`;
+      // ---- 헤로 + KPI ----
+      document.getElementById('totalCompleted').innerHTML = `${logs.length}<span class="unit">건</span>`;
       document.getElementById('currentWait').innerText = `${q.length}명`;
       document.getElementById('activeDesks').innerText = `${desks.length}개`;
 
-      // 2. 창구별 완료 건수
-      const deskCounts = {};
-      desks.forEach(d => deskCounts[d.desk] = 0);
-      logs.forEach(l => {
-        if (deskCounts[l.desk] !== undefined) deskCounts[l.desk]++;
-      });
+      const avgWait = avg(logs.map(l => l.waitSec || 0));
+      document.getElementById('avgWaitTile').innerText = fmtMin(avgWait);
+      document.getElementById('passTile').innerText = `${passes.length}건`;
 
-      const deskGrid = document.getElementById('deskGrid');
-      deskGrid.innerHTML = '';
-      desks.forEach(d => {
-        const isBusy = d.status === 'consulting' && d.currentCustomer;
-        const box = document.createElement('div');
-        box.className = 'desk-card';
+      const activeDeskCount = desks.filter(d => !d.away).length || 1;
+      const eta = q.length > 0 ? Math.ceil(q.length / activeDeskCount) * standardMinutes : 0;
+      document.getElementById('etaTile').innerText = q.length > 0 ? `${eta}분` : '없음';
+
+      // ---- 미터: 평균 상담시간 vs 표준 ----
+      const avgDur = avg(logs.map(l => l.durationSec || 0));
+      const avgDurMin = avgDur / 60;
+      const maxScale = Math.max(standardMinutes * 2, avgDurMin, 1);
+      const pct = Math.min(100, (avgDurMin / maxScale) * 100);
+      const tickPct = Math.min(100, (standardMinutes / maxScale) * 100);
+      const over = avgDurMin > standardMinutes;
+
+      document.getElementById('meterNow').innerText = logs.length ? fmtMin(avgDur) : '집계 전';
+      document.getElementById('meterNow').style.color = over ? 'var(--danger)' : 'var(--text)';
+      document.getElementById('meterTarget').innerText = `표준 ${standardMinutes}분`;
+      document.getElementById('meterFill').style.width = `${pct}%`;
+      document.getElementById('meterFill').classList.toggle('over', over);
+      document.querySelector('.meter-tick').style.left = `${tickPct}%`;
+      document.getElementById('meterMaxLabel').innerText = `${Math.round(maxScale)}분`;
+
+      // ---- 창구별 가로 막대 ----
+      renderDeskBars(desks, logs);
+
+      // ---- 시간대별 컬럼차트 ----
+      renderHourlyChart(logs, openHour, closeHour);
+
+      // ---- 대기 명단 ----
+      renderQueue(q);
+    });
+
+    // 창구 상태 하나로 색과 문구를 함께 정한다 (색만으로 상태를 전달하지 않도록 항상 문구를 같이 보여준다)
+    function deskStatusInfo(d) {
+      if (d.away) return { color: 'var(--away)', label: '자리 비움' };
+      const busy = d.status === 'consulting' && d.currentCustomer;
+      if (!busy) return { color: 'var(--muted)', label: '대기 중' };
+      const sec = elapsedSec(d.currentCustomer.calledAt);
+      const over = sec > standardMinutes * 60;
+      return over
+        ? { color: 'var(--danger)', label: `지연 · ${fmtMs(sec)}` }
+        : { color: 'var(--success)', label: `상담중 · ${fmtMs(sec)}` };
+    }
+
+    function renderDeskBars(desks, logs) {
+      const box = document.getElementById('deskBarChart');
+      const counts = desks.map(d => logs.filter(l => l.desk === d.desk).length);
+      const max = Math.max(1, ...counts);
+
+      box.innerHTML = '';
+      desks.forEach((d, i) => {
+        const count = counts[i];
+        const info = deskStatusInfo(d);
+        const widthPct = Math.max(3, (count / max) * 100);
         const deskLogs = logs.filter(l => l.desk === d.desk);
         const deskAvg = avg(deskLogs.map(l => l.durationSec || 0));
-        const sec = isBusy ? elapsedSec(d.currentCustomer.calledAt) : 0;
-        const over = isBusy && sec > standardMinutes * 60;
 
-        box.innerHTML = `
-          <div class="desk-title">${d.name}</div>
-          <div class="desk-stat">${deskCounts[d.desk]}<span style="font-size: 18px;">건 완료</span></div>
-          <div style="font-size: 13px; font-weight: 800; color: ${isBusy ? (over ? '#ef4444' : '#0067ac') : '#04b071'};">
-            ${isBusy ? `${d.currentCustomer.ticketNumber}번 상담 중` : '대기 중'}
+        const row = document.createElement('div');
+        row.className = 'bar-row';
+        row.innerHTML = `
+          <div>
+            <div class="b-label">${d.name}</div>
+            <div class="b-status" style="color: ${info.color};">${info.label}</div>
           </div>
-          <div class="desk-elapsed" data-called="${isBusy ? d.currentCustomer.calledAt : ''}"
-               style="font-size: 13px; font-weight: 800; margin-top: 4px; color: ${over ? '#ef4444' : '#8b95a1'};">
-            ${isBusy ? '상담 ' + fmtMs(sec) + (over ? ' 지연' : '') : '평균 ' + fmtMin(deskAvg)}
+          <div class="bar-track">
+            <div class="bar-fill" style="width: ${widthPct}%; background: ${info.color};"></div>
           </div>
+          <div class="b-value" style="color: ${info.color};">${count}건</div>
         `;
-        deskGrid.appendChild(box);
+        const fillEl = row.querySelector('.bar-fill');
+        fillEl.addEventListener('pointermove', () => showTooltip(fillEl,
+          `<b>${d.name}</b><br>오늘 완료 ${count}건 · 평균 상담 ${fmtMin(deskAvg)}`));
+        fillEl.addEventListener('pointerleave', hideTooltip);
+        box.appendChild(row);
       });
 
-      // 3. 시간대별 분석 (09시~18시)
-      const hours = ['09', '10', '11', '12', '13', '14', '15', '16', '17', '18'];
-      const hourCounts = {};
-      hours.forEach(h => hourCounts[h] = 0);
-
-      logs.forEach(l => {
-        if (l.completedAt) {
-          const h = new Date(l.completedAt).getHours().toString().padStart(2, '0');
-          if (hourCounts[h] !== undefined) hourCounts[h]++;
-        }
-      });
-
-      const timeGrid = document.getElementById('timelineGrid');
-      timeGrid.innerHTML = '';
-      hours.forEach(h => {
-        const slot = document.createElement('div');
-        slot.className = 'time-slot';
-        slot.innerHTML = `
-          <div class="time-hour">${h}시</div>
-          <div class="time-count">${hourCounts[h]}건</div>
-        `;
-        timeGrid.appendChild(slot);
-      });
-
-      // 4. 대기 명단
-      const qBox = document.getElementById('queueList');
-      qBox.innerHTML = '';
-      if (q.length === 0) {
-        qBox.innerHTML = '<div style="color: var(--text-sub); font-size: 14px;">현재 대기 중인 고객이 없습니다.</div>';
-      } else {
-        q.forEach((c, idx) => {
-          const pill = document.createElement('div');
-          pill.className = 'queue-pill';
-          pill.innerText = `${idx + 1}등: ${c.ticketNumber}번`;
-          qBox.appendChild(pill);
-        });
+      if (desks.length === 0) {
+        box.innerHTML = '<div class="queue-empty">운영 중인 창구가 없습니다.</div>';
       }
-    });
+    }
+
+    function renderHourlyChart(logs, openHour, closeHour) {
+      const hours = [];
+      for (let h = openHour; h <= closeHour; h++) hours.push(h);
+
+      const counts = hours.map(h => logs.filter(l => l.completedAt && new Date(l.completedAt).getHours() === h).length);
+      const max = Math.max(1, ...counts);
+      const peakIdx = counts.reduce((best, v, i) => (v > counts[best] ? i : best), 0);
+      const hasAnyData = counts.some(c => c > 0);
+
+      const box = document.getElementById('hourlyChart');
+      box.innerHTML = '';
+      hours.forEach((h, i) => {
+        const c = counts[i];
+        const heightPct = Math.max(2, (c / max) * 100);
+        const isPeak = hasAnyData && i === peakIdx && c > 0;
+
+        const item = document.createElement('div');
+        item.className = 'col-item';
+        item.innerHTML = `
+          <div class="col-label-val ${isPeak ? 'peak' : ''}">${c}</div>
+          <div class="col-bar ${c > 0 ? 'has-data' : ''} ${isPeak ? 'peak' : ''}" style="height: ${heightPct}%;"></div>
+          <div class="col-hour">${h}시</div>
+        `;
+        const barEl = item.querySelector('.col-bar');
+        barEl.addEventListener('pointermove', () => showTooltip(barEl, `<b>${h}시</b> 완료 ${c}건`));
+        barEl.addEventListener('pointerleave', hideTooltip);
+        box.appendChild(item);
+      });
+    }
+
+    function renderQueue(q) {
+      const box = document.getElementById('queueTable');
+      box.innerHTML = '';
+      if (q.length === 0) {
+        box.innerHTML = '<div class="queue-empty">현재 대기 중인 고객이 없습니다.</div>';
+        return;
+      }
+      q.forEach((c, idx) => {
+        const row = document.createElement('div');
+        row.className = 'queue-row';
+        row.innerHTML = `
+          <div class="q-rank">${idx + 1}번째</div>
+          <div class="q-num">${c.ticketNumber}번</div>
+          <div class="q-wait" data-created="${c.createdAt || ''}">-</div>
+        `;
+        box.appendChild(row);
+      });
+      updateQueueWaitTimes();
+    }
+
+    function updateQueueWaitTimes() {
+      document.querySelectorAll('.q-wait[data-created]').forEach(el => {
+        const iso = el.dataset.created;
+        if (!iso) { el.innerText = '-'; return; }
+        const sec = elapsedSec(iso);
+        const long = sec > standardMinutes * 60;
+        el.innerText = fmtMs(sec) + ' 대기';
+        el.classList.toggle('long', long);
+      });
+    }
+    setInterval(updateQueueWaitTimes, 1000);
+
+    // 상담 중인 창구의 경과시간은 다음 전체 갱신 전까지 1초마다 다시 그린다
+    setInterval(() => {
+      if (lastDesks.length) renderDeskBars(lastDesks, lastLogs);
+    }, 1000);
   </script>
   <script src="/pwa.js" data-role="leader"></script>
 </body>
