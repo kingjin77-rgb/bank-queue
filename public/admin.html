@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>현장 총괄 관리자 대시보드</title>
+  <title>현장 통합 총괄 관리자 콘솔</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
     :root {
@@ -13,125 +13,226 @@
       --danger: #ef4444;
       --border: #e2e8f0;
       --text: #0f172a;
+      --success: #10b981;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif; }
     body { background: var(--bg); color: var(--text); padding: 20px; }
-    .wrap { max-width: 900px; margin: 0 auto; }
-    .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .wrap { max-width: 960px; margin: 0 auto; }
+    .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
     
-    .card { background: var(--card); border-radius: 24px; padding: 26px; box-shadow: 0 6px 20px rgba(0,0,0,0.03); margin-bottom: 20px; }
-    h2 { font-size: 19px; font-weight: 800; margin-bottom: 16px; }
+    .card { background: var(--card); border-radius: 24px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); margin-bottom: 20px; }
+    h2 { font-size: 20px; font-weight: 800; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
 
-    .btn-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-    .btn { height: 56px; border-radius: 16px; font-size: 16px; font-weight: 800; border: none; cursor: pointer; }
+    .speaker-box { background: #0f172a; color: #fff; border-radius: 20px; padding: 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .btn-speaker { background: var(--success); color: #fff; border: none; padding: 14px 24px; font-size: 16px; font-weight: 800; border-radius: 14px; cursor: pointer; }
+
+    .bank-manage-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 14px; }
+    .bank-ctrl-card { background: #f8fafc; border: 2px solid var(--border); border-radius: 20px; padding: 18px; }
+    .bank-ctrl-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .ctrl-group { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+    .btn-step { width: 44px; height: 44px; font-size: 24px; font-weight: 900; border: none; border-radius: 12px; background: #fff; border: 1px solid var(--border); cursor: pointer; display: flex; justify-content: center; align-items: center; }
+    .btn-step:active { background: #e2e8f0; }
+
+    .input-row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+    .input-field { flex: 1; min-width: 140px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; font-size: 15px; }
+    .btn-add { background: var(--primary); color: #fff; border: none; padding: 14px 22px; font-weight: 800; border-radius: 12px; cursor: pointer; }
+
+    .link-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .chip-link { background: #e8f3ff; color: var(--primary); padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 700; text-decoration: none; cursor: pointer; border: 1px solid #cce3ff; }
+
+    .btn-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+    .btn-action { height: 52px; border-radius: 14px; font-size: 15px; font-weight: 800; border: none; cursor: pointer; }
     .btn-danger { background: var(--danger); color: #fff; }
     .btn-secondary { background: #475569; color: #fff; }
     .btn-dark { background: #0f172a; color: #fff; }
 
-    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 14px; }
-    .stat-box { background: #f1f5f9; border-radius: 16px; padding: 20px; text-align: center; }
-    .stat-title { font-size: 14px; font-weight: 700; color: #64748b; }
-    .stat-val { font-size: 32px; font-weight: 900; color: var(--primary); margin-top: 6px; }
-
-    #reportBox { display: none; background: #0f172a; color: #38bdf8; padding: 20px; border-radius: 18px; font-family: monospace; white-space: pre-wrap; margin-top: 14px; font-size: 14px; }
+    #reportBox { display: none; background: #0f172a; color: #38bdf8; padding: 20px; border-radius: 16px; font-family: monospace; white-space: pre-wrap; margin-top: 14px; }
   </style>
 </head>
 <body>
 
   <div class="wrap">
     <div class="head">
-      <h1 style="font-size: 26px; font-weight: 900;">총괄 관리자 콘솔</h1>
-      <span style="color: #10b981; font-weight: 800; font-size: 14px;">● 실시간 정상 작동</span>
+      <h1 style="font-size: 26px; font-weight: 900;">현장 통합 총괄 관리자</h1>
+      <span style="color: var(--success); font-weight: 800;">● 실시간 연동 중</span>
     </div>
 
-    <!-- 비상 제어 센터 -->
-    <div class="card" style="border: 2px solid var(--danger);">
-      <h2 style="color: var(--danger);">🚨 비상 긴급 제어 & 복구</h2>
-      <p style="font-size: 14px; color: #64748b; margin-bottom: 18px;">현장에서 앱 먹통 또는 오류 발생 시 스마트폰으로 즉시 복구합니다.</p>
-      <div class="btn-grid">
-        <button class="btn btn-danger" onclick="emergencyRepair()">비상 시스템 원클릭 복구</button>
-        <button class="btn btn-secondary" onclick="resetTickets()">전체 번호표 리셋</button>
-        <button class="btn btn-dark" onclick="closeDay()">일마감 및 통계 생성</button>
+    <div class="speaker-box">
+      <div>
+        <h3 style="font-size: 18px; margin-bottom: 4px;">📢 현장 스피커 오디오 방송 앰프</h3>
+        <p style="font-size: 13px; color: #94a3b8;">스피커를 연결하고 켜두면 모든 은행 호출 음성이 자동 방송됩니다.</p>
       </div>
+      <button class="btn-speaker" id="speakerBtn" onclick="toggleSpeaker()">스피커 방송 켜기</button>
     </div>
 
-    <!-- 실시간 집계 -->
     <div class="card">
-      <h2>실시간 상담 완료 현황</h2>
-      <div class="stats-grid">
-        <div class="stat-box"><div class="stat-title">우리은행</div><div class="stat-val" id="cntWoori">0</div></div>
-        <div class="stat-box"><div class="stat-title">신한은행</div><div class="stat-val" id="cntShinhan">0</div></div>
-        <div class="stat-box"><div class="stat-title">국민은행</div><div class="stat-val" id="cntKb">0</div></div>
-        <div class="stat-box"><div class="stat-title">푸본현대</div><div class="stat-val" id="cntFubon">0</div></div>
+      <h2>은행별 창구 실시간 증설 및 축소 (+ / -)</h2>
+      <div class="bank-manage-grid" id="bankDesksGrid"></div>
+    </div>
+
+    <div class="card">
+      <h2>신규 은행 즉시 추가</h2>
+      <div class="input-row">
+        <input type="text" id="newBankName" class="input-field" placeholder="은행명 (예: 하나은행)">
+        <input type="text" id="newBankCode" class="input-field" placeholder="영문코드 (예: hana)">
+        <input type="color" id="newBankColor" value="#008485" style="width: 60px; height: 48px; border-radius: 10px; cursor: pointer;">
+        <button class="btn-add" onclick="addNewBank()">은행 추가</button>
       </div>
-      <div style="text-align: right; margin-top: 18px; font-size: 18px; font-weight: 800;">
-        총 완료 상담: <span id="cntTotal" style="color: var(--primary);">0</span>건
+      <div style="margin-top: 14px;">
+        <span style="font-size: 13px; font-weight: 700; color: #64748b;">은행별 발권 QR 링크 (클릭 시 URL 복사):</span>
+        <div class="link-chips" id="qrLinksList"></div>
       </div>
     </div>
 
-    <!-- 일마감 출력 -->
+    <div class="card" style="border: 2px solid var(--danger);">
+      <h2 style="color: var(--danger);">🚨 비상 긴급 제어</h2>
+      <div class="btn-grid">
+        <button class="btn-action btn-danger" onclick="emergencyRepair()">비상 시스템 원클릭 복구</button>
+        <button class="btn-action btn-secondary" onclick="resetAll()">전체 번호표 리셋</button>
+        <button class="btn-action btn-dark" onclick="closeDay()">일마감 및 보고서 생성</button>
+      </div>
+    </div>
+
     <div class="card" id="reportCard" style="display: none;">
-      <h2>📋 당일 현장 일마감 보고서</h2>
-      <button class="btn" style="background: #10b981; color: #fff; width: 100%; height: 50px;" onclick="copyReport()">보고서 텍스트 복사</button>
+      <h2>📋 일마감 보고서</h2>
+      <button class="btn-action" style="background: var(--success); color:#fff; width:100%; margin-bottom:10px;" onclick="copyReport()">보고서 복사</button>
       <div id="reportBox"></div>
     </div>
   </div>
 
   <script>
     const socket = io({ transports: ['websocket', 'polling'] });
+    let globalState = null;
+    let audioUnlocked = false;
+    let audioCtx = null;
+
+    if ('wakeLock' in navigator) {
+      navigator.wakeLock.request('screen').catch(() => {});
+    }
+
+    function toggleSpeaker() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      audioUnlocked = true;
+      const btn = document.getElementById('speakerBtn');
+      btn.innerText = '🔊 스피커 방송 켜짐 (정상)';
+      btn.style.background = '#2563eb';
+    }
+
+    function speakBroadcast(text) {
+      if (!audioUnlocked) return;
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'ko-KR';
+        u.rate = 0.95;
+        window.speechSynthesis.speak(u);
+      }
+    }
 
     socket.on('connect', () => {
       socket.emit('get_all_state');
     });
 
     socket.on('all_state_update', (data) => {
-      renderStats(data.logs || []);
+      globalState = data;
+      renderDeskControls(data);
+      renderLinks(data.bankInfo);
     });
 
-    function renderStats(logs) {
-      const counts = { woori: 0, shinhan: 0, kb: 0, fubon: 0 };
-      logs.forEach(l => { if (counts[l.bank] !== undefined) counts[l.bank]++; });
+    function renderDeskControls(data) {
+      const container = document.getElementById('bankDesksGrid');
+      container.innerHTML = '';
 
-      document.getElementById('cntWoori').innerText = counts.woori;
-      document.getElementById('cntShinhan').innerText = counts.shinhan;
-      document.getElementById('cntKb').innerText = counts.kb;
-      document.getElementById('cntFubon').innerText = counts.fubon;
-      document.getElementById('cntTotal').innerText = logs.length;
+      Object.keys(data.bankInfo).forEach(b => {
+        const info = data.bankInfo[b];
+        const desks = data.desks[b] || [];
+        const queue = data.queues[b] || [];
+
+        const box = document.createElement('div');
+        box.className = 'bank-ctrl-card';
+        box.style.borderTop = `6px solid ${info.color}`;
+        box.innerHTML = `
+          <div class="bank-ctrl-head">
+            <span style="font-size: 18px; font-weight: 800; color: ${info.color};">${info.name}</span>
+            <span style="font-size: 13px; font-weight: 700; color: #64748b;">대기 ${queue.length}명</span>
+          </div>
+          <div style="font-size: 14px; font-weight: 600; color: #334155;">운영 창구 수: <b>${desks.length}개</b></div>
+          <div class="ctrl-group">
+            <button class="btn-step" onclick="modDesk('${b}', 'remove')">-</button>
+            <span style="font-size: 18px; font-weight: 900; min-width: 30px; text-align: center;">${desks.length}</span>
+            <button class="btn-step" onclick="modDesk('${b}', 'add')">+</button>
+            <span style="font-size: 12px; color: #94a3b8; margin-left: 6px;">(즉시 증감)</span>
+          </div>
+        `;
+        container.appendChild(box);
+      });
     }
 
+    function renderLinks(bankInfo) {
+      const box = document.getElementById('qrLinksList');
+      box.innerHTML = '';
+      const base = window.location.origin;
+
+      Object.keys(bankInfo).forEach(b => {
+        const chip = document.createElement('div');
+        chip.className = 'chip-link';
+        chip.innerText = `${bankInfo[b].name} 발권 URL 복사`;
+        chip.onclick = () => {
+          const url = `${base}/?bank=${b}`;
+          navigator.clipboard.writeText(url).then(() => alert(`${bankInfo[b].name} 발권 URL 복사 완료:\n${url}`));
+        };
+        box.appendChild(chip);
+      });
+    }
+
+    function modDesk(bank, action) {
+      socket.emit('modify_desk_count', { bank, action });
+    }
+
+    function addNewBank() {
+      const name = document.getElementById('newBankName').value;
+      const code = document.getElementById('newBankCode').value;
+      const color = document.getElementById('newBankColor').value;
+
+      if (!name || !code) return alert('은행명과 코드를 입력해주세요.');
+      socket.emit('admin_add_bank', { name, code, color });
+      document.getElementById('newBankName').value = '';
+      document.getElementById('newBankCode').value = '';
+      alert(`${name} 등록 완료!`);
+    }
+
+    socket.on('customer_called', (data) => {
+      speakBroadcast(`${data.bankName} ${data.customer.ticketNumber}번 고객님, ${data.deskName}로 와주시기 바랍니다.`);
+    });
+
     function emergencyRepair() {
-      if (confirm('모든 창구와 대기열을 초기화하고 비상 복구하시겠습니까?')) {
+      if (confirm('전체 시스템을 비상 복구하시겠습니까?')) {
         socket.emit('admin_emergency_repair');
-        alert('비상 복구가 완료되었습니다.');
       }
     }
 
-    function resetTickets() {
-      if (confirm('번호표 순번을 100번으로 리셋하시겠습니까?')) {
+    function resetAll() {
+      if (confirm('전체 은행 번호표를 리셋하시겠습니까?')) {
         socket.emit('admin_reset_tickets', { bank: 'all' });
       }
     }
 
     function closeDay() {
-      if (confirm('일마감을 실행하시겠습니까?')) {
+      if (confirm('일마감을 진행하시겠습니까?')) {
         socket.emit('admin_day_close');
       }
     }
 
     socket.on('day_closed', (report) => {
-      const counts = { woori: 0, shinhan: 0, kb: 0, fubon: 0 };
-      report.logs.forEach(l => { if (counts[l.bank] !== undefined) counts[l.bank]++; });
+      const counts = {};
+      report.logs.forEach(l => { counts[l.bankName] = (counts[l.bankName] || 0) + 1; });
 
-      const text = `[현장 일마감 상담 보고서]
-마감 시각: ${new Date(report.closedAt).toLocaleString('ko-KR')}
-총 상담 완료 건수: ${report.totalCount}건
+      let text = `[현장 일마감 상담 보고서]\n마감 시각: ${new Date(report.closedAt).toLocaleString('ko-KR')}\n총 완료 건수: ${report.totalCount}건\n\n■ 은행별 실적\n`;
+      for (const [k, v] of Object.entries(counts)) {
+        text += `- ${k}: ${v}건\n`;
+      }
 
-■ 은행별 완료 건수
-- 우리은행: ${counts.woori}건 (2개 창구)
-- 푸본현대: ${counts.fubon}건 (단일 창구)
-- 신한은행: ${counts.shinhan}건 (2개 창구)
-- 국민은행: ${counts.kb}건 (2개 창구)
-`;
       document.getElementById('reportCard').style.display = 'block';
       const box = document.getElementById('reportBox');
       box.style.display = 'block';

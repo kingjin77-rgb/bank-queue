@@ -10,12 +10,12 @@
       --bg: #f2f4f6;
       --card-bg: #ffffff;
       --primary: #3182f6;
-      --primary-pressed: #1b64da;
+      --primary-sub: #e8f3ff;
       --text: #191f28;
       --text-sub: #8b95a1;
       --border: #e5e8eb;
       --danger: #f04452;
-      --success: #04b071;
+      --btn-text: #ffffff;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif; -webkit-tap-highlight-color: transparent; }
     body { background: var(--bg); color: var(--text); min-height: 100vh; padding: 16px; display: flex; justify-content: center; }
@@ -26,35 +26,29 @@
     .gate-card h2 { font-size: 24px; font-weight: 800; margin-bottom: 10px; }
     .gate-card p { font-size: 15px; color: var(--text-sub); margin-bottom: 24px; line-height: 1.5; }
     .gate-select { width: 100%; padding: 16px; border-radius: 14px; border: 2px solid var(--border); font-size: 17px; font-weight: 700; margin-bottom: 20px; outline: none; }
-    .btn-gate-start { width: 100%; height: 60px; font-size: 18px; font-weight: 800; background: var(--primary); color: #fff; border: none; border-radius: 16px; cursor: pointer; }
+    .btn-gate-start { width: 100%; height: 60px; font-size: 18px; font-weight: 800; background: var(--primary); color: var(--btn-text); border: none; border-radius: 16px; cursor: pointer; }
 
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 0 4px; }
     .bank-info { display: flex; align-items: center; gap: 10px; }
-    .bank-tag { font-size: 22px; font-weight: 800; }
-    .desk-pill { background: #e8f3ff; color: var(--primary); font-size: 14px; font-weight: 800; padding: 6px 14px; border-radius: 20px; }
+    .bank-tag { font-size: 22px; font-weight: 800; color: var(--primary); }
+    .desk-pill { background: var(--primary-sub); color: var(--primary); font-size: 14px; font-weight: 800; padding: 6px 14px; border-radius: 20px; border: 1px solid var(--primary); }
     .btn-seat-change { background: #fff; border: 1px solid var(--border); padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; }
 
-    .card { background: var(--card-bg); border-radius: 28px; padding: 30px 24px; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin-bottom: 16px; }
-    .status-badge { display: inline-block; font-size: 13px; font-weight: 700; padding: 6px 14px; border-radius: 20px; background: #e5e8eb; color: #4e5968; margin-bottom: 8px; }
-    .status-badge.active { background: #e8f3ff; color: var(--primary); }
+    .card { background: var(--card-bg); border-radius: 28px; padding: 32px 24px; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin-bottom: 16px; border-top: 6px solid var(--primary); }
+    .status-badge { display: inline-block; font-size: 14px; font-weight: 700; padding: 6px 16px; border-radius: 20px; background: #e5e8eb; color: #4e5968; margin-bottom: 12px; }
+    .status-badge.active { background: var(--primary-sub); color: var(--primary); }
 
-    .center-display { text-align: center; padding: 16px 0 24px; }
+    .center-display { text-align: center; padding: 20px 0 30px; }
     .center-display .label { font-size: 15px; color: var(--text-sub); font-weight: 600; }
-    .center-display .number { font-size: 76px; font-weight: 900; color: var(--primary); margin: 6px 0; line-height: 1; letter-spacing: -1.5px; }
-    .center-display .timer { font-size: 18px; font-weight: 800; color: var(--danger); margin-top: 10px; }
+    .center-display .number { font-size: 84px; font-weight: 900; color: var(--primary); margin: 10px 0; line-height: 1; letter-spacing: -2px; }
 
     .btn-stack { display: flex; flex-direction: column; gap: 12px; }
-    .btn-huge { width: 100%; height: 64px; border-radius: 18px; font-size: 19px; font-weight: 800; border: none; cursor: pointer; transition: transform 0.1s; display: flex; justify-content: center; align-items: center; gap: 8px; }
+    .btn-huge { width: 100%; height: 64px; border-radius: 18px; font-size: 19px; font-weight: 800; border: none; cursor: pointer; transition: transform 0.1s; display: flex; justify-content: center; align-items: center; }
     .btn-huge:active { transform: scale(0.98); }
-    .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 6px 20px rgba(49, 130, 246, 0.3); }
+    .btn-primary { background: var(--primary); color: var(--btn-text); box-shadow: 0 6px 20px rgba(0,0,0,0.15); }
     .btn-finish-auto { background: #191f28; color: #fff; }
     .btn-sub-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .btn-sub { height: 54px; border-radius: 16px; font-size: 16px; font-weight: 700; border: 1px solid var(--border); background: #fff; color: #333d4b; cursor: pointer; }
-
-    .duration-box { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
-    .chips { display: flex; gap: 6px; }
-    .chip { padding: 8px 14px; border-radius: 10px; border: 1px solid var(--border); background: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
-    .chip.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .btn-sub { height: 56px; border-radius: 16px; font-size: 16px; font-weight: 700; border: 1px solid var(--border); background: #fff; color: #333d4b; cursor: pointer; }
 
     .queue-card { background: var(--card-bg); border-radius: 24px; padding: 20px 24px; }
     .queue-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 15px; font-weight: 800; }
@@ -90,7 +84,6 @@
       <div class="center-display">
         <div class="label">현재 상담 중인 고객</div>
         <div class="number" id="currentCustNum">-</div>
-        <div class="timer" id="timerDisplay">대기 중</div>
       </div>
 
       <div class="btn-stack">
@@ -100,13 +93,6 @@
           <button class="btn-sub" onclick="transferPrompt()">창구 이동전달</button>
         </div>
         <button class="btn-huge btn-finish-auto" onclick="finishAndAutoCall()">상담 완료 및 자동 다음호출</button>
-      </div>
-
-      <div class="duration-box">
-        <span style="font-size: 14px; font-weight: 700; color: var(--text-sub);">상담 기준시간</span>
-        <div class="chips">
-          ${[5, 10, 15, 20].map(m => `<button class="chip" id="dur-${m}" onclick="changeDuration(${m})">${m}분</button>`).join('')}
-        </div>
       </div>
     </div>
 
@@ -124,16 +110,20 @@
     const urlParams = new URLSearchParams(window.location.search);
     const bank = (urlParams.get('bank') || 'kb').toLowerCase();
 
-    const BANK_NAMES = { woori: '우리은행', shinhan: '신한은행', kb: '국민은행', fubon: '푸본현대생명' };
-    document.getElementById('bankTitle').innerText = BANK_NAMES[bank] || '은행';
-
     let myDesk = parseInt(localStorage.getItem(`selected_desk_${bank}`)) || parseInt(urlParams.get('desk')) || 1;
     let deskData = null;
     let audioCtx = null;
-    let timerId = null;
 
     if ('wakeLock' in navigator) {
       navigator.wakeLock.request('screen').catch(() => {});
+    }
+
+    function applyTheme(info) {
+      if (!info) return;
+      document.documentElement.style.setProperty('--primary', info.color);
+      document.documentElement.style.setProperty('--primary-sub', info.sub || '#f2f4f6');
+      document.documentElement.style.setProperty('--btn-text', info.btnText || '#fff');
+      document.getElementById('bankTitle').innerText = info.name;
     }
 
     function initSelect(desks) {
@@ -182,6 +172,7 @@
 
     socket.on('state_update', (data) => {
       if (data.bank !== bank) return;
+      applyTheme(data.bankInfo);
       initSelect(data.desks);
 
       deskData = data.desks.find(d => d.desk === myDesk) || data.desks[0];
@@ -216,24 +207,7 @@
         badge.innerText = '상담 대기';
         badge.className = 'status-badge';
       }
-
-      [5, 10, 15, 20].forEach(m => {
-        const btn = document.getElementById(`dur-${m}`);
-        if (btn) btn.className = `chip ${(d.duration || 10) === m ? 'selected' : ''}`;
-      });
     }
-
-    clearInterval(timerId);
-    timerId = setInterval(() => {
-      if (deskData && deskData.status === 'consulting' && deskData.startTime) {
-        const sec = Math.floor((new Date() - new Date(deskData.startTime)) / 1000);
-        const m = Math.floor(sec / 60);
-        const s = sec % 60;
-        document.getElementById('timerDisplay').innerText = `상담 진행: ${m}분 ${s < 10 ? '0' : ''}${sec}초`;
-      } else {
-        document.getElementById('timerDisplay').innerText = '대기 중';
-      }
-    }, 1000);
 
     function callNext() {
       socket.emit('call_customer', { bank, deskNumber: myDesk });
@@ -252,10 +226,6 @@
       if (target) {
         socket.emit('transfer_customer', { bank, fromDesk: myDesk, toDesk: target });
       }
-    }
-
-    function changeDuration(duration) {
-      socket.emit('update_duration', { bank, deskNumber: myDesk, duration });
     }
 
     socket.on('customer_called', (data) => {
