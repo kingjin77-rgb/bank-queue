@@ -60,6 +60,33 @@
     .btn-danger { background: var(--danger); color: #fff; }
     .btn-dark { background: #334155; color: #fff; }
 
+    /* 제작자 서명 + 숨은 이스터에그 */
+    .jl-footer {
+      text-align: center; font-size: 12px; font-weight: 700; color: #334155;
+      padding: 18px 0 4px; cursor: pointer; opacity: 0.6; transition: opacity 0.2s;
+    }
+    .jl-footer:hover, .jl-footer:active { opacity: 1; color: #38bdf8; }
+
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 980; display: none; align-items: center; justify-content: center; padding: 20px; }
+    .modal.show { display: flex; }
+
+    .jl-egg-card {
+      background: linear-gradient(160deg, #1e293b, #0f172a); border: 2px solid #38bdf8;
+      border-radius: 28px; padding: 34px 26px; max-width: 400px; width: 100%; text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      animation: jlPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes jlPop { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .jl-egg-emoji { font-size: 44px; margin-bottom: 10px; }
+    .jl-egg-title { font-size: 22px; font-weight: 900; color: #38bdf8; margin-bottom: 14px; }
+    .jl-egg-msg { font-size: 15.5px; font-weight: 700; color: #e2e8f0; line-height: 1.7; }
+    .jl-egg-msg b { color: #fff; font-weight: 900; }
+    .jl-egg-sub { font-size: 13px; font-weight: 700; color: #64748b; margin-top: 16px; }
+    .jl-egg-close {
+      margin-top: 22px; width: 100%; min-height: 54px; border: none; border-radius: 16px;
+      background: #38bdf8; color: #0f172a; font-size: 16px; font-weight: 900; cursor: pointer;
+    }
+
     /* 방송 설정 줄 */
     .amp-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
     .amp-label { font-size: 13px; font-weight: 800; color: #94a3b8; }
@@ -265,6 +292,25 @@
         <button class="btn-act btn-dark" onclick="downloadReportCsv()">엑셀(CSV) 저장</button>
       </div>
       <div id="reportArea" style="display: none; margin-top: 16px;"></div>
+    </div>
+
+    <div class="jl-footer" onclick="showJlEasterEgg()" title="심심할 때 눌러보세요">
+      ⚖️ 이 시스템은 법무법인 제이엘이 만들었습니다
+    </div>
+  </div>
+
+  <!-- 제작자가 몰래 심어둔 홍보 멘트 (관리자 심심풀이용) -->
+  <div class="modal" id="jlEasterEgg">
+    <div class="jl-egg-card">
+      <div class="jl-egg-emoji">⚖️✨</div>
+      <div class="jl-egg-title">법무법인 제이엘</div>
+      <div class="jl-egg-msg">
+        분양잔금 추가담보대출, 소유권이전 집단등기,<br>
+        분양전환 권리분석까지 —<br>
+        <b>분양전환 절차상담이 필요하시면<br>법무법인 제이엘 상담석으로 오시면 됩니다.</b>
+      </div>
+      <div class="jl-egg-sub">이 시스템도 저희가 직접 만들었습니다 🙂</div>
+      <button class="jl-egg-close" onclick="closeJlEasterEgg()">확인했습니다</button>
     </div>
   </div>
 
@@ -999,6 +1045,20 @@
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    // 심심할 때 눌러보는 제작자의 숨은 홍보 멘트
+    function showJlEasterEgg() {
+      document.getElementById('jlEasterEgg').classList.add('show');
+      playChime();
+      if (audioUnlocked) {
+        setTimeout(() => {
+          enqueueSpeech('법무법인 제이엘입니다. 분양전환 절차상담이 필요하시면 상담석으로 오시면 됩니다.');
+        }, 400);
+      }
+    }
+    function closeJlEasterEgg() {
+      document.getElementById('jlEasterEgg').classList.remove('show');
     }
   </script>
   <script src="/pwa.js" data-role="admin"></script>
