@@ -3,100 +3,124 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>현장 총괄 관리자 및 음성 전광판</title>
+  <title>통합 관리자 및 음성 전광판</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    body { background: #0f172a; color: #f8fafc; font-family: sans-serif; padding: 20px; }
-    h1 { font-size: 24px; margin-bottom: 20px; }
-    .box { background: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #334155; }
-    .btn { background: #22c55e; color: #000; font-weight: bold; padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+    body { background: #0f172a; color: #f8fafc; padding: 20px; }
+    .wrap { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+    .box { background: #1e293b; padding: 24px; border-radius: 16px; border: 1px solid #334155; }
+    h1 { font-size: 26px; color: #38bdf8; margin-bottom: 10px; }
+    h3 { color: #94a3b8; margin-bottom: 15px; }
+    .btn { background: #22c55e; color: #000; font-weight: bold; padding: 16px 24px; border: none; border-radius: 12px; cursor: pointer; font-size: 18px; width: 100%; }
+    .btn:active { transform: scale(0.98); }
+    .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-top: 15px; }
+    .bank-card { background: #0f172a; padding: 18px; border-radius: 12px; border: 1px solid #334155; text-align: center; }
+    .bank-card h4 { color: #38bdf8; margin-bottom: 8px; font-size: 18px; }
+    .bank-card p { font-size: 22px; font-weight: bold; color: #22c55e; }
+    .log-box { font-family: monospace; color: #38bdf8; font-size: 22px; background: #020617; padding: 20px; border-radius: 12px; margin-top: 10px; min-height: 80px; display: flex; align-items: center; justify-content: center; text-align: center; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h1>📢 현장 총괄 관리자 콘솔 (음성 전광판 겸용)</h1>
-  <div class="box">
-    <p>브라우저 음성 엔진 활성화를 위해 아래 버튼을 먼저 눌러주세요.</p>
-    <button class="btn" onclick="enableAudio()">🔊 음성 시스템 활성화 (필수)</button>
-  </div>
-  <div class="box">
-    <h3>실시간 음성 방송 모니터</h3>
-    <div id="voiceLog" style="font-family: monospace; color: #38bdf8;">대기 중...</div>
+  <div class="wrap">
+    <div class="box">
+      <h1>📢 통합 음성 전광판 시스템</h1>
+      <p style="margin-bottom: 15px; color: #94a3b8;">브라우저 음성 안내 활성화를 위해 아래 버튼을 꼭 먼저 클릭하세요.</p>
+      <button class="btn" onclick="enableAudio()">🔊 음성 시스템 활성화 (필수 클릭)</button>
+    </div>
+
+    <div class="box">
+      <h3>실시간 은행별 대기 현황 (국민 / 우리 / 신한 / 푸본현대)</h3>
+      <div class="status-grid" id="bankStatusGrid">
+        <div class="bank-card"><h4>국민은행</h4><p id="kbWait">0명 대기</p></div>
+        <div class="bank-card"><h4>우리은행</h4><p id="wooriWait">0명 대기</p></div>
+        <div class="bank-card"><h4>신한은행</h4><p id="shinhanWait">0명 대기</p></div>
+        <div class="bank-card"><h4>푸본현대</h4><p id="fubonWait">0명 대기</p></div>
+      </div>
+    </div>
+
+    <div class="box">
+      <h3>최근 호출 내역 및 음성 모니터</h3>
+      <div class="log-box" id="voiceLog">대기 중...</div>
+    </div>
   </div>
 
   <script>
     const socket = io();
-    let audioEnabled = false;
+    let audioReady = false;
 
     function enableAudio() {
-      audioEnabled = true;
-      alert('음성 시스템이 활성화되었습니다.');
+      audioReady = true;
+      // alert 대신 안전한 UI 표시
+      document.getElementById('voiceLog').innerText = '음성 시스템이 활성화되었습니다.';
     }
 
-    function convertNumberToKorean(numStr) {
-      let n = parseInt(numStr);
-      if (isNaN(n)) return numStr;
-      if (n === 0) return '영';
+    // "한번", "두번" 발음 오류를 완벽하게 교정하는 한글 숫자 변환 함수 ("일번", "이번" 보장)
+    function numToKorean(n) {
+      let num = parseInt(n);
+      if (isNaN(num)) return n;
+      if (num === 0) return '영';
 
       const units = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
-      if (n < 10) return units[n];
-      if (n < 20) return '십' + (n % 10 > 0 ? units[n % 10] : '');
+      if (num < 10) return units[num];
+      if (num < 20) return '십' + (num % 10 > 0 ? units[num % 10] : '');
       
-      let ten = Math.floor(n / 10);
-      let one = n % 10;
+      let ten = Math.floor(num / 10);
+      let one = num % 10;
       return (ten > 1 ? units[ten] : '') + '십' + (one > 0 ? units[one] : '');
     }
 
     let speechQueue = [];
     let isSpeaking = false;
 
-    function queueSpeech(text) {
-      speechQueue.push(text);
-      processQueue();
-    }
-
-    function processQueue() {
-      if (isSpeaking || speechQueue.length === 0) return;
-      if (!audioEnabled) return;
-
-      const text = speechQueue.shift();
+    function processSpeechQueue() {
+      if (isSpeaking || speechQueue.length === 0 || !audioReady) return;
       isSpeaking = true;
 
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'ko-KR';
-        utterance.rate = 0.92;
-        utterance.pitch = 1.0;
+      const text = speechQueue.shift();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'ko-KR';
+      utter.rate = 0.92; // 또렷하고 안정적인 속도
 
-        utterance.onend = () => {
-          isSpeaking = false;
-          setTimeout(processQueue, 300);
-        };
-        utterance.onerror = () => {
-          isSpeaking = false;
-          processQueue();
-        };
-
-        window.speechSynthesis.speak(utterance);
-      } else {
+      utter.onend = () => {
         isSpeaking = false;
-      }
+        setTimeout(processSpeechQueue, 300);
+      };
+      utter.onerror = () => {
+        isSpeaking = false;
+        processSpeechQueue();
+      };
+
+      window.speechSynthesis.speak(utter);
     }
 
-    socket.on('customer_called', (data) => {
-      const { bankName, customer, deskName } = data;
-      document.getElementById('voiceLog').innerText = `[호출] ${bankName} ${customer.ticketNumber}번 고객님 -> ${deskName}`;
-
-      const koreanTicketNum = convertNumberToKorean(customer.ticketNumber);
-      const deskNumOnly = deskName.replace(/[^0-9]/g, '');
-      const koreanDeskNum = convertNumberToKorean(deskNumOnly);
-
-      const speechMessage = `${bankName}, ${koreanTicketNum}번 고객님, ${koreanDeskNum}번 창구로 오십시요.`;
-      
-      playChimeAndSpeak(speechMessage);
+    // 서버로부터 전체 은행 대기 상태 동기화 (신한은행 포함)
+    socket.on('sync_state', (banks) => {
+      if (banks.kb) document.getElementById('kbWait').innerText = `${banks.kb.waiting.length}명 대기`;
+      if (banks.woori) document.getElementById('wooriWait').innerText = `${banks.woori.waiting.length}명 대기`;
+      if (banks.shinhan) document.getElementById('shinhanWait').innerText = `${banks.shinhan.waiting.length}명 대기`;
+      if (banks.fubon) document.getElementById('fubonWait').innerText = `${banks.fubon.waiting.length}명 대기`;
     });
 
-    function playChimeAndSpeak(text) {
+    // 고객 호출 이벤트 발생 시 전광판 표시 및 음성 출력
+    socket.on('customer_called', (data) => {
+      const displayMsg = `${data.bankName} - ${data.customer.ticketNumber}번 고객님 ➡️ ${data.deskName}`;
+      document.getElementById('voiceLog').innerText = displayMsg;
+
+      // 음성 발음 변환 ("일번", "이번" 보장)
+      const ticketNumKorean = numToKorean(data.customer.ticketNumber);
+      const deskNumOnly = data.deskName.replace(/[^0-9]/g, '');
+      const deskNumKorean = numToKorean(deskNumOnly);
+
+      const speechMessage = `${data.bankName}, ${ticketNumKorean}번 고객님, ${deskNumKorean}번 창구로 오십시요.`;
+
+      // 차임벨 효과 후 음성 큐에 추가
+      playChime();
+      speechQueue.push(speechMessage);
+      processSpeechQueue();
+    });
+
+    function playChime() {
       try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const osc = audioCtx.createOscillator();
@@ -104,19 +128,15 @@
         osc.type = 'sine';
         osc.frequency.setValueAtTime(659.25, audioCtx.currentTime);
         osc.frequency.setValueAtTime(523.25, audioCtx.currentTime + 0.15);
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.5);
+        osc.stop(audioCtx.currentTime + 0.4);
       } catch (e) {
-        console.log(e);
+        console.log('AudioContext error:', e);
       }
-
-      setTimeout(() => {
-        queueSpeech(text);
-      }, 600);
     }
   </script>
 </body>

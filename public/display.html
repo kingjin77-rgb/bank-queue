@@ -2,125 +2,72 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>은행 종합 상담 전광판</title>
+  <title>전광판 및 음성 안내</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    :root {
-      --bg: #0b101b;
-      --card-bg: #162032;
-      --text: #ffffff;
-      --text-sub: #94a3b8;
-      --border: #24324a;
-      --success: #22c55e;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif; }
-    body { background: var(--bg); color: var(--text); padding: 24px; min-height: 100vh; overflow-x: hidden; }
-
-    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border); padding-bottom: 16px; margin-bottom: 24px; }
-    .title { font-size: 34px; font-weight: 900; letter-spacing: -0.5px; }
-    .clock { font-size: 28px; font-weight: 800; color: #38bdf8; font-family: monospace; }
-
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 24px; }
-    .bank-card { background: var(--card-bg); border-radius: 28px; padding: 24px; border: 2px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-
-    .bank-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid var(--border); padding-bottom: 14px; }
-    .bank-name { font-size: 28px; font-weight: 900; }
-    .queue-badge { background: #0b101b; border: 1px solid #e2e8f0; color: #fff; font-size: 18px; font-weight: 800; padding: 6px 16px; border-radius: 20px; }
-
-    .desk-list { display: flex; flex-direction: column; gap: 14px; }
-    .desk-row { display: flex; justify-content: space-between; align-items: center; background: #0b101b; border-radius: 20px; padding: 18px 24px; border: 1px solid var(--border); }
-    .desk-title { font-size: 22px; font-weight: 800; color: var(--text-sub); }
-    .ticket-display { font-size: 64px; font-weight: 900; color: var(--success); letter-spacing: -1px; }
-    .ticket-display.idle { font-size: 26px; color: #475569; font-weight: 700; }
-
-    #audioBtn { position: fixed; bottom: 24px; right: 24px; background: #38bdf8; color: #000; border: none; font-size: 18px; font-weight: 900; padding: 16px 28px; border-radius: 50px; cursor: pointer; box-shadow: 0 8px 25px rgba(56, 189, 248, 0.4); z-index: 100; }
+    body { background: #0f172a; color: #fff; font-family: sans-serif; padding: 20px; }
+    .box { background: #1e293b; padding: 20px; border-radius: 10px; margin-bottom: 15px; }
+    .btn { background: #22c55e; color: #000; padding: 15px 25px; font-size: 18px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; }
   </style>
 </head>
 <body>
-
-  <div class="header">
-    <div class="title" id="boardTitle">상담 창구 전광판</div>
-    <div class="clock" id="clock">00:00:00</div>
+  <h1>📢 통합 음성 전광판</h1>
+  <div class="box">
+    <button class="btn" onclick="enableAudio()">🔊 음성 시스템 활성화 (필수 클릭)</button>
+  </div>
+  <div class="box">
+    <h3>최근 호출 내역</h3>
+    <p id="voiceLog" style="font-size: 22px; color: #38bdf8;">대기 중...</p>
   </div>
 
-  <div class="grid" id="gridContainer"></div>
-
-  <button id="audioBtn" onclick="activateAudio()">🔊 전광판 음성 켜기 (필수 클릭)</button>
-
   <script>
-    const socket = io({ transports: ['websocket', 'polling'] });
-    const urlParams = new URLSearchParams(window.location.search);
-    const targetBank = urlParams.get('bank');
+    const socket = io();
+    let audioReady = false;
 
-    let audioCtx = null;
-    function activateAudio() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      document.getElementById('audioBtn').innerText = '🔊 전광판 음성 켜짐 (정상)';
-      document.getElementById('audioBtn').style.background = '#22c55e';
+    function enableAudio() {
+      audioReady = true;
+      alert('음성 시스템이 활성화되었습니다.');
     }
 
-    function speakCall(text) {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(text);
-        utter.lang = 'ko-KR';
-        utter.rate = 0.95;
-        window.speechSynthesis.speak(utter);
-      }
+    // "한번" 발음 버그를 완벽하게 방지하는 한글 숫자 변환 함수
+    function numToKorean(n) {
+      let num = parseInt(n);
+      if (isNaN(num)) return n;
+      const units = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
+      if (num < 10) return units[num];
+      if (num < 20) return '십' + (num % 10 > 0 ? units[num % 10] : '');
+      let ten = Math.floor(num / 10);
+      let one = num % 10;
+      return (ten > 1 ? units[ten] : '') + '십' + (one > 0 ? units[one] : '');
     }
 
-    setInterval(() => {
-      document.getElementById('clock').innerText = new Date().toLocaleTimeString('ko-KR');
-    }, 1000);
+    let queue = [];
+    let speaking = false;
 
-    socket.on('connect', () => {
-      socket.emit('get_all_state');
-    });
+    function speakNext() {
+      if (speaking || queue.length === 0 || !audioReady) return;
+      speaking = true;
 
-    socket.on('all_state_update', (data) => {
-      render(data);
-    });
+      const text = queue.shift();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'ko-KR';
+      utter.rate = 0.92;
 
-    function render(data) {
-      const container = document.getElementById('gridContainer');
-      container.innerHTML = '';
+      utter.onend = () => { speaking = false; setTimeout(speakNext, 300); };
+      utter.onerror = () => { speaking = false; speakNext(); };
 
-      const banks = targetBank ? [targetBank.toLowerCase()] : Object.keys(data.bankInfo);
-
-      banks.forEach(b => {
-        const info = data.bankInfo[b] || { name: b.toUpperCase(), color: '#38bdf8' };
-        const desks = data.desks[b] || [];
-        const q = data.queues[b] || [];
-
-        const card = document.createElement('div');
-        card.className = 'bank-card';
-        card.style.borderTop = `6px solid ${info.color}`;
-        card.innerHTML = `
-          <div class="bank-head">
-            <span class="bank-name" style="color: ${info.color};">${info.name}</span>
-            <span class="queue-badge">대기 ${q.length}명</span>
-          </div>
-          <div class="desk-list">
-            ${desks.map(d => `
-              <div class="desk-row">
-                <span class="desk-title">${d.name}</span>
-                <span class="ticket-display ${d.currentCustomer ? '' : 'idle'}">
-                  ${d.currentCustomer ? d.currentCustomer.ticketNumber + '번' : '대기중'}
-                </span>
-              </div>
-            `).join('')}
-          </div>
-        `;
-        container.appendChild(card);
-      });
+      window.speechSynthesis.speak(utter);
     }
 
     socket.on('customer_called', (data) => {
-      if (!targetBank || targetBank.toLowerCase() === data.bank) {
-        speakCall(`${data.bankName} ${data.customer.ticketNumber}번 고객님, ${data.deskName}로 방문해주시기 바랍니다.`);
-      }
+      document.getElementById('voiceLog').innerText = `${data.bankName} ${data.customer.ticketNumber}번 -> ${data.deskName}`;
+      
+      const tNum = numToKorean(data.customer.ticketNumber);
+      const dNum = numToKorean(data.deskName.replace(/[^0-9]/g, ''));
+      const msg = `${data.bankName}, ${tNum}번 고객님, ${dNum}번 창구로 오십시요.`;
+
+      queue.push(msg);
+      speakNext();
     });
   </script>
 </body>

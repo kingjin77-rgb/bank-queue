@@ -2,58 +2,40 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>상담사 창구 및 발권 콘솔</title>
+  <title>창구 콘솔</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
-    body { background: #0f172a; color: #f8fafc; padding: 20px; }
-    .wrap { max-width: 600px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
-    .box { background: #1e293b; padding: 24px; border-radius: 16px; border: 1px solid #334155; }
-    h1 { font-size: 24px; color: #38bdf8; margin-bottom: 10px; }
-    .stat { font-size: 32px; font-weight: bold; color: #22c55e; margin: 10px 0; }
-    .btn-group { display: flex; gap: 10px; margin-top: 15px; }
-    button { flex: 1; background: #38bdf8; color: #000; font-weight: bold; padding: 16px; border: none; border-radius: 12px; cursor: pointer; font-size: 18px; }
-    button.call { background: #22c55e; color: #000; }
-    button:active { transform: scale(0.98); }
-    .log { font-family: monospace; color: #94a3b8; font-size: 14px; margin-top: 10px; background: #020617; padding: 12px; border-radius: 8px; }
+    body { background: #0f172a; color: #fff; font-family: sans-serif; padding: 20px; }
+    .box { background: #1e293b; padding: 20px; border-radius: 10px; margin-bottom: 15px; }
+    button { padding: 15px 20px; font-size: 16px; font-weight: bold; cursor: pointer; border: none; border-radius: 8px; margin-right: 10px; }
+    .btn-issue { background: #38bdf8; color: #000; }
+    .btn-call { background: #22c55e; color: #000; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="box">
-      <h1 id="bankTitle">창구 시스템</h1>
-      <p>대기 중인 고객 수</p>
-      <div class="stat"><span id="waitingCount">0</span>명</div>
-      <div class="btn-group">
-        <button onclick="issueTicket()">번호표 발권</button>
-        <button class="call" onclick="callNext()">다음 고객 호출</button>
-      </div>
-    </div>
-
-    <div class="box">
-      <h3>현재 호출된 고객</h3>
-      <div id="currentCalled" style="font-size: 22px; color: #38bdf8; font-weight: bold; margin-top: 10px;">대기 중...</div>
-      <div class="log" id="actionLog">시스템 준비 완료</div>
-    </div>
+  <h1 id="title">창구</h1>
+  <div class="box">
+    <h3>대기 인원: <span id="waitingCount">0</span>명</h3>
+    <button class="btn-issue" onclick="issueTicket()">번호표 발권</button>
+    <button class="btn-call" onclick="callNext()">다음 고객 호출</button>
+  </div>
+  <div class="box">
+    <h3>현재 호출</h3>
+    <p id="currentCalled" style="font-size: 20px; color: #22c55e; font-weight: bold;">대기 중...</p>
   </div>
 
   <script>
     const socket = io();
     const urlParams = new URLSearchParams(window.location.search);
     const bank = urlParams.get('bank') || 'kb';
-    const deskNumber = 1; // 기본 1번 창구
+    const deskNumber = urlParams.get('desk') || '1';
 
-    const bankNames = { kb: '국민은행', woori: '우리은행', shinhan: '신한은행', fubon: '푸본현대' };
-    document.getElementById('bankTitle').innerText = `${bankNames[bank] || '은행'} 창구 콘솔`;
+    const names = { kb: '국민은행', woori: '우리은행', shinhan: '신한은행', fubon: '푸본현대' };
+    document.getElementById('title').innerText = `${names[bank] || '은행'} ${deskNumber}번 창구`;
 
     function issueTicket() {
-      socket.emit('issue_ticket', { bank, name: '일반고객' }, (res) => {
-        if (res && res.success) {
-          document.getElementById('actionLog').innerText = `[발권 성공] ${res.ticket.ticketNumber}번 발권됨`;
-        } else {
-          alert('발권 실패: ' + (res ? res.message : '알 수 없는 오류'));
-        }
+      socket.emit('issue_ticket', { bank }, (res) => {
+        if (res && res.success) console.log('발권 성공:', res.ticket.ticketNumber);
       });
     }
 
@@ -67,36 +49,9 @@
       }
     });
 
-    // "한번" 발음 오류를 잡는 한글 숫자 변환 함수
-    function convertNumberToKorean(numStr) {
-      let n = parseInt(numStr);
-      if (isNaN(n)) return numStr;
-      if (n === 0) return '영';
-
-      const units = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
-      if (n < 10) return units[n];
-      if (n < 20) return '십' + (n % 10 > 0 ? units[n % 10] : '');
-      
-      let ten = Math.floor(n / 10);
-      let one = n % 10;
-      return (ten > 1 ? units[ten] : '') + '십' + (one > 0 ? units[one] : '');
-    }
-
     socket.on('customer_called', (data) => {
       if (data.bankKey !== bank) return;
       document.getElementById('currentCalled').innerText = `${data.customer.ticketNumber}번 고객님 -> ${data.deskName}`;
-      
-      const ticketText = convertNumberToKorean(data.customer.ticketNumber);
-      const deskText = convertNumberToKorean(deskNumber);
-      const msg = `${data.bankName}, ${ticketText}번 고객님, ${deskText}번 창구로 오십시요.`;
-
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(msg);
-        utterance.lang = 'ko-KR';
-        utterance.rate = 0.92;
-        window.speechSynthesis.speak(utter);
-      }
     });
   </script>
 </body>
