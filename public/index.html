@@ -56,6 +56,7 @@
         <div class="ticket-label">내 대기 번호</div>
         <div class="ticket-number" id="myNumDisplay">-</div>
         <div class="wait-text" id="myWaitDisplay">내 앞 대기: 접수 중...</div>
+        <button id="reissueBtn" onclick="reissueTicket()" style="display: none; width: 100%; margin-top: 14px; height: 52px; border-radius: 14px; border: none; background: var(--primary); color: var(--btn-text); font-size: 16px; font-weight: 800; cursor: pointer;">다시 번호표 받기</button>
       </div>
 
       <div class="call-alert" id="callBanner">
@@ -121,13 +122,77 @@
       if (audioCtx.state === 'suspended') audioCtx.resume();
     }
 
-    function speak(text) {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(text);
-        u.lang = 'ko-KR';
-        u.rate = 1.0;
-        window.speechSynthesis.speak(u);
+    // ===== 공통 음성 유틸 =====
+    // 숫자를 "일, 이, 삼..." 한자어 발음으로 변환 ("한번/두번" 오독 방지, 최대 9999)
+    function numToKorean(n) {
+      const num = parseInt(n, 10);
+      if (isNaN(num)) return String(n);
+      if (num === 0) return '영';
+      const digits = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
+      const units = ['', '십', '백', '천'];
+      let out = '';
+      let rest = num;
+      for (let i = 3; i >= 0; i--) {
+        const div = Math.pow(10, i);
+        const d = Math.floor(rest / div);
+        rest %= div;
+        if (d === 0) continue;
+        out += (d === 1 && i > 0 ? '' : digits[d]) + units[i];
+      }
+      return out;
+    }
+
+    // "1번 창구" -> "일번 창구", "단일 창구" -> 그대로
+    function deskToKorean(deskName) {
+      const m = String(deskName || '').match(/\d+/);
+      return m ? `${numToKorean(m[0])}번 창구` : String(deskName || '창구');
+    }
+
+    // 표준 호출 안내 멘트
+    function callMessage(bankName, ticketNumber, deskName) {
+      return `${bankName}, ${numToKorean(ticketNumber)}번 고객님, ${deskToKorean(deskName)}로 오십시오.`;
+    }
+
+    // 음성 끊김 방지 큐: 이전 멘트가 끝난 뒤에 다음 멘트를 읽는다 (cancel 사용 안 함)
+    const speechQueue = [];
+    let speaking = false;
+    let speechGuard = null;
+
+    function enqueueSpeech(text, withChime) {
+      speechQueue.push({ text, withChime: !!withChime });
+      processSpeechQueue();
+    }
+
+    function processSpeechQueue() {
+      if (speaking || speechQueue.length === 0) return;
+      if (!('speechSynthesis' in window)) { speechQueue.length = 0; return; }
+      speaking = true;
+      const item = speechQueue.shift();
+
+      const start = () => {
+        const utter = new SpeechSynthesisUtterance(item.text);
+        utter.lang = 'ko-KR';
+        utter.rate = 0.92;
+        utter.pitch = 1.0;
+        utter.volume = 1.0;
+        const done = () => {
+          if (!speaking) return;
+          speaking = false;
+          clearTimeout(speechGuard);
+          setTimeout(processSpeechQueue, 300);
+        };
+        utter.onend = done;
+        utter.onerror = done;
+        speechGuard = setTimeout(done, 15000); // onend 가 오지 않는 브라우저 대비 안전장치
+        try { window.speechSynthesis.resume(); } catch (e) {}
+        window.speechSynthesis.speak(utter);
+      };
+
+      if (item.withChime && typeof playChime === 'function') {
+        playChime();
+        setTimeout(start, 500);
+      } else {
+        start();
       }
     }
 
@@ -194,12 +259,29 @@
         document.getElementById('deskNotice').innerText = `${data.deskName}로 와주세요.`;
 
         setTimeout(() => {
-          speak(`${myTicket.ticketNumber}번 고객님, ${data.deskName}로 방문해주시기 바랍니다.`);
+          enqueueSpeech(`${numToKorean(myTicket.ticketNumber)}번 고객님, ${deskToKorean(data.deskName)}로 오십시오.`);
         }, 300);
 
         if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 600]);
       }
     });
+
+    socket.on('customer_passed', (data) => {
+      if (data.bank !== currentBank || !myTicket) return;
+      if (data.customer.id !== myTicket.id) return;
+      localStorage.removeItem(`my_ticket_${currentBank}`);
+      myTicket = null;
+      document.getElementById('callBanner').style.display = 'none';
+      document.getElementById('myNumDisplay').innerText = '-';
+      document.getElementById('myWaitDisplay').innerText = '호출에 응답하지 않아 순번이 취소되었습니다.';
+      document.getElementById('reissueBtn').style.display = 'block';
+    });
+
+    function reissueTicket() {
+      document.getElementById('reissueBtn').style.display = 'none';
+      document.getElementById('myWaitDisplay').innerText = '내 앞 대기: 접수 중...';
+      autoIssue();
+    }
 
     function showCompleteView() {
       localStorage.removeItem(`my_ticket_${currentBank}`);

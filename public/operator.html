@@ -49,9 +49,8 @@
   </div>
 
   <script>
-    const socket = io();
-    let bankList = [];
-    let fullState = {};
+    const socket = io({ transports: ['websocket', 'polling'] });
+    let state = { bankInfo: {}, queues: {}, desks: {} };
 
     // 캔버스 애니메이션 기반 화면 꺼짐 방지
     const canvas = document.getElementById('keepAliveCanvasOp');
@@ -70,16 +69,27 @@
       navigator.wakeLock.request('screen').catch(() => {});
     }
 
-    socket.on('bank_list_sync', (list) => { bankList = list; render(); });
-    socket.on('full_state_sync', (states) => { fullState = states; render(); });
-    socket.on('queue_update', ({ bankId, state }) => { fullState[bankId] = state; render(); });
+    socket.on('connect', () => {
+      socket.emit('get_all_state');
+    });
+
+    socket.on('all_state_update', (data) => {
+      state = data;
+      render();
+    });
+
+    function bankList() {
+      return Object.keys(state.bankInfo || {}).map(id => ({ id, ...state.bankInfo[id] }));
+    }
 
     function render() {
       const container = document.getElementById('operatorGrid');
       container.innerHTML = '';
 
-      bankList.filter(b => b.active).forEach(bank => {
-        const state = fullState[bank.id] || { waiting: [], desks: [] };
+      bankList().forEach(bank => {
+        const queue = state.queues[bank.id] || [];
+        const waiting = queue.filter(c => c.status === 'waiting');
+        const desks = state.desks[bank.id] || [];
         const card = document.createElement('div');
         card.className = 'toss-card rounded-[32px] p-6 flex flex-col justify-between shadow-2xl';
 
@@ -91,34 +101,34 @@
                 <span class="text-2xl font-black text-white tracking-tight">${bank.name}</span>
               </div>
               <div class="px-4 py-2 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-[#3182f6] font-black text-base">
-                대기 <span class="text-white text-xl font-black">${state.waiting ? state.waiting.length : 0}</span>명
+                대기 <span class="text-white text-xl font-black">${waiting.length}</span>명
               </div>
             </div>
             <div class="flex flex-col gap-4">
         `;
 
-        state.desks.forEach(desk => {
-          const isBusy = !!desk.currentTicket;
+        desks.forEach(desk => {
+          const isBusy = desk.status === 'consulting' && desk.currentCustomer;
           html += `
             <div class="bg-[#1f293d] border border-white/5 rounded-2xl p-4">
               <div class="flex justify-between items-center mb-3">
                 <span class="text-lg font-black text-slate-200">${desk.name}</span>
                 <span class="px-3 py-1 rounded-xl text-sm font-black ${isBusy ? 'bg-amber-400 text-slate-950 animate-pulse' : 'bg-slate-800 text-slate-400'}">
-                  ${isBusy ? `진행중 : ${desk.currentTicket}번` : '호출 대기'}
+                  ${isBusy ? `진행중 : ${desk.currentCustomer.ticketNumber}번` : '호출 대기'}
                 </span>
               </div>
-              
+
               <div class="grid grid-cols-4 gap-2">
-                <button onclick="callCustomer('${bank.id}', ${desk.id})" class="toss-btn h-14 bg-[#3182f6] hover:bg-[#286cd0] text-white font-black text-base rounded-2xl flex items-center justify-center shadow">
+                <button onclick="callCustomer('${bank.id}', ${desk.desk})" class="toss-btn h-14 bg-[#3182f6] hover:bg-[#286cd0] text-white font-black text-base rounded-2xl flex items-center justify-center shadow">
                   호출
                 </button>
-                <button onclick="recallCustomer('${bank.id}', ${desk.id})" class="toss-btn h-14 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-base rounded-2xl flex items-center justify-center shadow">
+                <button onclick="recallCustomer('${bank.id}', ${desk.desk})" class="toss-btn h-14 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-base rounded-2xl flex items-center justify-center shadow">
                   재호출
                 </button>
-                <button onclick="passCustomer('${bank.id}', ${desk.id})" class="toss-btn h-14 bg-rose-500/20 border border-rose-500/40 text-rose-300 hover:bg-rose-500 hover:text-white font-black text-sm rounded-2xl flex items-center justify-center">
+                <button onclick="passCustomer('${bank.id}', ${desk.desk})" class="toss-btn h-14 bg-rose-500/20 border border-rose-500/40 text-rose-300 hover:bg-rose-500 hover:text-white font-black text-sm rounded-2xl flex items-center justify-center">
                   부재패스
                 </button>
-                <button onclick="completeCustomer('${bank.id}', ${desk.id})" class="toss-btn h-14 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-base rounded-2xl flex items-center justify-center shadow">
+                <button onclick="completeCustomer('${bank.id}', ${desk.desk})" class="toss-btn h-14 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-base rounded-2xl flex items-center justify-center shadow">
                   완료
                 </button>
               </div>
@@ -130,7 +140,7 @@
             </div>
           </div>
           <div class="pt-4 mt-4 border-t border-white/5 flex items-center justify-between text-xs font-bold text-slate-400">
-            <span>대기열: ${state.waiting.length > 0 ? state.waiting.map(w => w.ticketNo + '번').slice(0, 5).join(', ') : '비어있음'}</span>
+            <span>대기열: ${waiting.length > 0 ? waiting.map(w => w.ticketNumber + '번').slice(0, 5).join(', ') : '비어있음'}</span>
           </div>
         `;
 
@@ -139,27 +149,28 @@
       });
     }
 
-    function callCustomer(bank, deskId) { socket.emit('call_next_customer', { bank, deskId }); }
-    function recallCustomer(bank, deskId) { socket.emit('recall_customer', { bank, deskId }); }
-    function passCustomer(bank, deskId) {
+    function callCustomer(bank, deskNumber) { socket.emit('call_customer', { bank, deskNumber }); }
+    function recallCustomer(bank, deskNumber) { socket.emit('recall_customer', { bank, deskNumber }); }
+    function passCustomer(bank, deskNumber) {
       if (confirm('현재 고객을 부재(패스) 처리하시겠습니까?')) {
-        socket.emit('pass_customer', { bank, deskId });
+        socket.emit('pass_customer', { bank, deskNumber });
       }
     }
-    function completeCustomer(bank, deskId) { socket.emit('complete_consultation', { bank, deskId }); }
+    function completeCustomer(bank, deskNumber) { socket.emit('complete_consultation', { bank, deskNumber, autoCall: false }); }
 
     function openProxyModal() {
       const list = document.getElementById('proxyBankList');
       list.innerHTML = '';
-      bankList.filter(b => b.active).forEach(bank => {
+      bankList().forEach(bank => {
         const btn = document.createElement('button');
         btn.className = 'toss-btn w-full h-16 rounded-2xl text-white font-black text-lg flex items-center justify-between px-6 shadow-lg';
         btn.style.backgroundColor = bank.color;
+        btn.style.color = bank.btnText || '#fff';
         btn.innerHTML = `<span>${bank.name}</span><span class="text-sm bg-black/20 px-3 py-1.5 rounded-xl">대리 발권 ➔</span>`;
         btn.onclick = () => {
-          socket.emit('issue_ticket', { bank: bank.id }, (res) => {
+          socket.emit('issue_ticket', { bank: bank.id, name: '대리발권' }, (res) => {
             if (res && res.success) {
-              alert(`[발권 완료]\n${res.bankName} ${res.ticketNo}번`);
+              alert(`[발권 완료]\n${res.ticket.bankName} ${res.ticket.ticketNumber}번`);
               closeProxyModal();
             }
           });

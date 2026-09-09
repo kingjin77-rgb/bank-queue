@@ -3,141 +3,380 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>통합 관리자 및 음성 전광판</title>
+  <title>현장 통합 총괄 관리자 콘솔</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
-    body { background: #0f172a; color: #f8fafc; padding: 20px; }
-    .wrap { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
-    .box { background: #1e293b; padding: 24px; border-radius: 16px; border: 1px solid #334155; }
-    h1 { font-size: 26px; color: #38bdf8; margin-bottom: 10px; }
-    h3 { color: #94a3b8; margin-bottom: 15px; }
-    .btn { background: #22c55e; color: #000; font-weight: bold; padding: 16px 24px; border: none; border-radius: 12px; cursor: pointer; font-size: 18px; width: 100%; }
-    .btn:active { transform: scale(0.98); }
-    .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-top: 15px; }
-    .bank-card { background: #0f172a; padding: 18px; border-radius: 12px; border: 1px solid #334155; text-align: center; }
-    .bank-card h4 { color: #38bdf8; margin-bottom: 8px; font-size: 18px; }
-    .bank-card p { font-size: 22px; font-weight: bold; color: #22c55e; }
-    .log-box { font-family: monospace; color: #38bdf8; font-size: 22px; background: #020617; padding: 20px; border-radius: 12px; margin-top: 10px; min-height: 80px; display: flex; align-items: center; justify-content: center; text-align: center; font-weight: bold; }
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --primary: #38bdf8;
+      --danger: #ef4444;
+      --border: #334155;
+      --text: #f8fafc;
+      --success: #22c55e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: clamp(12px, 3vw, 24px); min-height: 100vh; }
+    .wrap { max-width: 1080px; margin: 0 auto; width: 100%; }
+    
+    .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+    .title { font-size: clamp(22px, 4vw, 32px); font-weight: 900; }
+
+    .card { background: var(--card); border-radius: 28px; padding: clamp(18px, 3vw, 28px); border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.3); margin-bottom: 20px; }
+    h2 { font-size: clamp(18px, 2.5vw, 22px); font-weight: 800; margin-bottom: 16px; }
+
+    /* 1. 상단 실시간 미니 전광판 */
+    .mini-display-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+    .mini-display-box { background: #0b1120; border-radius: 20px; padding: 18px; border-top: 6px solid var(--primary); text-align: center; }
+    .disp-bank { font-size: 20px; font-weight: 900; }
+    .disp-num { font-size: clamp(48px, 8vw, 64px); font-weight: 900; color: var(--success); letter-spacing: -1px; margin: 6px 0; }
+
+    /* 2. 스피커 방송 앰프 박스 */
+    .speaker-box { background: #020617; border-radius: 22px; padding: 20px; display: flex; justify-content: space-between; align-items: center; border: 2px solid var(--border); margin-bottom: 20px; flex-wrap: wrap; gap: 14px; }
+    .btn-speaker { background: var(--success); color: #000; border: none; padding: 16px 28px; font-size: clamp(16px, 2vw, 19px); font-weight: 900; border-radius: 16px; cursor: pointer; transition: all 0.2s; }
+    .btn-speaker:active { transform: scale(0.98); }
+    .btn-test-sound { background: #334155; color: #fff; border: 1px solid var(--border); padding: 16px 20px; font-size: 15px; font-weight: 800; border-radius: 16px; cursor: pointer; }
+
+    /* 3. 창구 조절 (+ / -) */
+    .bank-ctrl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+    .ctrl-card { background: #0b1120; border-radius: 20px; padding: 18px; border: 1px solid var(--border); }
+    .ctrl-group { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+    .btn-step { width: 52px; height: 52px; font-size: 28px; font-weight: 900; border: none; border-radius: 14px; background: #334155; color: #fff; cursor: pointer; }
+    .btn-step:active { background: #475569; }
+
+    /* 4. 은행 추가 및 링크 */
+    .input-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+    .input-field { flex: 1; min-width: 140px; height: 52px; padding: 0 14px; border-radius: 14px; background: #0b1120; border: 1px solid var(--border); color: #fff; font-size: 16px; }
+    .btn-add { height: 52px; padding: 0 24px; border-radius: 14px; font-size: 16px; font-weight: 800; background: var(--primary); color: #000; border: none; cursor: pointer; }
+    .link-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .chip-link { background: #0b1120; color: var(--primary); padding: 10px 16px; border-radius: 12px; font-size: 14px; font-weight: 800; cursor: pointer; border: 1px solid var(--border); }
+
+    /* 5. 비상 제어 */
+    .btn-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+    .btn-act { height: 56px; border-radius: 16px; font-size: 16px; font-weight: 800; border: none; cursor: pointer; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-dark { background: #334155; color: #fff; }
   </style>
 </head>
 <body>
+
   <div class="wrap">
-    <div class="box">
-      <h1>📢 통합 음성 전광판 시스템</h1>
-      <p style="margin-bottom: 15px; color: #94a3b8;">브라우저 음성 안내 활성화를 위해 아래 버튼을 꼭 먼저 클릭하세요.</p>
-      <button class="btn" onclick="enableAudio()">🔊 음성 시스템 활성화 (필수 클릭)</button>
+    <div class="head">
+      <div class="title">현장 통합 총괄 콘솔</div>
+      <div style="color: var(--success); font-weight: 800;">● 중앙 관제 정상 작동</div>
     </div>
 
-    <div class="box">
-      <h3>실시간 은행별 대기 현황 (국민 / 우리 / 신한 / 푸본현대)</h3>
-      <div class="status-grid" id="bankStatusGrid">
-        <div class="bank-card"><h4>국민은행</h4><p id="kbWait">0명 대기</p></div>
-        <div class="bank-card"><h4>우리은행</h4><p id="wooriWait">0명 대기</p></div>
-        <div class="bank-card"><h4>신한은행</h4><p id="shinhanWait">0명 대기</p></div>
-        <div class="bank-card"><h4>푸본현대</h4><p id="fubonWait">0명 대기</p></div>
+    <!-- 1. 스피커 방송 앰프 -->
+    <div class="speaker-box">
+      <div>
+        <h3 style="font-size: 19px; margin-bottom: 4px;">📢 현장 스피커 오디오 방송 앰프</h3>
+        <p style="font-size: 14px; color: #94a3b8;">스피커를 연결하고 켜두면 모든 은행 호출 음성이 자동 방송됩니다.</p>
+        <p id="lastCall" style="font-size: 15px; color: #38bdf8; font-weight: 800; margin-top: 8px;">최근 호출: 대기 중</p>
+      </div>
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <button class="btn-test-sound" onclick="testSoundDirect()">🔔 소리 시험</button>
+        <button class="btn-speaker" id="speakerBtn" onclick="toggleSpeaker()">🔊 스피커 방송 켜기</button>
       </div>
     </div>
 
-    <div class="box">
-      <h3>최근 호출 내역 및 음성 모니터</h3>
-      <div class="log-box" id="voiceLog">대기 중...</div>
+    <!-- 2. 관리자 내장형 실시간 전광판 뷰 -->
+    <div class="card">
+      <h2>실시간 호출 현황 전광판 (내장 뷰)</h2>
+      <div class="mini-display-grid" id="miniDisplayGrid"></div>
+    </div>
+
+    <!-- 3. 은행별 창구 실시간 +, - 조절 -->
+    <div class="card">
+      <h2>은행별 창구 실시간 조절 (+ / -)</h2>
+      <div class="bank-ctrl-grid" id="bankCtrlGrid"></div>
+    </div>
+
+    <!-- 4. 은행 추가 및 발권 링크 -->
+    <div class="card">
+      <h2>신규 은행 추가 & QR 링크</h2>
+      <div class="input-row">
+        <input type="text" id="newBankName" class="input-field" placeholder="은행명 (예: 하나은행)">
+        <input type="text" id="newBankCode" class="input-field" placeholder="영문코드 (예: hana)">
+        <input type="color" id="newBankColor" value="#008485" style="width: 60px; height: 52px; border-radius: 12px; cursor: pointer;">
+        <button class="btn-add" onclick="addNewBank()">은행 추가</button>
+      </div>
+      <div class="link-chips" id="qrLinksList"></div>
+    </div>
+
+    <!-- 5. 비상 제어 & 일마감 -->
+    <div class="card" style="border: 2px solid var(--danger);">
+      <h2 style="color: var(--danger);">🚨 비상 긴급 제어</h2>
+      <div class="btn-grid">
+        <button class="btn-act btn-danger" onclick="emergencyRepair()">비상 시스템 원클릭 복구</button>
+        <button class="btn-act btn-dark" onclick="resetAll()">전체 번호표 리셋</button>
+        <button class="btn-act btn-dark" onclick="closeDay()">일마감 및 통계</button>
+      </div>
+      <div id="reportBox" style="display: none; background: #020617; color: var(--primary); padding: 18px; border-radius: 16px; margin-top: 14px; white-space: pre-wrap; font-family: monospace;"></div>
     </div>
   </div>
 
   <script>
-    const socket = io();
-    let audioReady = false;
+    const socket = io({ transports: ['websocket', 'polling'] });
+    let audioUnlocked = false;
+    let audioCtx = null;
 
-    function enableAudio() {
-      audioReady = true;
-      // alert 대신 안전한 UI 표시
-      document.getElementById('voiceLog').innerText = '음성 시스템이 활성화되었습니다.';
+    if ('wakeLock' in navigator) {
+      navigator.wakeLock.request('screen').catch(() => {});
     }
 
-    // "한번", "두번" 발음 오류를 완벽하게 교정하는 한글 숫자 변환 함수 ("일번", "이번" 보장)
-    function numToKorean(n) {
-      let num = parseInt(n);
-      if (isNaN(num)) return n;
-      if (num === 0) return '영';
-
-      const units = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
-      if (num < 10) return units[num];
-      if (num < 20) return '십' + (num % 10 > 0 ? units[num % 10] : '');
-      
-      let ten = Math.floor(num / 10);
-      let one = num % 10;
-      return (ten > 1 ? units[ten] : '') + '십' + (one > 0 ? units[one] : '');
-    }
-
-    let speechQueue = [];
-    let isSpeaking = false;
-
-    function processSpeechQueue() {
-      if (isSpeaking || speechQueue.length === 0 || !audioReady) return;
-      isSpeaking = true;
-
-      const text = speechQueue.shift();
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = 'ko-KR';
-      utter.rate = 0.92; // 또렷하고 안정적인 속도
-
-      utter.onend = () => {
-        isSpeaking = false;
-        setTimeout(processSpeechQueue, 300);
-      };
-      utter.onerror = () => {
-        isSpeaking = false;
-        processSpeechQueue();
-      };
-
-      window.speechSynthesis.speak(utter);
-    }
-
-    // 서버로부터 전체 은행 대기 상태 동기화 (신한은행 포함)
-    socket.on('sync_state', (banks) => {
-      if (banks.kb) document.getElementById('kbWait').innerText = `${banks.kb.waiting.length}명 대기`;
-      if (banks.woori) document.getElementById('wooriWait').innerText = `${banks.woori.waiting.length}명 대기`;
-      if (banks.shinhan) document.getElementById('shinhanWait').innerText = `${banks.shinhan.waiting.length}명 대기`;
-      if (banks.fubon) document.getElementById('fubonWait').innerText = `${banks.fubon.waiting.length}명 대기`;
-    });
-
-    // 고객 호출 이벤트 발생 시 전광판 표시 및 음성 출력
-    socket.on('customer_called', (data) => {
-      const displayMsg = `${data.bankName} - ${data.customer.ticketNumber}번 고객님 ➡️ ${data.deskName}`;
-      document.getElementById('voiceLog').innerText = displayMsg;
-
-      // 음성 발음 변환 ("일번", "이번" 보장)
-      const ticketNumKorean = numToKorean(data.customer.ticketNumber);
-      const deskNumOnly = data.deskName.replace(/[^0-9]/g, '');
-      const deskNumKorean = numToKorean(deskNumOnly);
-
-      const speechMessage = `${data.bankName}, ${ticketNumKorean}번 고객님, ${deskNumKorean}번 창구로 오십시요.`;
-
-      // 차임벨 효과 후 음성 큐에 추가
-      playChime();
-      speechQueue.push(speechMessage);
-      processSpeechQueue();
-    });
-
-    function playChime() {
-      try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(659.25, audioCtx.currentTime);
-        osc.frequency.setValueAtTime(523.25, audioCtx.currentTime + 0.15);
-        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.4);
-      } catch (e) {
-        console.log('AudioContext error:', e);
+    // 1. 오디오 컨텍스트 강제 활성화
+    function initAudioContext() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
       }
     }
+
+    // 2. 챠임벨 사운드 (딩-동 2음)
+    function playChime() {
+      try {
+        initAudioContext();
+        const now = audioCtx.currentTime;
+
+        const osc1 = audioCtx.createOscillator();
+        const gain1 = audioCtx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(659.25, now); // Mi (E5)
+        gain1.gain.setValueAtTime(0.3, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+        osc1.connect(gain1);
+        gain1.connect(audioCtx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.5);
+
+        const osc2 = audioCtx.createOscillator();
+        const gain2 = audioCtx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(523.25, now + 0.25); // Do (C5)
+        gain2.gain.setValueAtTime(0.35, now + 0.25);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.85);
+        osc2.connect(gain2);
+        gain2.connect(audioCtx.destination);
+        osc2.start(now + 0.25);
+        osc2.stop(now + 0.85);
+      } catch (e) {
+        console.error('Chime error:', e);
+      }
+    }
+
+    // ===== 공통 음성 유틸 =====
+    // 숫자를 "일, 이, 삼..." 한자어 발음으로 변환 ("한번/두번" 오독 방지, 최대 9999)
+    function numToKorean(n) {
+      const num = parseInt(n, 10);
+      if (isNaN(num)) return String(n);
+      if (num === 0) return '영';
+      const digits = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
+      const units = ['', '십', '백', '천'];
+      let out = '';
+      let rest = num;
+      for (let i = 3; i >= 0; i--) {
+        const div = Math.pow(10, i);
+        const d = Math.floor(rest / div);
+        rest %= div;
+        if (d === 0) continue;
+        out += (d === 1 && i > 0 ? '' : digits[d]) + units[i];
+      }
+      return out;
+    }
+
+    // "1번 창구" -> "일번 창구", "단일 창구" -> 그대로
+    function deskToKorean(deskName) {
+      const m = String(deskName || '').match(/\d+/);
+      return m ? `${numToKorean(m[0])}번 창구` : String(deskName || '창구');
+    }
+
+    // 표준 호출 안내 멘트
+    function callMessage(bankName, ticketNumber, deskName) {
+      return `${bankName}, ${numToKorean(ticketNumber)}번 고객님, ${deskToKorean(deskName)}로 오십시오.`;
+    }
+
+    // 음성 끊김 방지 큐: 이전 멘트가 끝난 뒤에 다음 멘트를 읽는다 (cancel 사용 안 함)
+    const speechQueue = [];
+    let speaking = false;
+    let speechGuard = null;
+
+    function enqueueSpeech(text, withChime) {
+      speechQueue.push({ text, withChime: !!withChime });
+      processSpeechQueue();
+    }
+
+    function processSpeechQueue() {
+      if (speaking || speechQueue.length === 0) return;
+      if (!('speechSynthesis' in window)) { speechQueue.length = 0; return; }
+      speaking = true;
+      const item = speechQueue.shift();
+
+      const start = () => {
+        const utter = new SpeechSynthesisUtterance(item.text);
+        utter.lang = 'ko-KR';
+        utter.rate = 0.92;
+        utter.pitch = 1.0;
+        utter.volume = 1.0;
+        const done = () => {
+          if (!speaking) return;
+          speaking = false;
+          clearTimeout(speechGuard);
+          setTimeout(processSpeechQueue, 300);
+        };
+        utter.onend = done;
+        utter.onerror = done;
+        speechGuard = setTimeout(done, 15000); // onend 가 오지 않는 브라우저 대비 안전장치
+        try { window.speechSynthesis.resume(); } catch (e) {}
+        window.speechSynthesis.speak(utter);
+      };
+
+      if (item.withChime && typeof playChime === 'function') {
+        playChime();
+        setTimeout(start, 500);
+      } else {
+        start();
+      }
+    }
+
+    // 스피커 켜기 버튼 동작 (누르자마자 즉시 소리 출력)
+    function toggleSpeaker() {
+      initAudioContext();
+      audioUnlocked = true;
+
+      const btn = document.getElementById('speakerBtn');
+      btn.innerText = '🔊 스피커 방송 켜짐 (정상)';
+      btn.style.background = '#38bdf8';
+
+      // 차단 해제 검증을 위해 즉시 벨과 안내 멘트 송출
+      enqueueSpeech('현장 스피커 방송 엔진이 정상 연결되었습니다.', true);
+    }
+
+    // 소리 시험 버튼
+    function testSoundDirect() {
+      initAudioContext();
+      enqueueSpeech(callMessage('국민은행', 12, '1번 창구'), true);
+    }
+
+    // 전체 호출 방송 브로드캐스트
+    function broadcastCall(bankName, ticketNum, deskName) {
+      document.getElementById('lastCall').innerText = `최근 호출: ${bankName} ${ticketNum}번 고객님 → ${deskName}`;
+      if (!audioUnlocked) return;
+      enqueueSpeech(callMessage(bankName, ticketNum, deskName), true);
+    }
+
+    socket.on('connect', () => {
+      socket.emit('get_all_state');
+    });
+
+    socket.on('all_state_update', (data) => {
+      renderMiniDisplay(data);
+      renderCtrl(data);
+      renderLinks(data.bankInfo);
+    });
+
+    function renderMiniDisplay(data) {
+      const grid = document.getElementById('miniDisplayGrid');
+      grid.innerHTML = '';
+      Object.keys(data.bankInfo).forEach(b => {
+        const info = data.bankInfo[b];
+        const desks = data.desks[b] || [];
+        const currentCalling = desks.find(d => d.status === 'consulting' && d.currentCustomer);
+
+        const box = document.createElement('div');
+        box.className = 'mini-display-box';
+        box.style.borderTopColor = info.color;
+        box.innerHTML = `
+          <div class="disp-bank" style="color: ${info.color};">${info.name}</div>
+          <div class="disp-num">${currentCalling ? currentCalling.currentCustomer.ticketNumber + '번' : '대기'}</div>
+          <div style="font-size: 14px; color: #94a3b8;">${currentCalling ? currentCalling.name : '호출 대기 중'}</div>
+        `;
+        grid.appendChild(box);
+      });
+    }
+
+    function renderCtrl(data) {
+      const grid = document.getElementById('bankCtrlGrid');
+      grid.innerHTML = '';
+      Object.keys(data.bankInfo).forEach(b => {
+        const info = data.bankInfo[b];
+        const desks = data.desks[b] || [];
+
+        const box = document.createElement('div');
+        box.className = 'ctrl-card';
+        box.style.borderLeft = `6px solid ${info.color}`;
+        box.innerHTML = `
+          <div style="font-size: 18px; font-weight: 800; color: ${info.color};">${info.name}</div>
+          <div style="font-size: 14px; color: #94a3b8; margin-top: 4px;">운영 창구: <b>${desks.length}개</b></div>
+          <div class="ctrl-group">
+            <button class="btn-step" onclick="modDesk('${b}', 'remove')">-</button>
+            <span style="font-size: 24px; font-weight: 900; min-width: 36px; text-align: center;">${desks.length}</span>
+            <button class="btn-step" onclick="modDesk('${b}', 'add')">+</button>
+          </div>
+        `;
+        grid.appendChild(box);
+      });
+    }
+
+    function renderLinks(bankInfo) {
+      const box = document.getElementById('qrLinksList');
+      box.innerHTML = '';
+      const base = window.location.origin;
+      Object.keys(bankInfo).forEach(b => {
+        const chip = document.createElement('div');
+        chip.className = 'chip-link';
+        chip.innerText = `${bankInfo[b].name} 발권링크 복사`;
+        chip.onclick = () => {
+          const url = `${base}/?bank=${b}`;
+          navigator.clipboard.writeText(url).then(() => alert(`${bankInfo[b].name} URL 복사됨:\n${url}`));
+        };
+        box.appendChild(chip);
+      });
+    }
+
+    function modDesk(bank, action) {
+      socket.emit('modify_desk_count', { bank, action });
+    }
+
+    function addNewBank() {
+      const name = document.getElementById('newBankName').value;
+      const code = document.getElementById('newBankCode').value;
+      const color = document.getElementById('newBankColor').value;
+      if (!name || !code) return alert('은행명과 코드를 입력해주세요.');
+      socket.emit('admin_add_bank', { name, code, color });
+      document.getElementById('newBankName').value = '';
+      document.getElementById('newBankCode').value = '';
+    }
+
+    // 실시간 호출 수신
+    socket.on('customer_called', (data) => {
+      broadcastCall(data.bankName, data.customer.ticketNumber, data.deskName);
+    });
+
+    function emergencyRepair() {
+      if (confirm('전체 시스템을 비상 초기화 복구하시겠습니까?')) {
+        socket.emit('admin_emergency_repair');
+      }
+    }
+
+    function resetAll() {
+      if (confirm('전체 은행 번호표를 리셋하시겠습니까?')) {
+        socket.emit('admin_reset_tickets', { bank: 'all' });
+      }
+    }
+
+    function closeDay() {
+      if (confirm('일마감을 진행하시겠습니까?')) {
+        socket.emit('admin_day_close');
+      }
+    }
+
+    socket.on('day_closed', (report) => {
+      const box = document.getElementById('reportBox');
+      box.style.display = 'block';
+      box.innerText = `[일마감 완료] ${new Date(report.closedAt).toLocaleString()}\n총 상담: ${report.totalCount}건`;
+    });
   </script>
 </body>
 </html>
