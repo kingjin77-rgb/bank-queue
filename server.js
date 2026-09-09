@@ -91,7 +91,7 @@ const INITIAL_DESKS = {
     { desk: 2, name: '2번 창구', status: 'idle', currentCustomer: null }
   ],
   fubon: [
-    { desk: 1, name: '단일 창구', status: 'idle', currentCustomer: null }
+    { desk: 1, name: '1번 창구', status: 'idle', currentCustomer: null, away: false }
   ]
 };
 

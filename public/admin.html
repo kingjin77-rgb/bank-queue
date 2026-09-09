@@ -451,7 +451,7 @@
       return out;
     }
 
-    // "1번 창구" -> "일번 창구", "단일 창구" -> 그대로
+    // "1번 창구" -> "일번 창구" (숫자가 없는 창구명이 오면 그대로 읽는다)
     function deskToKorean(deskName) {
       const m = String(deskName || '').match(/\d+/);
       return m ? `${numToKorean(m[0])}번 창구` : String(deskName || '창구');
