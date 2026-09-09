@@ -21,7 +21,8 @@
     body { background: var(--bg); color: var(--text); min-height: 100vh; padding: 16px; display: flex; justify-content: center; }
     .wrap { width: 100%; max-width: 520px; }
 
-    #gateModal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 999; display: flex; justify-content: center; align-items: center; padding: 20px; }
+    /* 최초 1회만 뜨는 모달 */
+    #gateModal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 999; display: none; justify-content: center; align-items: center; padding: 20px; }
     .gate-card { background: #fff; border-radius: 28px; padding: 36px 24px; width: 100%; max-width: 400px; text-align: center; }
     .gate-card h2 { font-size: 24px; font-weight: 800; margin-bottom: 10px; }
     .gate-card p { font-size: 15px; color: var(--text-sub); margin-bottom: 24px; line-height: 1.5; }
@@ -60,10 +61,10 @@
 
   <div id="gateModal">
     <div class="gate-card">
-      <h2>🔊 창구 업무 시작</h2>
-      <p>실시간 음성 알림을 켜고<br>담당 상담 창구를 선택해주세요.</p>
+      <h2>🔊 창구 선택 및 음성 활성화</h2>
+      <p>상담 창구를 선택하면 음성 호출이 켜지며<br>새로고침해도 창구가 영구 고정됩니다.</p>
       <select id="deskSelect" class="gate-select"></select>
-      <button class="btn-gate-start" onclick="startWork()">음성 켜고 콘솔 시작</button>
+      <button class="btn-gate-start" onclick="confirmGateAndStart()">창구 확정 및 업무 시작</button>
     </div>
   </div>
 
@@ -73,7 +74,7 @@
         <span class="bank-tag" id="bankTitle">은행</span>
         <span class="desk-pill" id="deskPill">-번 창구</span>
       </div>
-      <button class="btn-seat-change" onclick="changeSeat()">창구 자리이동</button>
+      <button class="btn-seat-change" onclick="resetSeatAndChange()">창구 변경</button>
     </div>
 
     <div class="card">
@@ -123,17 +124,28 @@
       document.documentElement.style.setProperty('--btn-text', info.btnText || '#fff');
       document.getElementById('bankTitle').innerText = info.name;
     }
-
     applyTheme(LOCAL_BANK_THEMES[bank] || LOCAL_BANK_THEMES.kb);
 
     const socket = io({ transports: ['websocket', 'polling'] });
-    let myDesk = parseInt(localStorage.getItem(`selected_desk_${bank}`)) || parseInt(urlParams.get('desk')) || 1;
+    
+    // [핵심] 창구 영구 기억 (새로고침해도 안 풀림)
+    let savedDesk = localStorage.getItem(`fixed_desk_${bank}`);
+    let myDesk = savedDesk ? parseInt(savedDesk) : (parseInt(urlParams.get('desk')) || null);
     let deskData = null;
     let audioCtx = null;
 
     if ('wakeLock' in navigator) {
       navigator.wakeLock.request('screen').catch(() => {});
     }
+
+    function unlockAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    // 클릭 시 언제든 오디오 잠금 해제 유지
+    window.addEventListener('click', unlockAudio);
+    window.addEventListener('touchstart', unlockAudio);
 
     function initSelect(desks) {
       const s = document.getElementById('deskSelect');
@@ -142,27 +154,36 @@
         const opt = document.createElement('option');
         opt.value = d.desk;
         opt.innerText = d.name;
-        if (d.desk === myDesk) opt.selected = true;
+        if (myDesk && d.desk === myDesk) opt.selected = true;
         s.appendChild(opt);
       });
     }
 
-    function startWork() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
+    // 창구 미지정 시에만 모달 띄움
+    function checkGate() {
+      if (!myDesk) {
+        document.getElementById('gateModal').style.display = 'flex';
+      } else {
+        document.getElementById('gateModal').style.display = 'none';
+        document.getElementById('deskPill').innerText = `${myDesk}번 창구`;
+      }
+    }
 
+    function confirmGateAndStart() {
+      unlockAudio();
       const sel = document.getElementById('deskSelect');
       myDesk = parseInt(sel.value);
-      localStorage.setItem(`selected_desk_${bank}`, myDesk);
+      localStorage.setItem(`fixed_desk_${bank}`, myDesk);
 
       document.getElementById('gateModal').style.display = 'none';
       document.getElementById('deskPill').innerText = `${myDesk}번 창구`;
       socket.emit('get_state', { bank });
     }
 
-    function changeSeat() {
-      localStorage.removeItem(`selected_desk_${bank}`);
-      window.location.reload();
+    function resetSeatAndChange() {
+      localStorage.removeItem(`fixed_desk_${bank}`);
+      myDesk = null;
+      document.getElementById('gateModal').style.display = 'flex';
     }
 
     function speak(text) {
@@ -183,10 +204,14 @@
       if (data.bank !== bank) return;
       if (data.bankInfo) applyTheme(data.bankInfo);
       initSelect(data.desks);
+      checkGate();
 
-      deskData = data.desks.find(d => d.desk === myDesk) || data.desks[0];
-      if (deskData) {
-        myDesk = deskData.desk;
+      if (myDesk) {
+        deskData = data.desks.find(d => d.desk === myDesk);
+        if (!deskData) {
+          deskData = data.desks[0];
+          myDesk = deskData ? deskData.desk : 1;
+        }
         document.getElementById('deskPill').innerText = deskData.name;
         renderDesk(deskData);
       }
@@ -219,18 +244,25 @@
     }
 
     function callNext() {
+      if (!myDesk) return resetSeatAndChange();
+      unlockAudio();
       socket.emit('call_customer', { bank, deskNumber: myDesk });
     }
 
     function recall() {
+      if (!myDesk) return;
+      unlockAudio();
       socket.emit('recall_customer', { bank, deskNumber: myDesk });
     }
 
     function finishAndAutoCall() {
+      if (!myDesk) return;
+      unlockAudio();
       socket.emit('complete_consultation', { bank, deskNumber: myDesk, autoCall: true });
     }
 
     function transferPrompt() {
+      if (!myDesk) return;
       const target = prompt('손님을 전달할 창구 번호를 입력하세요 (예: 2)');
       if (target) {
         socket.emit('transfer_customer', { bank, fromDesk: myDesk, toDesk: target });
@@ -239,6 +271,7 @@
 
     socket.on('customer_called', (data) => {
       if (data.bank === bank && data.desk === myDesk) {
+        unlockAudio();
         speak(`${data.customer.ticketNumber}번 고객님 호출되었습니다.`);
       }
     });

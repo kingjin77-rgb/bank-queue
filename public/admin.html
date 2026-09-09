@@ -23,9 +23,11 @@
     .card { background: var(--card); border-radius: 24px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); margin-bottom: 20px; }
     h2 { font-size: 20px; font-weight: 800; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
 
+    /* 현장 스피커 허브 */
     .speaker-box { background: #0f172a; color: #fff; border-radius: 20px; padding: 20px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
     .btn-speaker { background: var(--success); color: #fff; border: none; padding: 14px 24px; font-size: 16px; font-weight: 800; border-radius: 14px; cursor: pointer; }
 
+    /* 은행별 창구 관리 (+, -) */
     .bank-manage-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 14px; }
     .bank-ctrl-card { background: #f8fafc; border: 2px solid var(--border); border-radius: 20px; padding: 18px; }
     .bank-ctrl-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
@@ -33,6 +35,7 @@
     .btn-step { width: 44px; height: 44px; font-size: 24px; font-weight: 900; border: none; border-radius: 12px; background: #fff; border: 1px solid var(--border); cursor: pointer; display: flex; justify-content: center; align-items: center; }
     .btn-step:active { background: #e2e8f0; }
 
+    /* 은행 추가 & 링크 */
     .input-row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
     .input-field { flex: 1; min-width: 140px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; font-size: 15px; }
     .btn-add { background: var(--primary); color: #fff; border: none; padding: 14px 22px; font-weight: 800; border-radius: 12px; cursor: pointer; }
@@ -57,19 +60,23 @@
       <span style="color: var(--success); font-weight: 800;">● 실시간 연동 중</span>
     </div>
 
+    <!-- 스피커 방송 앰프 -->
     <div class="speaker-box">
       <div>
         <h3 style="font-size: 18px; margin-bottom: 4px;">📢 현장 스피커 오디오 방송 앰프</h3>
-        <p style="font-size: 13px; color: #94a3b8;">스피커를 연결하고 켜두면 모든 은행 호출 음성이 자동 방송됩니다.</p>
+        <p style="font-size: 13px; color: #94a3b8;">이 기기에 스피커를 꽂아두고 버튼을 켜면 모든 은행 창구 호출이 자동 방송됩니다.</p>
       </div>
       <button class="btn-speaker" id="speakerBtn" onclick="toggleSpeaker()">스피커 방송 켜기</button>
     </div>
 
+    <!-- 은행별 창구 +, - -->
     <div class="card">
       <h2>은행별 창구 실시간 증설 및 축소 (+ / -)</h2>
+      <p style="font-size: 13px; color: #64748b;">버튼을 누르면 상담사 앱과 전광판에 즉시 창구가 추가/제거됩니다.</p>
       <div class="bank-manage-grid" id="bankDesksGrid"></div>
     </div>
 
+    <!-- 은행 추가 -->
     <div class="card">
       <h2>신규 은행 즉시 추가</h2>
       <div class="input-row">
@@ -84,6 +91,7 @@
       </div>
     </div>
 
+    <!-- 비상 제어 -->
     <div class="card" style="border: 2px solid var(--danger);">
       <h2 style="color: var(--danger);">🚨 비상 긴급 제어</h2>
       <div class="btn-grid">
@@ -93,6 +101,7 @@
       </div>
     </div>
 
+    <!-- 일마감 -->
     <div class="card" id="reportCard" style="display: none;">
       <h2>📋 일마감 보고서</h2>
       <button class="btn-action" style="background: var(--success); color:#fff; width:100%; margin-bottom:10px;" onclick="copyReport()">보고서 복사</button>
@@ -115,7 +124,7 @@
       if (audioCtx.state === 'suspended') audioCtx.resume();
       audioUnlocked = true;
       const btn = document.getElementById('speakerBtn');
-      btn.innerText = '🔊 스피커 방송 켜짐 (정상)';
+      btn.innerText = '🔊 스피커 방송 켜짐 (정상 작동 중)';
       btn.style.background = '#2563eb';
     }
 
@@ -157,12 +166,12 @@
             <span style="font-size: 18px; font-weight: 800; color: ${info.color};">${info.name}</span>
             <span style="font-size: 13px; font-weight: 700; color: #64748b;">대기 ${queue.length}명</span>
           </div>
-          <div style="font-size: 14px; font-weight: 600; color: #334155;">운영 창구 수: <b>${desks.length}개</b></div>
+          <div style="font-size: 14px; font-weight: 600; color: #334155;">운영 창구: <b>${desks.length}개 창구</b></div>
           <div class="ctrl-group">
             <button class="btn-step" onclick="modDesk('${b}', 'remove')">-</button>
-            <span style="font-size: 18px; font-weight: 900; min-width: 30px; text-align: center;">${desks.length}</span>
+            <span style="font-size: 20px; font-weight: 900; min-width: 34px; text-align: center;">${desks.length}</span>
             <button class="btn-step" onclick="modDesk('${b}', 'add')">+</button>
-            <span style="font-size: 12px; color: #94a3b8; margin-left: 6px;">(즉시 증감)</span>
+            <span style="font-size: 12px; color: #94a3b8; margin-left: 6px;">(실시간 변동)</span>
           </div>
         `;
         container.appendChild(box);
@@ -228,7 +237,7 @@
       const counts = {};
       report.logs.forEach(l => { counts[l.bankName] = (counts[l.bankName] || 0) + 1; });
 
-      let text = `[현장 일마감 상담 보고서]\n마감 시각: ${new Date(report.closedAt).toLocaleString('ko-KR')}\n총 완료 건수: ${report.totalCount}건\n\n■ 은행별 실적\n`;
+      let text = `[현장 일마감 상담 보고서]\n마감 시각: ${new Date(report.closedAt).toLocaleString('ko-KR')}\n총 완료: ${report.totalCount}건\n\n■ 은행별 실적\n`;
       for (const [k, v] of Object.entries(counts)) {
         text += `- ${k}: ${v}건\n`;
       }

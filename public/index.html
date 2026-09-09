@@ -89,7 +89,6 @@
   </div>
 
   <script>
-    // 1. 페이지 뜨자마자 URL 파라미터 기반으로 은행 색상 즉시 강제 주입
     const urlParams = new URLSearchParams(window.location.search);
     let currentBank = (urlParams.get('bank') || 'kb').toLowerCase();
 
@@ -107,8 +106,6 @@
       document.documentElement.style.setProperty('--btn-text', theme.btnText || '#fff');
       document.getElementById('bankPill').innerText = theme.name;
     }
-
-    // 소켓 접속 전에 화면 즉시 색칠
     applyThemeDirect(LOCAL_BANK_THEMES[currentBank] || LOCAL_BANK_THEMES.kb);
 
     const socket = io({ transports: ['websocket', 'polling'] });

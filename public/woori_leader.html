@@ -2,261 +2,116 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>우리은행 상담사 대시보드 관리</title>
-  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
-  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>우리은행 팀장 현장 지휘 콘솔</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    * {
-      font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif !important;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
-    body {
-      background-color: #0b101b;
-      letter-spacing: -0.035em;
-    }
-    .toss-card {
-      background: #171f30;
-      border: 1px solid rgba(255, 255, 255, 0.07);
-      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
-    }
-    .toss-inner {
-      background: #101726;
-      border: 1px solid rgba(255, 255, 255, 0.04);
-    }
+    :root { --primary: #0067ac; --bg: #f0f4f8; --card: #ffffff; --border: #d0d7de; --text: #1f2328; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 20px; }
+    .wrap { max-width: 800px; margin: 0 auto; }
+    .card { background: var(--card); border-radius: 20px; padding: 24px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; border-top: 6px solid var(--primary); }
+    h2 { font-size: 20px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+    
+    .desk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+    .desk-box { background: #f8fafc; border: 1px solid var(--border); border-radius: 16px; padding: 16px; text-align: center; }
+    .desk-num { font-size: 36px; font-weight: 900; color: var(--primary); margin: 6px 0; }
+
+    .ctrl-row { display: flex; gap: 10px; align-items: center; margin-top: 14px; }
+    .btn-ctrl { padding: 12px 20px; border-radius: 12px; font-size: 15px; font-weight: 800; border: none; cursor: pointer; background: var(--primary); color: #fff; }
+    
+    .queue-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .queue-item { display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border: 1px solid var(--border); padding: 12px 18px; border-radius: 12px; }
+    .btn-assign { background: #1f2328; color: #fff; border: none; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
   </style>
 </head>
-<body class="text-white min-h-screen p-4 md:p-8 select-none pb-24 flex justify-center">
+<body>
 
-  <div class="w-full max-w-5xl flex flex-col gap-6">
-
-    <!-- 상단 헤더 -->
-    <header class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 border-b border-slate-800/80 gap-4">
-      <div>
-        <div class="flex items-center gap-2 mb-1.5">
-          <span class="px-2.5 py-0.5 bg-[#0067ac] text-white text-[11px] font-black rounded-lg tracking-tight shadow-sm">
-            우리은행
-          </span>
-          <span class="text-xs text-slate-400 font-bold tracking-tight">창구 실시간 모니터링 시스템</span>
-        </div>
-        <h1 class="text-2xl sm:text-3xl font-black text-white tracking-tight">우리은행 상담사 대시보드 관리</h1>
-      </div>
-      <div id="realtimeClock" class="font-mono text-emerald-400 toss-card px-4 py-2 rounded-2xl text-xs sm:text-sm font-black w-fit tracking-wider border border-emerald-500/20">
-        KST --:--:--
-      </div>
-    </header>
-
-    <!-- 실시간 요약 카드 -->
-    <div class="grid grid-cols-2 gap-3 sm:gap-5">
-      <div class="toss-card rounded-[28px] p-6 text-center">
-        <span class="text-xs font-black text-slate-400">우리은행 실시간 대기</span>
-        <div id="wooriWaitCount" class="text-5xl sm:text-6xl font-black text-amber-400 my-2 tracking-tight">0</div>
-        <span class="text-[11px] font-bold text-slate-500">현재 대기 중 고객</span>
-      </div>
-      <div class="toss-card rounded-[28px] p-6 text-center">
-        <span class="text-xs font-black text-slate-400">오늘 누적 상담종료 실적</span>
-        <div id="wooriDoneCount" class="text-5xl sm:text-6xl font-black text-[#3182f6] my-2 tracking-tight">0</div>
-        <span class="text-[11px] font-bold text-slate-500">정상 상담완료 기준</span>
+  <div class="wrap">
+    <div class="card">
+      <h2>우리은행 창구 실시간 지휘 본부 <span style="font-size: 13px; color: var(--primary);">팀장 전용 모드</span></h2>
+      <div class="desk-grid" id="deskGrid"></div>
+      <div class="ctrl-row">
+        <span style="font-weight: 700;">창구 실시간 조절:</span>
+        <button class="btn-ctrl" onclick="modDesk('remove')">- 창구 축소</button>
+        <button class="btn-ctrl" onclick="modDesk('add')">+ 창구 즉시 증설</button>
       </div>
     </div>
 
-    <!-- 창구별 개별 진행 현황 그리드 (1~4번 카드 기본 상시 출력) -->
-    <section>
-      <div class="flex justify-between items-center mb-3 px-1">
-        <h2 class="text-base sm:text-lg font-black text-white flex items-center gap-2">
-          <span>🏢</span> 창구별 실시간 진행 현황
-        </h2>
-        <span class="text-xs font-bold text-[#3182f6]" id="deskActiveSummary">운영 창구 연동 중</span>
-      </div>
-
-      <div id="wooriDesksGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <!-- 1번 창구 -->
-        <div id="card_desk_1" class="toss-card rounded-[26px] p-5 flex flex-col justify-between transition-all">
-          <div class="flex justify-between items-center pb-3 border-b border-white/5 mb-3">
-            <span class="font-black text-base text-slate-200 tracking-tight">1번 창구</span>
-            <span id="badge_desk_1" class="px-2.5 py-1 rounded-xl text-[11px] font-black bg-slate-800 text-slate-400">대기 중</span>
-          </div>
-          <div class="my-4 text-center">
-            <div class="text-[11px] font-bold text-slate-500 mb-1">상담 진행 고객</div>
-            <div id="ticket_desk_1" class="text-4xl sm:text-5xl font-black text-slate-600 tracking-tight">-</div>
-          </div>
-          <div class="toss-inner rounded-xl p-3 flex justify-between items-center text-xs font-bold">
-            <span class="text-slate-400 font-medium">상담종료</span>
-            <span id="done_desk_1" class="text-emerald-400 font-black text-sm">0건</span>
-          </div>
-        </div>
-
-        <!-- 2번 창구 -->
-        <div id="card_desk_2" class="toss-card rounded-[26px] p-5 flex flex-col justify-between transition-all">
-          <div class="flex justify-between items-center pb-3 border-b border-white/5 mb-3">
-            <span class="font-black text-base text-slate-200 tracking-tight">2번 창구</span>
-            <span id="badge_desk_2" class="px-2.5 py-1 rounded-xl text-[11px] font-black bg-slate-800 text-slate-400">대기 중</span>
-          </div>
-          <div class="my-4 text-center">
-            <div class="text-[11px] font-bold text-slate-500 mb-1">상담 진행 고객</div>
-            <div id="ticket_desk_2" class="text-4xl sm:text-5xl font-black text-slate-600 tracking-tight">-</div>
-          </div>
-          <div class="toss-inner rounded-xl p-3 flex justify-between items-center text-xs font-bold">
-            <span class="text-slate-400 font-medium">상담종료</span>
-            <span id="done_desk_2" class="text-emerald-400 font-black text-sm">0건</span>
-          </div>
-        </div>
-
-        <!-- 3번 창구 -->
-        <div id="card_desk_3" class="toss-card rounded-[26px] p-5 flex flex-col justify-between transition-all">
-          <div class="flex justify-between items-center pb-3 border-b border-white/5 mb-3">
-            <span class="font-black text-base text-slate-200 tracking-tight">3번 창구</span>
-            <span id="badge_desk_3" class="px-2.5 py-1 rounded-xl text-[11px] font-black bg-slate-800 text-slate-400">대기 중</span>
-          </div>
-          <div class="my-4 text-center">
-            <div class="text-[11px] font-bold text-slate-500 mb-1">상담 진행 고객</div>
-            <div id="ticket_desk_4" class="text-4xl sm:text-5xl font-black text-slate-600 tracking-tight">-</div>
-          </div>
-          <div class="toss-inner rounded-xl p-3 flex justify-between items-center text-xs font-bold">
-            <span class="text-slate-400 font-medium">상담종료</span>
-            <span id="done_desk_3" class="text-emerald-400 font-black text-sm">0건</span>
-          </div>
-        </div>
-
-        <!-- 4번 창구 -->
-        <div id="card_desk_4" class="toss-card rounded-[26px] p-5 flex flex-col justify-between transition-all">
-          <div class="flex justify-between items-center pb-3 border-b border-white/5 mb-3">
-            <span class="font-black text-base text-slate-200 tracking-tight">4번 창구</span>
-            <span id="badge_desk_4" class="px-2.5 py-1 rounded-xl text-[11px] font-black bg-slate-800 text-slate-400">대기 중</span>
-          </div>
-          <div class="my-4 text-center">
-            <div class="text-[11px] font-bold text-slate-500 mb-1">상담 진행 고객</div>
-            <div id="ticket_desk_4" class="text-4xl sm:text-5xl font-black text-slate-600 tracking-tight">-</div>
-          </div>
-          <div class="toss-inner rounded-xl p-3 flex justify-between items-center text-xs font-bold">
-            <span class="text-slate-400 font-medium">상담종료</span>
-            <span id="done_desk_4" class="text-emerald-400 font-black text-sm">0건</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 운영시간대 바 -->
-    <div class="toss-card rounded-2xl px-5 py-3.5 flex justify-between items-center text-xs font-bold border border-white/5">
-      <span class="text-slate-400">총괄 현장 운영시간대</span>
-      <span id="displayHoursText" class="text-amber-300 font-black">09:00 ~ 20:00 (자동 연동)</span>
+    <div class="card">
+      <h2>실시간 고객 대기 명단 <span id="queueTotal">0명 대기</span></h2>
+      <div class="queue-list" id="queueList"></div>
     </div>
-
-    <!-- 시간대별 상담종료 현황 차트 -->
-    <section class="toss-card rounded-[28px] p-6">
-      <div class="flex justify-between items-center mb-5">
-        <h2 class="text-sm font-black text-white">📊 시간대별 상담종료 현황</h2>
-        <span class="text-xs font-bold text-slate-500">실시간 자동 집계</span>
-      </div>
-      <div id="hourlyChart" class="flex items-end gap-2.5 h-44 pt-5 pb-2 px-1 overflow-x-auto"></div>
-    </section>
-
   </div>
 
   <script>
-    const socket = io();
-    let currentOperatingHours = { startHour: 9, endHour: 20 };
-    let wooriStats = {};
+    const socket = io({ transports: ['websocket', 'polling'] });
+    const bank = 'woori';
 
-    function updateClock() {
-      const now = new Date();
-      const kstStr = now.toLocaleTimeString('ko-KR', { hour12: false, timeZone: 'Asia/Seoul' });
-      document.getElementById('realtimeClock').innerText = `KST ${kstStr}`;
-    }
-    setInterval(updateClock, 1000);
-    updateClock();
-
-    socket.on('operating_hours_update', (hours) => {
-      if (hours && hours.startHour !== undefined) {
-        currentOperatingHours = hours;
-        document.getElementById('displayHoursText').innerText = 
-          `${String(hours.startHour).padStart(2, '0')}:00 ~ ${String(hours.endHour).padStart(2, '0')}:00 (자동 연동)`;
-        renderChart();
-      }
+    socket.on('connect', () => {
+      socket.emit('get_state', { bank });
     });
 
-    socket.on('full_state_sync', (states) => {
-      if (states && states.woori) applyWooriState(states.woori);
+    socket.on('state_update', (data) => {
+      if (data.bank !== bank) return;
+      renderDesks(data.desks);
+      renderQueue(data.queue, data.desks);
     });
 
-    socket.on('queue_update', ({ bankId, state }) => {
-      if (bankId === 'woori') applyWooriState(state);
-    });
-
-    function applyWooriState(state) {
-      document.getElementById('wooriWaitCount').innerText = (state.waiting || []).length;
-      document.getElementById('wooriDoneCount').innerText = state.completedCount || 0;
-      wooriStats = state.hourlyStats || {};
-
-      const desks = state.desks || [];
-      document.getElementById('deskActiveSummary').innerText = `운영 창구 ${desks.length}개 연동`;
-
+    function renderDesks(desks) {
+      const box = document.getElementById('deskGrid');
+      box.innerHTML = '';
       desks.forEach(d => {
-        const card = document.getElementById(`card_desk_${d.id}`);
-        const badge = document.getElementById(`badge_desk_${d.id}`);
-        const ticketTxt = document.getElementById(`ticket_desk_${d.id}`);
-        const doneTxt = document.getElementById(`done_desk_${d.id}`);
-
-        if (card && badge && ticketTxt && doneTxt) {
-          doneTxt.innerText = `${d.completedCount || 0}건`;
-
-          if (d.currentTicket) {
-            ticketTxt.innerText = `${d.currentTicket}번`;
-            ticketTxt.className = 'text-4xl sm:text-5xl font-black text-amber-300 tracking-tight';
-            badge.innerText = '상담 진행 중';
-            badge.className = 'px-2.5 py-1 rounded-xl text-[11px] font-black bg-amber-400 text-slate-950 animate-pulse';
-            card.className = 'toss-card rounded-[26px] p-5 flex flex-col justify-between border border-amber-400/50 bg-[#192236]';
-          } else {
-            ticketTxt.innerText = '-';
-            ticketTxt.className = 'text-4xl sm:text-5xl font-black text-slate-600 tracking-tight';
-            badge.innerText = '대기 중';
-            badge.className = 'px-2.5 py-1 rounded-xl text-[11px] font-black bg-slate-800 text-slate-400';
-            card.className = 'toss-card rounded-[26px] p-5 flex flex-col justify-between border border-white/5';
-          }
-        }
+        const isBusy = d.status === 'consulting' && d.currentCustomer;
+        box.innerHTML += `
+          <div class="desk-box">
+            <div style="font-size: 14px; font-weight: 700; color: #64748b;">${d.name}</div>
+            <div class="desk-num">${isBusy ? d.currentCustomer.ticketNumber + '번' : '대기'}</div>
+            <div style="font-size: 12px; font-weight: 700; color: ${isBusy ? '#ef4444' : '#10b981'};">
+              ${isBusy ? '상담 진행 중' : '비어 있음'}
+            </div>
+          </div>
+        `;
       });
-
-      renderChart();
     }
 
-    function renderChart() {
-      const container = document.getElementById('hourlyChart');
-      if (!container) return;
-      container.innerHTML = '';
+    function renderQueue(queue, desks) {
+      document.getElementById('queueTotal').innerText = `${queue.length}명 대기`;
+      const list = document.getElementById('queueList');
+      list.innerHTML = '';
 
-      const start = currentOperatingHours.startHour;
-      const end = currentOperatingHours.endHour;
-      const nowHour = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' })).getHours();
-
-      const hoursToDisplay = [];
-      if (start <= end) {
-        for (let h = start; h <= end; h++) hoursToDisplay.push(h);
-      } else {
-        for (let h = start; h < 24; h++) hoursToDisplay.push(h);
-        for (let h = 0; h <= end; h++) hoursToDisplay.push(h);
+      if (queue.length === 0) {
+        list.innerHTML = '<div style="text-align:center; padding: 20px; color:#94a3b8;">현재 대기 중인 고객이 없습니다.</div>';
+        return;
       }
 
-      let maxVal = 1;
-      hoursToDisplay.forEach(h => {
-        if ((wooriStats[h] || 0) > maxVal) maxVal = wooriStats[h];
-      });
-
-      hoursToDisplay.forEach(h => {
-        const count = wooriStats[h] || 0;
-        const heightPercent = Math.max(16, Math.round((count / maxVal) * 100));
-        const isCurrent = (h === nowHour);
-
-        const col = document.createElement('div');
-        col.className = 'flex-1 flex flex-col items-center justify-end h-full min-w-[34px]';
-        col.innerHTML = `
-          <span class="text-xs font-black ${count > 0 ? 'text-[#3182f6]' : 'text-slate-600'} mb-1.5">${count}</span>
-          <div class="w-full rounded-xl transition-all ${isCurrent ? 'bg-amber-400 ring-2 ring-amber-300' : (count > 0 ? 'bg-[#0067ac]' : 'bg-slate-800')}" style="height: ${heightPercent}%;"></div>
-          <span class="text-[11px] font-black ${isCurrent ? 'text-amber-300' : 'text-slate-500'} mt-2">${h}시</span>
+      queue.forEach((c, idx) => {
+        const item = document.createElement('div');
+        item.className = 'queue-item';
+        item.innerHTML = `
+          <div>
+            <span style="font-size: 18px; font-weight: 900; color: var(--primary);">${c.ticketNumber}번</span>
+            <span style="font-size: 13px; color: #64748b; margin-left: 8px;">(순번: ${idx + 1}번째)</span>
+          </div>
+          <div>
+            <select id="sel-desk-${c.id}" style="padding: 6px; border-radius: 8px;">
+              ${desks.map(d => `<option value="${d.desk}">${d.name}</option>`).join('')}
+            </select>
+            <button class="btn-assign" onclick="forceAssign('${c.id}')">강제 호출</button>
+          </div>
         `;
-        container.appendChild(col);
+        list.appendChild(item);
       });
+    }
+
+    function modDesk(action) {
+      socket.emit('modify_desk_count', { bank, action });
+    }
+
+    function forceAssign(customerId) {
+      const sel = document.getElementById(`sel-desk-${customerId}`);
+      const deskNumber = sel.value;
+      socket.emit('call_customer', { bank, deskNumber, customerId });
     }
   </script>
 </body>
