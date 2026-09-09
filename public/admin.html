@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>현장 총괄 관리자 및 음성 안내</title>
+  <title>현장 총괄 관리자 및 음성 전광판</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
     body { background: #0f172a; color: #f8fafc; font-family: sans-serif; padding: 20px; }
@@ -15,7 +15,7 @@
 <body>
   <h1>📢 현장 총괄 관리자 콘솔 (음성 전광판 겸용)</h1>
   <div class="box">
-    <p>브라우저 음성 엔진 활성화를 위해 화면을 한 번 클릭하거나 아래 버튼을 눌러주세요.</p>
+    <p>브라우저 음성 엔진 활성화를 위해 아래 버튼을 먼저 눌러주세요.</p>
     <button class="btn" onclick="enableAudio()">🔊 음성 시스템 활성화 (필수)</button>
   </div>
   <div class="box">
@@ -29,10 +29,42 @@
 
     function enableAudio() {
       audioEnabled = true;
-      alert('음성 시스템이 활성화되었습니다. 내일 정상 방송됩니다.');
+      alert('음성 시스템이 활성화되었습니다.');
     }
 
-    // 🔊 음성 씹힘 방지 순차 큐(Queue) 시스템
+    // 숫자를 완벽한 한글 발음으로 변환 (1 -> 일, 10 -> 일십이 아니라 십, 11 -> 일십일이 아니라 십일)
+    function convertNumberToKorean(numStr) {
+      let n = parseInt(numStr);
+      if (isNaN(n)) return numStr;
+      if (n === 0) return '영';
+
+      const nums = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
+      const tens = ['', '십', '백', '천'];
+
+      let result = '';
+      let 만 = Math.floor(n / 10000);
+      let 나머지 = n % 10000;
+
+      function formatChunk(chunk) {
+        let str = '';
+        let t = Math.floor(chunk / 1000);
+        let h = Math.floor((chunk % 1000) / 100);
+        let d = Math.floor((chunk % 100) / 10);
+        let u = chunk % 10;
+
+        if (t > 0) str += (t > 1 ? nums[t] : '') + '천';
+        if (h > 0) str += (h > 1 ? nums[h] : '') + '백';
+        if (d > 0) str += (d > 1 ? nums[d] : '') + '십';
+        if (u > 0) str += nums[u];
+        return str;
+      }
+
+      if (만 > 0) result += formatChunk(만) + '만 ';
+      if (나머지 > 0) result += formatChunk(나머지);
+
+      return result;
+    }
+
     let speechQueue = [];
     let isSpeaking = false;
 
@@ -43,21 +75,21 @@
 
     function processQueue() {
       if (isSpeaking || speechQueue.length === 0) return;
-      if (!audioEnabled) return; // 활성화 전이면 대기
+      if (!audioEnabled) return;
 
       const text = speechQueue.shift();
       isSpeaking = true;
 
       if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel(); // 이전 잔여 음성 강제 초기화
+        window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'ko-KR';
-        utterance.rate = 0.95; // 말하기 속도 약간 차분하게 조절하여 끊김 방지
+        utterance.rate = 0.95;
         utterance.pitch = 1.0;
 
         utterance.onend = () => {
           isSpeaking = false;
-          setTimeout(processQueue, 300); // 다음 안내 멘트와 텀 주기
+          setTimeout(processQueue, 300);
         };
         utterance.onerror = () => {
           isSpeaking = false;
@@ -70,25 +102,27 @@
       }
     }
 
-    // 서버에서 호출 신호 수신
     socket.on('customer_called', (data) => {
       const { bankName, customer, deskName } = data;
       document.getElementById('voiceLog').innerText = `[호출] ${bankName} ${customer.ticketNumber}번 고객님 -> ${deskName}`;
 
-      // 🔔 정확하고 부드러운 표준 안내 멘트 조합
-      // 예: "딩동~ 우리은행, 101번 고객님, 1번 창구로 오십시요."
-      playChimeAndSpeak(`${bankName}, ${customer.ticketNumber}번 고객님, ${deskName}로 오십시요.`);
+      const koreanTicketNum = convertNumberToKorean(customer.ticketNumber);
+      const deskNumOnly = deskName.replace(/[^0-9]/g, '');
+      const koreanDeskNum = convertNumberToKorean(deskNumOnly);
+
+      const speechMessage = `${bankName}, ${koreanTicketNum}번 고객님, ${koreanDeskNum}번 창구로 오십시요.`;
+      
+      playChimeAndSpeak(speechMessage);
     });
 
-    // 딩동 차임벨 효과음 + 음성 재생
     function playChimeAndSpeak(text) {
       try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(659.25, audioCtx.currentTime); // E5
-        osc.frequency.setValueAtTime(523.25, audioCtx.currentTime + 0.15); // C5
+        osc.frequency.setValueAtTime(659.25, audioCtx.currentTime);
+        osc.frequency.setValueAtTime(523.25, audioCtx.currentTime + 0.15);
         gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
         osc.connect(gain);
@@ -96,10 +130,9 @@
         osc.start();
         osc.stop(audioCtx.currentTime + 0.5);
       } catch (e) {
-        console.log('Chime audio context error:', e);
+        console.log(e);
       }
 
-      // 차임벨 울린 직후 자연스럽게 음성 큐에 투입
       setTimeout(() => {
         queueSpeech(text);
       }, 600);

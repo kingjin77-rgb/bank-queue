@@ -12,7 +12,7 @@ const io = new Server(server, {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-// 은행별 대기열 및 현황 데이터 관리
+// 은행별 대기열 데이터 (1번부터 시작하도록 currentNumber: 0 설정)
 const banks = {
   kb: { name: '국민은행', prefix: 'KB', currentNumber: 0, waiting: [], counters: {} },
   woori: { name: '우리은행', prefix: 'WOORI', currentNumber: 0, waiting: [], counters: {} },
@@ -23,10 +23,9 @@ const banks = {
 io.on('connection', (socket) => {
   console.log(`클라이언트 접속: ${socket.id}`);
 
-  // 현재 전체 상태 전송
   socket.emit('sync_state', banks);
 
-  // 번호표 발권
+  // 번호표 발권 (무조건 1번부터 차례대로 증가)
   socket.on('issue_ticket', (data, callback) => {
     const { bank, name } = data;
     if (!banks[bank]) return;
@@ -42,7 +41,6 @@ io.on('connection', (socket) => {
 
     banks[bank].waiting.push(ticket);
 
-    // 실시간 브로드캐스트
     io.emit('ticket_issued', { bank, ticket, totalWaiting: banks[bank].waiting.length });
     io.emit('sync_state', banks);
 
@@ -55,7 +53,6 @@ io.on('connection', (socket) => {
   socket.on('call_customer', (data) => {
     const { bank, deskNumber } = data;
     if (!banks[bank]) return;
-
     if (banks[bank].waiting.length === 0) return;
 
     const customer = banks[bank].waiting.shift();
@@ -63,7 +60,6 @@ io.on('connection', (socket) => {
 
     banks[bank].counters[deskNumber] = { customer, calledAt: new Date().toLocaleTimeString() };
 
-    // 음성 및 전광판 동기화 전송
     io.emit('customer_called', {
       bankKey: bank,
       bankName: banks[bank].name,
