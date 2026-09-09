@@ -2,270 +2,84 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>상담사 업무 콘솔</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>상담사 창구 및 발권 콘솔</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    :root {
-      --bg: #f2f4f6;
-      --card-bg: #ffffff;
-      --primary: #3182f6;
-      --primary-sub: #e8f3ff;
-      --text: #191f28;
-      --text-sub: #8b95a1;
-      --border: #e5e8eb;
-      --danger: #f04452;
-      --btn-text: #ffffff;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif; -webkit-tap-highlight-color: transparent; }
-    body { background: var(--bg); color: var(--text); min-height: 100vh; padding: clamp(12px, 3vw, 20px); display: flex; justify-content: center; }
-    .wrap { width: 100%; max-width: 540px; }
-
-    #gateModal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 999; display: none; justify-content: center; align-items: center; padding: 20px; }
-    .gate-card { background: #fff; border-radius: 28px; padding: 36px 24px; width: 100%; max-width: 400px; text-align: center; }
-    .gate-card h2 { font-size: 24px; font-weight: 800; margin-bottom: 10px; }
-    .gate-card p { font-size: 15px; color: var(--text-sub); margin-bottom: 24px; line-height: 1.5; }
-    .gate-select { width: 100%; padding: 16px; border-radius: 14px; border: 2px solid var(--border); font-size: 17px; font-weight: 700; margin-bottom: 20px; outline: none; }
-    .btn-gate-start { width: 100%; height: 60px; font-size: 18px; font-weight: 800; background: var(--primary); color: var(--btn-text); border: none; border-radius: 16px; cursor: pointer; }
-
-    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-    .bank-info { display: flex; align-items: center; gap: 10px; }
-    .bank-tag { font-size: clamp(20px, 4vw, 24px); font-weight: 800; color: var(--primary); }
-    .desk-pill { background: var(--primary-sub); color: var(--primary); font-size: 15px; font-weight: 800; padding: 6px 14px; border-radius: 20px; border: 1px solid var(--primary); }
-    .btn-seat-change { background: #fff; border: 1px solid var(--border); padding: 8px 14px; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; }
-
-    .card { background: var(--card-bg); border-radius: 28px; padding: clamp(24px, 5vw, 32px) 24px; box-shadow: 0 8px 24px rgba(0,0,0,0.04); margin-bottom: 16px; border-top: 8px solid var(--primary); }
-    .status-badge { display: inline-block; font-size: 14px; font-weight: 700; padding: 6px 16px; border-radius: 20px; background: #e5e8eb; color: #4e5968; margin-bottom: 12px; }
-    .status-badge.active { background: var(--primary-sub); color: var(--primary); }
-
-    .center-display { text-align: center; padding: 16px 0 24px; }
-    .center-display .label { font-size: 15px; color: var(--text-sub); font-weight: 600; }
-    .center-display .number { font-size: clamp(64px, 16vw, 92px); font-weight: 900; color: var(--primary); margin: 6px 0; line-height: 1; letter-spacing: -2px; }
-
-    .btn-stack { display: flex; flex-direction: column; gap: 12px; }
-    .btn-huge { width: 100%; height: clamp(58px, 12vw, 68px); border-radius: 20px; font-size: clamp(17px, 3.5vw, 20px); font-weight: 800; border: none; cursor: pointer; display: flex; justify-content: center; align-items: center; }
-    .btn-huge:active { transform: scale(0.98); }
-    .btn-primary { background: var(--primary); color: var(--btn-text); box-shadow: 0 6px 20px rgba(0,0,0,0.15); }
-    .btn-finish-auto { background: #191f28; color: #fff; }
-    .btn-sub-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .btn-sub { height: 56px; border-radius: 16px; font-size: 16px; font-weight: 700; border: 1px solid var(--border); background: #fff; color: #333d4b; cursor: pointer; }
-
-    .queue-card { background: var(--card-bg); border-radius: 24px; padding: 20px 24px; }
-    .queue-slider { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; }
-    .queue-chip { background: #f9fafb; border: 1px solid var(--border); padding: 10px 18px; border-radius: 14px; font-size: 16px; font-weight: 800; white-space: nowrap; }
+    body { background: #0f172a; color: #f8fafc; font-family: sans-serif; padding: 20px; }
+    .box { background: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #334155; }
+    button { background: #38bdf8; color: #000; font-weight: bold; padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; margin: 5px; }
+    button:active { transform: scale(0.98); }
   </style>
 </head>
 <body>
-
-  <div id="gateModal">
-    <div class="gate-card">
-      <h2>🔊 창구 선택 및 업무 시작</h2>
-      <p>상담 창구를 선택하면 새로고침해도<br>창구가 고정 유지됩니다.</p>
-      <select id="deskSelect" class="gate-select"></select>
-      <button class="btn-gate-start" onclick="confirmGateAndStart()">창구 확정</button>
-    </div>
+  <h1 id="bankTitle">창구 시스템</h1>
+  <div class="box">
+    <h3>대기 인원: <span id="waitingCount">0</span>명</h3>
+    <button onclick="issueTicket()">번호표 발권</button>
+    <button onclick="callNext()">다음 고객 호출</button>
   </div>
-
-  <div class="wrap">
-    <div class="header">
-      <div class="bank-info">
-        <span class="bank-tag" id="bankTitle">은행</span>
-        <span class="desk-pill" id="deskPill">-번 창구</span>
-      </div>
-      <button class="btn-seat-change" onclick="resetSeatAndChange()">창구 변경</button>
-    </div>
-
-    <div class="card">
-      <div style="text-align: center;">
-        <span class="status-badge" id="deskStatusBadge">상담 대기</span>
-      </div>
-      
-      <div class="center-display">
-        <div class="label">현재 상담 중인 고객</div>
-        <div class="number" id="currentCustNum">-</div>
-      </div>
-
-      <div class="btn-stack">
-        <button class="btn-huge btn-primary" id="btnCallNext" onclick="callNext()">다음 고객 호출</button>
-        <div class="btn-sub-row">
-          <button class="btn-sub" onclick="recall()">🔔 재호출</button>
-          <button class="btn-sub" onclick="transferPrompt()">창구 전달</button>
-        </div>
-        <button class="btn-huge btn-finish-auto" onclick="finishAndAutoCall()">상담 완료 및 자동 다음호출</button>
-      </div>
-    </div>
-
-    <div class="queue-card">
-      <div style="display: flex; justify-content: space-between; margin-bottom: 12px; font-weight: 800;">
-        <span>실시간 대기열</span>
-        <span id="queueCount" style="color: var(--primary);">대기 0명</span>
-      </div>
-      <div class="queue-slider" id="queueList"></div>
-    </div>
+  <div class="box">
+    <h3>현재 호출된 고객</h3>
+    <p id="currentCalled" style="font-size: 20px; color: #22c55e; font-weight: bold;">없음</p>
   </div>
 
   <script>
+    const socket = io();
     const urlParams = new URLSearchParams(window.location.search);
-    const bank = (urlParams.get('bank') || 'kb').toLowerCase();
+    const bank = urlParams.get('bank') || 'kb';
+    const deskNumber = 1; // 기본 1번 창구
 
-    const LOCAL_BANK_THEMES = {
-      kb: { name: '국민은행', color: '#ffbc00', sub: '#fff9e6', btnText: '#2b2b2b' },
-      shinhan: { name: '신한은행', color: '#0046ff', sub: '#e8f0fe', btnText: '#ffffff' },
-      woori: { name: '우리은행', color: '#0067ac', sub: '#e6f3fa', btnText: '#ffffff' },
-      fubon: { name: '푸본현대생명', color: '#00A88F', sub: '#e6f7f4', btnText: '#ffffff' }
-    };
+    document.getElementById('bankTitle').innerText = `${bank.toUpperCase()} 창구 관리 시스템`;
 
-    function applyTheme(info) {
-      if (!info) return;
-      document.documentElement.style.setProperty('--primary', info.color);
-      document.documentElement.style.setProperty('--primary-sub', info.sub || '#f2f4f6');
-      document.documentElement.style.setProperty('--btn-text', info.btnText || '#fff');
-      document.getElementById('bankTitle').innerText = info.name;
-    }
-    applyTheme(LOCAL_BANK_THEMES[bank] || LOCAL_BANK_THEMES.kb);
-
-    const socket = io({ transports: ['websocket', 'polling'] });
-    let savedDesk = localStorage.getItem(`fixed_desk_${bank}`);
-    let myDesk = savedDesk ? parseInt(savedDesk) : (parseInt(urlParams.get('desk')) || null);
-    let deskData = null;
-    let audioCtx = null;
-
-    if ('wakeLock' in navigator) {
-      navigator.wakeLock.request('screen').catch(() => {});
-    }
-
-    function unlockAudio() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-    }
-    window.addEventListener('click', unlockAudio);
-    window.addEventListener('touchstart', unlockAudio);
-
-    function initSelect(desks) {
-      const s = document.getElementById('deskSelect');
-      s.innerHTML = '';
-      desks.forEach(d => {
-        const opt = document.createElement('option');
-        opt.value = d.desk;
-        opt.innerText = d.name;
-        if (myDesk && d.desk === myDesk) opt.selected = true;
-        s.appendChild(opt);
-      });
-    }
-
-    function checkGate() {
-      if (!myDesk) {
-        document.getElementById('gateModal').style.display = 'flex';
-      } else {
-        document.getElementById('gateModal').style.display = 'none';
-        document.getElementById('deskPill').innerText = `${myDesk}번 창구`;
-      }
-    }
-
-    function confirmGateAndStart() {
-      unlockAudio();
-      const sel = document.getElementById('deskSelect');
-      myDesk = parseInt(sel.value);
-      localStorage.setItem(`fixed_desk_${bank}`, myDesk);
-
-      document.getElementById('gateModal').style.display = 'none';
-      document.getElementById('deskPill').innerText = `${myDesk}번 창구`;
-      socket.emit('get_state', { bank });
-    }
-
-    function resetSeatAndChange() {
-      localStorage.removeItem(`fixed_desk_${bank}`);
-      myDesk = null;
-      document.getElementById('gateModal').style.display = 'flex';
-    }
-
-    function speak(text) {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(text);
-        u.lang = 'ko-KR';
-        u.rate = 1.0;
-        window.speechSynthesis.speak(u);
-      }
-    }
-
-    socket.on('connect', () => {
-      socket.emit('get_state', { bank });
-    });
-
-    socket.on('state_update', (data) => {
-      if (data.bank !== bank) return;
-      if (data.bankInfo) applyTheme(data.bankInfo);
-      initSelect(data.desks);
-      checkGate();
-
-      if (myDesk) {
-        deskData = data.desks.find(d => d.desk === myDesk);
-        if (!deskData) {
-          deskData = data.desks[0];
-          myDesk = deskData ? deskData.desk : 1;
+    function issueTicket() {
+      socket.emit('issue_ticket', { bank, name: '일반고객' }, (res) => {
+        if (res && res.success) {
+          alert(`발권 완료: ${res.ticket.ticketNumber}번`);
         }
-        document.getElementById('deskPill').innerText = deskData.name;
-        renderDesk(deskData);
-      }
-
-      document.getElementById('queueCount').innerText = `대기 ${data.queue.length}명`;
-      const qBox = document.getElementById('queueList');
-      qBox.innerHTML = '';
-      data.queue.forEach(c => {
-        const item = document.createElement('div');
-        item.className = 'queue-chip';
-        item.innerText = `${c.ticketNumber}번`;
-        qBox.appendChild(item);
       });
-    });
-
-    function renderDesk(d) {
-      const isBusy = d.status === 'consulting' && d.currentCustomer;
-      const numEl = document.getElementById('currentCustNum');
-      const badge = document.getElementById('deskStatusBadge');
-
-      if (isBusy) {
-        numEl.innerText = `${d.currentCustomer.ticketNumber}번`;
-        badge.innerText = '상담 진행 중';
-        badge.className = 'status-badge active';
-      } else {
-        numEl.innerText = '-';
-        badge.innerText = '상담 대기';
-        badge.className = 'status-badge';
-      }
     }
 
     function callNext() {
-      if (!myDesk) return resetSeatAndChange();
-      unlockAudio();
-      socket.emit('call_customer', { bank, deskNumber: myDesk });
+      socket.emit('call_customer', { bank, deskNumber });
     }
 
-    function recall() {
-      if (!myDesk) return;
-      unlockAudio();
-      socket.emit('recall_customer', { bank, deskNumber: myDesk });
-    }
-
-    function finishAndAutoCall() {
-      if (!myDesk) return;
-      unlockAudio();
-      socket.emit('complete_consultation', { bank, deskNumber: myDesk, autoCall: true });
-    }
-
-    function transferPrompt() {
-      if (!myDesk) return;
-      const target = prompt('손님을 전달할 창구 번호를 입력하세요 (예: 2)');
-      if (target) {
-        socket.emit('transfer_customer', { bank, fromDesk: myDesk, toDesk: target });
+    socket.on('sync_state', (banks) => {
+      if (banks[bank]) {
+        document.getElementById('waitingCount').innerText = banks[bank].waiting.length;
       }
+    });
+
+    // 🔊 "한번"이 아니라 무조건 "일번"으로 읽어주는 완벽한 변환 함수
+    function convertNumberToKorean(numStr) {
+      let n = parseInt(numStr);
+      if (isNaN(n)) return numStr;
+      if (n === 0) return '영';
+
+      const units = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
+      if (n < 10) return units[n];
+      if (n < 20) return '십' + (n % 10 > 0 ? units[n % 10] : '');
+      
+      let ten = Math.floor(n / 10);
+      let one = n % 10;
+      return (ten > 1 ? units[ten] : '') + '십' + (one > 0 ? units[one] : '');
     }
 
     socket.on('customer_called', (data) => {
-      if (data.bank === bank && data.desk === myDesk) {
-        unlockAudio();
-        speak(`${data.customer.ticketNumber}번 고객님 호출되었습니다.`);
+      if (data.bankKey !== bank) return;
+      document.getElementById('currentCalled').innerText = `${data.customer.ticketNumber}번 고객님 -> ${data.deskName}`;
+      
+      // 음성 출력 (일번, 이번 발음 보장)
+      const ticketText = convertNumberToKorean(data.customer.ticketNumber);
+      const deskText = convertNumberToKorean(deskNumber);
+      const msg = `${data.bankName}, ${ticketText}번 고객님, ${deskText}번 창구로 오십시요.`;
+
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(msg);
+        utterance.lang = 'ko-KR';
+        utterance.rate = 0.95;
+        window.speechSynthesis.speak(utter);
       }
     });
   </script>
