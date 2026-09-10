@@ -966,16 +966,26 @@
       broadcastCall(data.bankName, data.customer.ticketNumber, data.deskName);
     });
 
-    // 일부러 비우는 동작에서는 백업도 함께 지운다. 그래야 지운 대기가 되살아나지 않는다.
+    function waitingTotal() {
+      if (!lastState) return 0;
+      return Object.keys(lastState.bankInfo || {})
+        .reduce((n, b) => n + ((lastState.queues || {})[b] || []).length, 0);
+    }
+
+    // 비상 복구는 손님을 지우지 않는다. 멈춘 창구 상태와 음성 방송만 정리한다.
     function emergencyRepair() {
-      if (confirm('전체 시스템을 비상 초기화 복구하시겠습니까?')) {
-        clearMirror();
+      if (confirm('멈춘 창구 상태와 음성 방송을 정리합니다.\n\n대기 손님과 오늘 실적은 그대로 유지됩니다.\n상담 중이던 손님은 대기 맨 앞으로 돌아가니 다시 호출해 주세요.\n\n진행할까요?')) {
         socket.emit('admin_emergency_repair');
       }
     }
 
+    // 이쪽이 진짜로 비우는 동작이다. 백업도 함께 지워 지운 대기가 되살아나지 않게 한다.
     function resetAll() {
-      if (confirm('전체 은행 번호표를 리셋하시겠습니까?')) {
+      const n = waitingTotal();
+      const warn = n > 0
+        ? '\n\n⚠️ 지금 대기 중인 손님 ' + n + '명이 모두 삭제됩니다.'
+        : '';
+      if (confirm('전체 은행 번호표를 1번부터 다시 시작합니다.' + warn + '\n\n진행할까요?')) {
         clearMirror();
         socket.emit('admin_reset_tickets', { bank: 'all' });
       }
@@ -996,8 +1006,6 @@
 
     socket.on('report_data', (report) => renderReport(report, false));
     socket.on('day_closed', (report) => { clearMirror(); renderReport(report, true); });
-    // 다른 관리자 화면에서 비상 복구를 눌렀을 때도 이 화면의 백업을 지운다.
-    socket.on('emergency_repaired', clearMirror);
 
     function fmtMin(sec) {
       if (!sec) return '-';
