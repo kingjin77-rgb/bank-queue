@@ -818,8 +818,10 @@ io.on('connection', (socket) => {
       db.queues[b] = [];
       db.ticketSequence[b] = 0;
       (db.desks[b] || []).forEach(d => { d.status = 'idle'; d.currentCustomer = null; });
-      broadcastBank(b);
     });
+    // 은행별로 나눠 방송하면 '일부만 비워진 상태'가 밖으로 나가고, 관리자 콘솔이 그걸
+    // 백업으로 저장해 리셋한 대기가 되살아난다. 다 비운 뒤 한 번에 방송한다.
+    broadcastEverywhere();
   });
 
   socket.on('admin_emergency_repair', () => {
@@ -840,14 +842,28 @@ io.on('connection', (socket) => {
         away: false
       }));
     });
-    db.desks = repairedDesks;
-    db.completedLogs = [];
-    db.passedLogs = [];
-    db.settings = { ...INITIAL_SETTINGS, ...db.settings };
+    // 창구에서 상담 중이던 고객은 사라지지 않도록 대기열 맨 앞으로 돌려놓는다.
+    // (복구를 눌렀다고 손님이 없어지면 안 된다. 상담사가 다시 호출하면 된다.)
     Object.keys(db.bankInfo).forEach(b => {
-      db.queues[b] = [];
-      db.ticketSequence[b] = 0;
+      const backToQueue = (db.desks[b] || [])
+        .map(d => d.currentCustomer)
+        .filter(Boolean)
+        .map(c => {
+          const cust = { ...c, status: 'waiting' };
+          delete cust.desk;
+          delete cust.deskName;
+          delete cust.calledAt;
+          return cust;
+        });
+      if (backToQueue.length === 0) return;
+      const ids = backToQueue.map(c => c.id);
+      db.queues[b] = backToQueue.concat((db.queues[b] || []).filter(c => !ids.includes(c.id)));
     });
+
+    db.desks = repairedDesks;
+    // 대기 손님과 당일 실적은 지우지 않는다. 번호표를 처음부터 다시 시작하려면
+    // 관리자 콘솔의 "전체 번호표 리셋"을 쓰면 된다.
+    db.settings = { ...INITIAL_SETTINGS, ...db.settings };
     // 방송 대기열도 함께 비운다 - 밀린 음성 방송이 있었다면 복구와 함께 초기화한다.
     resetAnnounceQueue();
     io.emit('emergency_repaired');
