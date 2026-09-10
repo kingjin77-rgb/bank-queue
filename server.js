@@ -67,7 +67,13 @@ app.get('/manifest.webmanifest', (req, res) => {
   });
 });
 
-const BACKUP_FILE = path.join(__dirname, 'queue_db_backup.json');
+// 기본값은 앱 폴더라 재배포하면 사라진다. Render 에 영구 디스크를 붙이고 DATA_DIR 을
+// 그 경로(예: /data)로 지정하면 재배포·재기동에도 저장 파일이 그대로 남는다.
+const DATA_DIR = process.env.DATA_DIR || __dirname;
+try {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+} catch (err) {}
+const BACKUP_FILE = path.join(DATA_DIR, 'queue_db_backup.json');
 
 // 푸본현대생명 공식 그린(#00A88F) 적용
 // 현장 QR 안내장에 인쇄되어 나간 5개 상담처. 여기 등록된 은행만 서버가 재시작해도
@@ -303,11 +309,83 @@ function sanitizeBank(b) {
   return db.bankInfo[bank] ? bank : 'kb';
 }
 
+// ===== 관리자 콘솔 백업 복구 =====
+// 이 서버는 대기 데이터를 메모리에 들고 있어서 재시작(배포, 절전 후 재기동)하면 비어버린다.
+// 관리자 콘솔이 마지막 상태를 자기 PC 에 저장해 두었다가 되돌려주면 아래에서 되살린다.
+// 값은 브라우저에서 오므로 형태를 일일이 검사한다 - 이상한 값이 서버를 죽이면 현장이 멈춘다.
+function hasLiveData() {
+  const banks = Object.keys(db.bankInfo);
+  if (banks.some(b => (db.queues[b] || []).length > 0)) return true;
+  if (banks.some(b => (db.ticketSequence[b] || 0) > 0)) return true;
+  if ((db.completedLogs || []).length > 0) return true;
+  return banks.some(b => (db.desks[b] || []).some(d => d.currentCustomer));
+}
+
+function safeText(v, max, fallback) {
+  const s = (v == null ? '' : String(v)).slice(0, max);
+  return s || fallback;
+}
+
+function safeTime(v) {
+  const t = new Date(v);
+  return isNaN(t.getTime()) ? new Date().toISOString() : t.toISOString();
+}
+
+function safeCount(v, max) {
+  const n = parseInt(v, 10);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(n, max);
+}
+
+function restoreCustomer(raw, bank) {
+  if (!raw || typeof raw !== 'object') return null;
+  const ticketNumber = parseInt(raw.ticketNumber, 10);
+  if (!Number.isFinite(ticketNumber) || ticketNumber <= 0 || ticketNumber > 100000) return null;
+
+  const customer = {
+    id: safeText(raw.id, 80, `${bank}-${ticketNumber}-${Date.now()}`),
+    ticketNumber,
+    bank,
+    bankName: db.bankInfo[bank].name,
+    phone: safeText(raw.phone, 30, ''),
+    name: safeText(raw.name, 30, '고객'),
+    status: raw.status === 'called' ? 'called' : 'waiting',
+    createdAt: safeTime(raw.createdAt)
+  };
+
+  const desk = parseInt(raw.desk, 10);
+  if (Number.isFinite(desk) && desk > 0 && desk <= 50) {
+    customer.desk = desk;
+    customer.deskName = safeText(raw.deskName, 20, `${desk}번 창구`);
+    customer.calledAt = safeTime(raw.calledAt);
+  }
+  return customer;
+}
+
+function restoreLogs(rawList) {
+  if (!Array.isArray(rawList)) return [];
+  return rawList.slice(-3000).map(l => {
+    if (!l || typeof l !== 'object' || !db.bankInfo[l.bank]) return null;
+    return {
+      bank: l.bank,
+      bankName: db.bankInfo[l.bank].name,
+      ticketNumber: safeCount(l.ticketNumber, 100000),
+      name: safeText(l.name, 30, '고객'),
+      desk: safeCount(l.desk, 50),
+      deskName: safeText(l.deskName, 20, ''),
+      durationSec: safeCount(l.durationSec, 86400),
+      waitSec: safeCount(l.waitSec, 86400),
+      completedAt: safeTime(l.completedAt)
+    };
+  }).filter(Boolean);
+}
+
 function broadcastAll() {
   io.emit('all_state_update', {
     bankInfo: db.bankInfo,
     queues: db.queues,
     desks: db.desks,
+    ticketSequence: db.ticketSequence,   // 관리자 콘솔 백업이 발권 번호를 그대로 이어가는 데 쓴다
     logs: db.completedLogs,
     passes: db.passedLogs,
     settings: db.settings,
@@ -369,6 +447,7 @@ io.on('connection', (socket) => {
       bankInfo: db.bankInfo,
       queues: db.queues,
       desks: db.desks,
+      ticketSequence: db.ticketSequence,
       logs: db.completedLogs,
       passes: db.passedLogs,
       settings: db.settings,
@@ -773,6 +852,66 @@ io.on('connection', (socket) => {
     resetAnnounceQueue();
     io.emit('emergency_repaired');
     broadcastEverywhere();
+  });
+
+  // 관리자 콘솔이 보관하던 마지막 상태로 대기 데이터를 되살린다.
+  // 이미 데이터가 들어있는 서버에는 적용하지 않으므로, 관리자 화면이 여러 대 열려 있어도
+  // 먼저 도착한 한 번만 반영되고 나머지는 조용히 무시된다.
+  socket.on('admin_restore_state', (snapshot, callback) => {
+    const done = (ok, reason, restored) => {
+      if (typeof callback === 'function') callback({ ok, reason: reason || '', restored: restored || 0 });
+    };
+    if (!snapshot || typeof snapshot !== 'object') return done(false, 'invalid');
+    if (hasLiveData()) return done(false, 'server_not_empty');
+
+    let restored = 0;
+    Object.keys(db.bankInfo).forEach((b) => {
+      const rawQueue = Array.isArray((snapshot.queues || {})[b]) ? snapshot.queues[b] : [];
+      const queue = rawQueue.slice(0, 500).map(c => restoreCustomer(c, b)).filter(Boolean);
+      db.queues[b] = queue;
+      restored += queue.length;
+
+      // 창구 배치(개수)와 상담 중이던 고객도 함께 되살린다.
+      const rawDesks = Array.isArray((snapshot.desks || {})[b]) ? snapshot.desks[b] : [];
+      const deskCount = rawDesks.length > 0
+        ? Math.min(rawDesks.length, 50)
+        : (db.desks[b] || []).length;
+      db.desks[b] = Array.from({ length: deskCount }, (_, i) => {
+        const src = rawDesks[i] || {};
+        const current = restoreCustomer(src.currentCustomer, b);
+        if (current) restored += 1;
+        return {
+          desk: i + 1,
+          name: `${i + 1}번 창구`,
+          status: current ? 'consulting' : 'idle',
+          currentCustomer: current,
+          away: src.away === true
+        };
+      });
+
+      // 번호가 겹치지 않도록, 저장된 발권 번호와 실제 남은 번호 중 큰 값에서 이어간다.
+      const savedSeq = safeCount((snapshot.ticketSequence || {})[b], 100000);
+      const maxInQueue = queue.reduce((m, c) => Math.max(m, c.ticketNumber), 0);
+      const maxAtDesk = db.desks[b].reduce(
+        (m, d) => Math.max(m, d.currentCustomer ? d.currentCustomer.ticketNumber : 0), 0);
+      db.ticketSequence[b] = Math.max(savedSeq, maxInQueue, maxAtDesk);
+    });
+
+    db.completedLogs = restoreLogs(snapshot.completedLogs);
+    db.passedLogs = restoreLogs(snapshot.passedLogs);
+    if (snapshot.settings && typeof snapshot.settings === 'object') {
+      db.settings = {
+        ...db.settings,
+        openHour: safeCount(snapshot.settings.openHour, 23),
+        closeHour: safeCount(snapshot.settings.closeHour, 23),
+        standardMinutes: safeCount(snapshot.settings.standardMinutes, 600) || db.settings.standardMinutes,
+        repeatCount: safeCount(snapshot.settings.repeatCount, 5) || db.settings.repeatCount
+      };
+    }
+
+    io.emit('state_restored', { restored });
+    broadcastEverywhere();
+    done(true, '', restored);
   });
 
   socket.on('admin_day_close', () => {
