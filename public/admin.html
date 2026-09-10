@@ -650,15 +650,22 @@
       return new Date().toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' });
     }
 
+    // 일부러 비운 직후에는 잠깐 백업을 멈춘다. 그 사이에 도착한 상태를 저장했다가
+    // 되돌려 버리면, 지운 대기가 되살아난다.
+    let mirrorPausedUntil = 0;
+
     function clearMirror() {
+      mirrorPausedUntil = Date.now() + 5000;
       try { localStorage.removeItem(MIRROR_KEY); } catch (e) {}
     }
+
+    function mirrorPaused() { return Date.now() < mirrorPausedUntil; }
 
     // 빈 상태로는 저장하지 않는다. 서버가 재시작돼 빈 채로 연결됐을 때 백업을
     // 덮어써 버리면 되살릴 것이 없어진다. 일마감·비상복구처럼 일부러 비운 경우는
     // 아래에서 백업을 직접 지우므로 옛 대기가 되살아나지 않는다.
     function saveMirror(data) {
-      if (stateIsEmpty(data)) return;
+      if (mirrorPaused() || stateIsEmpty(data)) return;
       try {
         localStorage.setItem(MIRROR_KEY, JSON.stringify({
           day: todayKey(),
@@ -690,7 +697,7 @@
     }
 
     function tryRestore(data) {
-      if (restoreTried || !stateIsEmpty(data)) return;
+      if (restoreTried || mirrorPaused() || !stateIsEmpty(data)) return;
       let mirror = null;
       try { mirror = JSON.parse(localStorage.getItem(MIRROR_KEY) || 'null'); } catch (e) {}
       if (!mirrorHasData(mirror)) return;

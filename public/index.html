@@ -82,6 +82,8 @@
 
     /* ===== 상담 완료 ===== */
     #completeSection { display: none; }
+    #blockedSection { display: none; }
+    .hold-badge { display: inline-block; background: #fff4e6; color: #e8590c; font-size: 13px; font-weight: 900; padding: 7px 14px; border-radius: 12px; }
     .done-card { background: var(--card); border-radius: 28px; padding: 28px 20px; text-align: center; box-shadow: 0 8px 28px rgba(0,0,0,0.07); }
     .done-badge { display: inline-block; background: #e6fcf5; color: #0ca678; font-size: 13px; font-weight: 900; padding: 7px 14px; border-radius: 12px; }
     .done-title { font-size: 24px; font-weight: 900; margin-top: 10px; }
@@ -140,6 +142,21 @@
       <div class="t-hint" style="text-align:center;">
         화면을 꺼두셔도 호출 시 알림음과 진동이 울립니다.<br>
         소리가 안 나면 휴대폰 무음(진동) 모드를 해제해주세요.
+      </div>
+    </section>
+
+    <!-- 다른 기관 상담이 끝나지 않은 경우 -->
+    <section id="blockedSection">
+      <div class="done-card">
+        <span class="hold-badge">상담 진행 중</span>
+        <div class="done-title" id="blockedTitle">이미 받으신 번호표가 있습니다</div>
+        <div class="done-desc" id="blockedDesc">
+          진행 중인 상담을 마치신 뒤에<br>이곳 번호표를 받으실 수 있습니다.
+        </div>
+        <button class="btn-big btn-brand" style="margin-top:18px;" id="blockedGoBtn" onclick="goToHeldTicket()">내 번호표 보기</button>
+        <div class="t-hint" style="text-align:center; margin-top:12px;">
+          상담이 끝나면 이 화면에서 자동으로 번호표가 발급됩니다.
+        </div>
       </div>
     </section>
 
@@ -364,6 +381,99 @@
       } catch (e) {}
     }
 
+    /* ===== 타 기관 중복 발권 차단 =====
+       한 분이 여러 기관 번호표를 미리 다 뽑아두면, 창구에서 불러도 다른 기관에 가 계셔서
+       순번이 계속 밀리고 뒤에 분들이 손해를 본다. 그래서 진행 중인 상담이 끝나기 전에는
+       다른 기관 번호표를 발급하지 않는다. */
+    let heldOther = null;      // 다른 기관에 살아있는 번호표
+    let issueDecided = false;  // 이번 연결에서 발권 여부를 정했는지
+
+    function storedTickets() {
+      const list = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key || key.indexOf('my_ticket_') !== 0) continue;
+        try {
+          const t = JSON.parse(localStorage.getItem(key));
+          if (t && t.id && t.ticketNumber) {
+            list.push({ bank: key.slice('my_ticket_'.length), ticket: t });
+          }
+        } catch (e) {}
+      }
+      return list;
+    }
+
+    // 서버 전체 상태에 그 번호표가 아직 남아 있는지 (대기 중이거나 창구에서 상담 중)
+    function ticketIsLive(state, bank, id) {
+      const queue = (state.queues || {})[bank] || [];
+      if (queue.some(function (c) { return c.id === id; })) return true;
+      const desks = (state.desks || {})[bank] || [];
+      return desks.some(function (d) { return d.currentCustomer && d.currentCustomer.id === id; });
+    }
+
+    // 다른 기관에 살아있는 번호표를 찾는다. 이미 끝난 번호표는 휴대폰에서 정리한다.
+    function findHeldOtherTicket(state) {
+      let held = null;
+      storedTickets().forEach(function (x) {
+        if (x.bank === currentBank) return;
+        if (ticketIsLive(state, x.bank, x.ticket.id)) {
+          if (!held) held = x;
+        } else {
+          localStorage.removeItem('my_ticket_' + x.bank);
+        }
+      });
+      return held;
+    }
+
+    function showBlockedView(held, bankInfo) {
+      heldOther = held;
+      const heldName = (bankInfo && bankInfo[held.bank] && bankInfo[held.bank].name)
+        || held.ticket.bankName || held.bank;
+      document.getElementById('ticketSection').style.display = 'none';
+      document.getElementById('completeSection').style.display = 'none';
+      document.getElementById('blockedSection').style.display = 'block';
+      document.getElementById('blockedTitle').innerText =
+        heldName + ' ' + held.ticket.ticketNumber + '번 번호표를 이미 받으셨습니다';
+      document.getElementById('blockedDesc').innerHTML =
+        heldName + ' 상담을 마치신 뒤에<br>' + bankName + ' 번호표를 받으실 수 있습니다.';
+      document.getElementById('blockedGoBtn').innerText = heldName + ' 번호표 보기';
+    }
+
+    function goToHeldTicket() {
+      if (!heldOther) return;
+      location.href = 'index.html?bank=' + encodeURIComponent(heldOther.bank);
+    }
+
+    // 전체 상태를 받아 발권할지 막을지 정한다. 상태가 안 오면(네트워크 문제) 손님이
+    // 번호표를 못 받는 일이 없도록 그냥 발급한다.
+    function decideIssue(state) {
+      if (myTicket) return;
+
+      if (state) {
+        // 이 기관 번호표를 이미 갖고 계시면 막지 않고 그대로 보여드린다.
+        const mine = storedTickets().filter(function (x) { return x.bank === currentBank; })[0];
+        const holdsThisBank = mine && ticketIsLive(state, currentBank, mine.ticket.id);
+
+        if (!holdsThisBank) {
+          const held = findHeldOtherTicket(state);
+          if (held) {
+            issueDecided = true;
+            showBlockedView(held, state.bankInfo);
+            return;
+          }
+        }
+        if (heldOther) {   // 다른 기관 상담이 끝났다 - 막아둔 화면을 풀고 발급한다
+          heldOther = null;
+          issueDecided = false;
+          document.getElementById('blockedSection').style.display = 'none';
+        }
+      }
+
+      if (issueDecided) return;
+      issueDecided = true;
+      autoIssue();
+    }
+
     /* ================= 발권 / 상태 ================= */
 
     function autoIssue() {
@@ -438,8 +548,10 @@
     }
 
     socket.on('connect', function () {
-      autoIssue();
+      // 발권 전에 다른 기관 번호표가 살아있는지 먼저 확인한다.
+      issueDecided = false;
       socket.emit('get_all_state');
+      setTimeout(function () { if (!issueDecided) decideIssue(null); }, 3000);
     });
 
     socket.on('all_state_update', function (data) {
@@ -447,6 +559,7 @@
       if (data.bankInfo && data.bankInfo[currentBank]) {
         bankName = data.bankInfo[currentBank].name;
       }
+      decideIssue(data);
     });
 
     socket.on('state_update', function (data) {

@@ -818,8 +818,10 @@ io.on('connection', (socket) => {
       db.queues[b] = [];
       db.ticketSequence[b] = 0;
       (db.desks[b] || []).forEach(d => { d.status = 'idle'; d.currentCustomer = null; });
-      broadcastBank(b);
     });
+    // 은행별로 나눠 방송하면 '일부만 비워진 상태'가 밖으로 나가고, 관리자 콘솔이 그걸
+    // 백업으로 저장해 리셋한 대기가 되살아난다. 다 비운 뒤 한 번에 방송한다.
+    broadcastEverywhere();
   });
 
   socket.on('admin_emergency_repair', () => {
