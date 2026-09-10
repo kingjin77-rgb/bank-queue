@@ -580,8 +580,6 @@
     // 전체 호출 방송 브로드캐스트
     function broadcastCall(bankName, ticketNum, deskName) {
       lastCallData = { bankName, ticketNum, deskName };
-      document.getElementById('lastCall').innerText =
-        `최근 호출: ${bankName} ${ticketNum}번 고객님 → ${deskName} (${new Date().toLocaleTimeString('ko-KR')})`;
       if (!audioUnlocked) return;
       const msg = callMessage(bankName, ticketNum, deskName);
       for (let i = 0; i < repeatCount; i++) {
@@ -880,8 +878,15 @@
       document.getElementById('newBankCode').value = '';
     }
 
-    // 실시간 호출 수신
+    // 실시간 호출 수신 - 화면(전광판 뷰/최근호출 텍스트)은 즉시 갱신한다.
+    // 실제 음성 재생은 서버가 순서를 매겨 보내주는 'play_announcement' 신호를 따로 기다린다.
+    // (여러 상담사가 동시에 호출해도 방송 음성이 서로 겹치지 않게 하기 위함)
     socket.on('customer_called', (data) => {
+      document.getElementById('lastCall').innerText =
+        `최근 호출: ${data.bankName} ${data.customer.ticketNumber}번 고객님 → ${data.deskName} (${new Date().toLocaleTimeString('ko-KR')})`;
+    });
+
+    socket.on('play_announcement', (data) => {
       broadcastCall(data.bankName, data.customer.ticketNumber, data.deskName);
     });
 
