@@ -566,12 +566,12 @@
       socket.emit('get_state', { bank: bank });
     });
 
-    // 내 창구로 호출된 고객 음성 안내
+    // 내 창구로 호출됐을 때 짧은 확인음만 울린다.
+    // (전체 문장 음성 안내는 관리자 콘솔의 메인 스피커가 이미 방송한다.
+    //  창구마다 각자 소리 내어 읽으면 여러 상담사가 동시에 호출했을 때 서로 겹쳐 들린다.)
     socket.on('customer_called', function (data) {
       if (data.bank !== bank || data.desk !== myDesk) return;
       playChime();
-      const msg = data.bankName + ', ' + numToKorean(data.customer.ticketNumber) + '번 고객님, ' + deskToKorean(data.deskName) + '로 오십시오.';
-      setTimeout(function () { enqueueSpeech(msg); }, 700);
     });
 
     /* ================= 조작 ================= */

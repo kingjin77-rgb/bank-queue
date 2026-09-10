@@ -266,6 +266,7 @@
       });
     }
 
+    // 번호/창구 표시는 즉시 갱신한다 (여러 창구가 동시에 호출해도 화면은 바로바로 바뀌어야 한다).
     socket.on('customer_called', function (data) {
       if (targetBank && targetBank.toLowerCase() !== data.bank) return;
 
@@ -283,12 +284,16 @@
       hero.classList.remove('flash');
       void hero.offsetWidth;
       hero.classList.add('flash');
+    });
 
-      if (audioReady) {
-        try { alarmAudio.currentTime = 0; alarmAudio.play().catch(function () {}); } catch (e) {}
-        const msg = data.bankName + ', ' + numToKorean(data.customer.ticketNumber) + '번 고객님, ' + deskToKorean(data.deskName) + '로 오십시오.';
-        setTimeout(function () { enqueueSpeech(msg); enqueueSpeech(msg); }, 900);
-      }
+    // 음성은 서버가 순서를 매겨 보내주는 'play_announcement' 신호를 따라간다.
+    // (관리자 콘솔의 메인 스피커와 동시에 방송해도 서로 겹치지 않게 하기 위함)
+    socket.on('play_announcement', function (data) {
+      if (targetBank && targetBank.toLowerCase() !== data.bank) return;
+      if (!audioReady) return;
+      try { alarmAudio.currentTime = 0; alarmAudio.play().catch(function () {}); } catch (e) {}
+      const msg = data.bankName + ', ' + numToKorean(data.customer.ticketNumber) + '번 고객님, ' + deskToKorean(data.deskName) + '로 오십시오.';
+      setTimeout(function () { enqueueSpeech(msg); enqueueSpeech(msg); }, 900);
     });
   </script>
   <script src="/pwa.js" data-role="board"></script>

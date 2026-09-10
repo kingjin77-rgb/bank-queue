@@ -216,6 +216,28 @@
     let announcedSoon = false;
     let lastPosition = null;
 
+    // 휴대폰 화면이 꺼졌다 켜지면 모바일 브라우저가 페이지를 조용히 다시 불러오는 경우가 흔하다.
+    // 이때 안내를 이미 들었는지 여부가 자바스크립트 메모리에만 있으면 초기화되어
+    // 같은 번호표에 대한 안내 멘트가 계속 반복된다. 번호표 아이디 기준으로 저장해 둔다.
+    function announceStorageKey(ticketId) {
+      return 'jl_ann_' + currentBank + '_' + ticketId;
+    }
+    function loadAnnounceFlags(ticketId) {
+      try {
+        const raw = localStorage.getItem(announceStorageKey(ticketId));
+        return raw ? JSON.parse(raw) : {};
+      } catch (e) { return {}; }
+    }
+    function saveAnnounceFlags(ticketId, patch) {
+      try {
+        const cur = loadAnnounceFlags(ticketId);
+        localStorage.setItem(announceStorageKey(ticketId), JSON.stringify(Object.assign(cur, patch)));
+      } catch (e) {}
+    }
+    function clearAnnounceFlags(ticketId) {
+      try { localStorage.removeItem(announceStorageKey(ticketId)); } catch (e) {}
+    }
+
     /* ================= 음성 / 알림 ================= */
 
     const keepAliveAudio = document.getElementById('keepAliveAudio');
@@ -308,7 +330,12 @@
       btn.classList.add('on');
       btn.innerText = '🔔 호출 알림이 켜졌습니다';
 
-      enqueueSpeech('호출 알림이 켜졌습니다. 순서가 되면 음성으로 안내해 드리겠습니다.');
+      // 화면이 꺼졌다 켜지며 페이지가 조용히 다시 불려도 이 확인 멘트를 또 말하지 않는다.
+      const already = myTicket ? !!loadAnnounceFlags(myTicket.id).confirmed : false;
+      if (!already) {
+        enqueueSpeech('호출 알림이 켜졌습니다. 순서가 되면 음성으로 안내해 드리겠습니다.');
+        if (myTicket) saveAnnounceFlags(myTicket.id, { confirmed: true });
+      }
       announceTicketIfReady();
     }
 
@@ -344,6 +371,9 @@
       if (saved) {
         try {
           myTicket = JSON.parse(saved);
+          const flags = loadAnnounceFlags(myTicket.id);
+          announcedIssue = !!flags.issued;
+          announcedSoon = !!flags.soon;
           showTicket();
           return;
         } catch (e) {}
@@ -371,6 +401,7 @@
     function announceTicketIfReady() {
       if (!alertsOn || announcedIssue || !myTicket) return;
       announcedIssue = true;
+      saveAnnounceFlags(myTicket.id, { issued: true });
       let msg = '번호표 ' + numToKorean(myTicket.ticketNumber) + '번이 발급되었습니다.';
       if (lastPosition != null) {
         msg += lastPosition === 0
@@ -431,6 +462,7 @@
       // 내 차례가 임박하면 한 번만 안내
       if (alertsOn && idx === 0 && !announcedSoon && myTicket.status !== 'called') {
         announcedSoon = true;
+        saveAnnounceFlags(myTicket.id, { soon: true });
         playAlarm();
         enqueueSpeech('곧 고객님 차례입니다. 창구 앞에서 대기해 주세요.');
         showNotification(bankName + ' 대기 안내', '곧 고객님 차례입니다. 창구 앞에서 대기해주세요.');
@@ -471,6 +503,7 @@
       if (data.bank !== currentBank || !myTicket) return;
       if (data.customer.id !== myTicket.id) return;
 
+      clearAnnounceFlags(myTicket.id);
       localStorage.removeItem('my_ticket_' + currentBank);
       myTicket = null;
       lastPosition = null;

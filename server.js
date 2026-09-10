@@ -244,6 +244,34 @@ function activeDeskCount(b) {
   return (db.desks[b] || []).filter(d => !d.away).length;
 }
 
+// 여러 상담사가 동시에 고객을 호출해도 방송 음성이 서로 겹치지 않도록
+// 관리자 콘솔/전광판의 '음성 재생 신호'는 여기서 한 줄로 줄 세워 내보낸다.
+// (화면에 번호가 뜨는 건 즉시 그대로 - customer_called 는 지금처럼 바로 나간다.
+//  단지 '소리 내는 시점'만 이 큐를 통해 순서대로 지연시킨다.)
+let announceQueue = [];
+let announceBusy = false;
+
+function estimateAnnounceMs() {
+  const repeats = Math.max(2, (db.settings && db.settings.repeatCount) || 2); // 전광판은 항상 2회 재생
+  return 900 + repeats * 4200; // 차임벨 + 반복 횟수만큼 여유있게 잡는다
+}
+
+function queueAnnouncement(payload) {
+  announceQueue.push(payload);
+  processAnnounceQueue();
+}
+
+function processAnnounceQueue() {
+  if (announceBusy || announceQueue.length === 0) return;
+  announceBusy = true;
+  const payload = announceQueue.shift();
+  io.emit('play_announcement', payload);
+  setTimeout(() => {
+    announceBusy = false;
+    processAnnounceQueue();
+  }, estimateAnnounceMs());
+}
+
 function sanitizeBank(b) {
   const bank = (b || 'kb').toLowerCase().trim();
   return db.bankInfo[bank] ? bank : 'kb';
@@ -371,13 +399,15 @@ io.on('connection', (socket) => {
     desk.away = false;
     desk.currentCustomer = target;
 
-    io.emit('customer_called', {
+    const calledPayload = {
       bank: b,
       bankName: db.bankInfo[b] ? db.bankInfo[b].name : b.toUpperCase(),
       desk: desk.desk,
       deskName: desk.name,
       customer: target
-    });
+    };
+    io.emit('customer_called', calledPayload);
+    queueAnnouncement(calledPayload);
     broadcastBank(b);
   });
 
@@ -386,13 +416,15 @@ io.on('connection', (socket) => {
     const desk = (db.desks[b] || []).find(d => d.desk === parseInt(deskNumber));
     if (!desk || !desk.currentCustomer) return;
 
-    io.emit('customer_called', {
+    const recalledPayload = {
       bank: b,
       bankName: db.bankInfo[b] ? db.bankInfo[b].name : b.toUpperCase(),
       desk: desk.desk,
       deskName: desk.name,
       customer: desk.currentCustomer
-    });
+    };
+    io.emit('customer_called', recalledPayload);
+    queueAnnouncement(recalledPayload);
   });
 
   socket.on('complete_consultation', ({ bank, deskNumber, autoCall }) => {
@@ -434,13 +466,15 @@ io.on('connection', (socket) => {
         desk.status = 'consulting';
         desk.currentCustomer = nextCust;
 
-        io.emit('customer_called', {
+        const autoPayload = {
           bank: b,
           bankName: db.bankInfo[b] ? db.bankInfo[b].name : b.toUpperCase(),
           desk: desk.desk,
           deskName: desk.name,
           customer: nextCust
-        });
+        };
+        io.emit('customer_called', autoPayload);
+        queueAnnouncement(autoPayload);
         broadcastBank(b);
       }
     }
@@ -578,13 +612,15 @@ io.on('connection', (socket) => {
     targetDesk.status = 'consulting';
     targetDesk.currentCustomer = cust;
 
-    io.emit('customer_called', {
+    const transferPayload = {
       bank: b,
       bankName: db.bankInfo[b] ? db.bankInfo[b].name : b.toUpperCase(),
       desk: targetDesk.desk,
       deskName: targetDesk.name,
       customer: cust
-    });
+    };
+    io.emit('customer_called', transferPayload);
+    queueAnnouncement(transferPayload);
     broadcastBank(b);
   });
 
