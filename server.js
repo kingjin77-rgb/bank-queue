@@ -70,27 +70,35 @@ app.get('/manifest.webmanifest', (req, res) => {
 const BACKUP_FILE = path.join(__dirname, 'queue_db_backup.json');
 
 // 푸본현대생명 공식 그린(#00A88F) 적용
+// 현장 QR 안내장에 인쇄되어 나간 5개 상담처. 여기 등록된 은행만 서버가 재시작해도
+// (배포, 절전 후 재기동, 비상 복구 등) 그대로 유지된다. 관리자 콘솔의 "은행 추가"로
+// 나중에 늘린 곳은 메모리에만 있어 재시작하면 사라지므로, 현장에 QR 을 붙여 쓰는
+// 상담처는 반드시 여기에 등록해 둔다.
 const INITIAL_BANKS = {
   kb: { name: '국민은행', color: '#ffbc00', sub: '#fff9e6', btnText: '#2b2b2b' },
   shinhan: { name: '신한은행', color: '#0046ff', sub: '#e8f0fe', btnText: '#ffffff' },
   woori: { name: '우리은행', color: '#0067ac', sub: '#e6f3fa', btnText: '#ffffff' },
-  fubon: { name: '푸본현대생명', color: '#00A88F', sub: '#e6f7f4', btnText: '#ffffff' }
+  fubon: { name: '푸본현대생명', color: '#00A88F', sub: '#e6f7f4', btnText: '#ffffff' },
+  jl: { name: '법무법인 제이엘', color: '#8b0029', sub: '#fbe9ee', btnText: '#ffffff' }
 };
 
 const INITIAL_DESKS = {
   kb: [
-    { desk: 1, name: '1번 창구', status: 'idle', currentCustomer: null },
-    { desk: 2, name: '2번 창구', status: 'idle', currentCustomer: null }
+    { desk: 1, name: '1번 창구', status: 'idle', currentCustomer: null, away: false },
+    { desk: 2, name: '2번 창구', status: 'idle', currentCustomer: null, away: false }
   ],
   shinhan: [
-    { desk: 1, name: '1번 창구', status: 'idle', currentCustomer: null },
-    { desk: 2, name: '2번 창구', status: 'idle', currentCustomer: null }
+    { desk: 1, name: '1번 창구', status: 'idle', currentCustomer: null, away: false },
+    { desk: 2, name: '2번 창구', status: 'idle', currentCustomer: null, away: false }
   ],
   woori: [
-    { desk: 1, name: '1번 창구', status: 'idle', currentCustomer: null },
-    { desk: 2, name: '2번 창구', status: 'idle', currentCustomer: null }
+    { desk: 1, name: '1번 창구', status: 'idle', currentCustomer: null, away: false },
+    { desk: 2, name: '2번 창구', status: 'idle', currentCustomer: null, away: false }
   ],
   fubon: [
+    { desk: 1, name: '1번 창구', status: 'idle', currentCustomer: null, away: false }
+  ],
+  jl: [
     { desk: 1, name: '1번 창구', status: 'idle', currentCustomer: null, away: false }
   ]
 };
@@ -107,9 +115,9 @@ const INITIAL_SETTINGS = {
 
 let db = {
   bankInfo: JSON.parse(JSON.stringify(INITIAL_BANKS)),
-  queues: { woori: [], fubon: [], shinhan: [], kb: [] },
+  queues: { woori: [], fubon: [], shinhan: [], kb: [], jl: [] },
   desks: JSON.parse(JSON.stringify(INITIAL_DESKS)),
-  ticketSequence: { woori: 0, fubon: 0, shinhan: 0, kb: 0 },
+  ticketSequence: { woori: 0, fubon: 0, shinhan: 0, kb: 0, jl: 0 },
   completedLogs: [],
   passedLogs: [],
   settings: { ...INITIAL_SETTINGS }
@@ -250,6 +258,7 @@ function activeDeskCount(b) {
 //  단지 '소리 내는 시점'만 이 큐를 통해 순서대로 지연시킨다.)
 let announceQueue = [];
 let announceBusy = false;
+let announceTimer = null;   // 예약된 다음 방송 타이머 - 비상 복구 등으로 강제 초기화할 때 반드시 함께 취소해야 한다
 
 function estimateAnnounceMs() {
   const repeats = Math.max(2, (db.settings && db.settings.repeatCount) || 2); // 전광판은 항상 2회 재생
@@ -266,10 +275,22 @@ function processAnnounceQueue() {
   announceBusy = true;
   const payload = announceQueue.shift();
   io.emit('play_announcement', payload);
-  setTimeout(() => {
+  announceTimer = setTimeout(() => {
+    announceTimer = null;
     announceBusy = false;
     processAnnounceQueue();
   }, estimateAnnounceMs());
+}
+
+// 방송 대기열을 통째로 비운다. announceBusy 만 되돌리고 예약된 타이머를 취소하지 않으면
+// 옛 타이머가 나중에 뒤늦게 발화해 그 사이 새로 들어온 방송을 예정보다 일찍 끊어버릴 수 있다.
+function resetAnnounceQueue() {
+  if (announceTimer) {
+    clearTimeout(announceTimer);
+    announceTimer = null;
+  }
+  announceQueue = [];
+  announceBusy = false;
 }
 
 function sanitizeBank(b) {
@@ -727,6 +748,8 @@ io.on('connection', (socket) => {
       db.queues[b] = [];
       db.ticketSequence[b] = 0;
     });
+    // 방송 대기열도 함께 비운다 - 밀린 음성 방송이 있었다면 복구와 함께 초기화한다.
+    resetAnnounceQueue();
     io.emit('emergency_repaired');
     broadcastEverywhere();
   });
