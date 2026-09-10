@@ -82,6 +82,9 @@ const INITIAL_BANKS = {
   jl: { name: '법무법인 제이엘', color: '#8b0029', sub: '#fbe9ee', btnText: '#ffffff' }
 };
 
+// 상담처별 현장 창구 수. 배포하면 서버 컨테이너가 새로 뜨면서 저장 파일이 사라지므로,
+// 관리자 콘솔에서 늘린 창구는 다음 배포 때 여기 값으로 돌아온다.
+// 현장 상시 운영 창구 수가 바뀌면 이 기본값을 함께 고쳐야 한다.
 const INITIAL_DESKS = {
   kb: [
     { desk: 1, name: '1번 창구', status: 'idle', currentCustomer: null, away: false },
@@ -93,7 +96,9 @@ const INITIAL_DESKS = {
   ],
   woori: [
     { desk: 1, name: '1번 창구', status: 'idle', currentCustomer: null, away: false },
-    { desk: 2, name: '2번 창구', status: 'idle', currentCustomer: null, away: false }
+    { desk: 2, name: '2번 창구', status: 'idle', currentCustomer: null, away: false },
+    { desk: 3, name: '3번 창구', status: 'idle', currentCustomer: null, away: false },
+    { desk: 4, name: '4번 창구', status: 'idle', currentCustomer: null, away: false }
   ],
   fubon: [
     { desk: 1, name: '1번 창구', status: 'idle', currentCustomer: null, away: false }
@@ -740,7 +745,23 @@ io.on('connection', (socket) => {
 
   socket.on('admin_emergency_repair', () => {
     db.bankInfo = JSON.parse(JSON.stringify(INITIAL_BANKS));
-    db.desks = JSON.parse(JSON.stringify(INITIAL_DESKS));
+    // 창구 '개수'는 그날의 현장 인원 배치이므로 복구해도 그대로 두고,
+    // 꼬인 상태(상담중 표시, 부재, 창구에 남은 고객)와 번호만 깨끗하게 정리한다.
+    // 창구가 하나도 없는 상담처만 기본값으로 되돌린다.
+    const baseDesks = JSON.parse(JSON.stringify(INITIAL_DESKS));
+    const repairedDesks = {};
+    Object.keys(db.bankInfo).forEach(b => {
+      const current = Array.isArray(db.desks[b]) ? db.desks[b].length : 0;
+      const count = current > 0 ? current : (baseDesks[b] || []).length;
+      repairedDesks[b] = Array.from({ length: count }, (_, i) => ({
+        desk: i + 1,
+        name: `${i + 1}번 창구`,
+        status: 'idle',
+        currentCustomer: null,
+        away: false
+      }));
+    });
+    db.desks = repairedDesks;
     db.completedLogs = [];
     db.passedLogs = [];
     db.settings = { ...INITIAL_SETTINGS, ...db.settings };
