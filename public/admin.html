@@ -599,6 +599,9 @@
       socket.emit('get_all_state');
     });
 
+    // 서버가 재시작되면 연결이 한 번 끊긴다. 그때마다 복구를 다시 시도할 수 있게 열어둔다.
+    socket.on('disconnect', () => { restoreTried = false; });
+
     // ===== 방송 자가 감시 =====
     // 큐에 멘트가 쌓였는데 소리가 안 나가는 상태를 잡아내 다시 시도하고,
     // 계속 실패하면 화면에 크게 알려준다.
@@ -637,8 +640,81 @@
     let standardMinutes = 15;
     let serverOffsetMs = 0;   // 서버 시각과 이 기기 시각의 차이 보정
 
+    // ===== 대기 데이터 자동 백업/복구 =====
+    // 서버는 대기 데이터를 메모리에만 들고 있어 재시작하면 통째로 비어버린다.
+    // 이 화면이 마지막 상태를 이 PC 에 저장해 두었다가, 빈 서버로 다시 연결되면 되돌려준다.
+    const MIRROR_KEY = 'jl_state_mirror';
+    let restoreTried = false;
+
+    function todayKey() {
+      return new Date().toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' });
+    }
+
+    function clearMirror() {
+      try { localStorage.removeItem(MIRROR_KEY); } catch (e) {}
+    }
+
+    // 빈 상태로는 저장하지 않는다. 서버가 재시작돼 빈 채로 연결됐을 때 백업을
+    // 덮어써 버리면 되살릴 것이 없어진다. 일마감·비상복구처럼 일부러 비운 경우는
+    // 아래에서 백업을 직접 지우므로 옛 대기가 되살아나지 않는다.
+    function saveMirror(data) {
+      if (stateIsEmpty(data)) return;
+      try {
+        localStorage.setItem(MIRROR_KEY, JSON.stringify({
+          day: todayKey(),
+          savedAt: new Date().toISOString(),
+          queues: data.queues,
+          desks: data.desks,
+          ticketSequence: data.ticketSequence,
+          completedLogs: data.logs,
+          passedLogs: data.passes,
+          settings: data.settings
+        }));
+      } catch (e) {}
+    }
+
+    function stateIsEmpty(data) {
+      const banks = Object.keys(data.bankInfo || {});
+      const anyQueue = banks.some(b => ((data.queues || {})[b] || []).length > 0);
+      const anyDesk = banks.some(b => ((data.desks || {})[b] || []).some(d => d.currentCustomer));
+      const anyLog = (data.logs || []).length > 0;
+      return !anyQueue && !anyDesk && !anyLog;
+    }
+
+    function mirrorHasData(m) {
+      if (!m || m.day !== todayKey()) return false;
+      const banks = Object.keys(m.queues || {});
+      if (banks.some(b => (m.queues[b] || []).length > 0)) return true;
+      if ((m.completedLogs || []).length > 0) return true;
+      return Object.keys(m.desks || {}).some(b => (m.desks[b] || []).some(d => d.currentCustomer));
+    }
+
+    function tryRestore(data) {
+      if (restoreTried || !stateIsEmpty(data)) return;
+      let mirror = null;
+      try { mirror = JSON.parse(localStorage.getItem(MIRROR_KEY) || 'null'); } catch (e) {}
+      if (!mirrorHasData(mirror)) return;
+
+      restoreTried = true;
+      socket.emit('admin_restore_state', mirror, (res) => {
+        if (res && res.ok) {
+          showRestoreNotice(res.restored);
+        }
+      });
+    }
+
+    function showRestoreNotice(count) {
+      const warn = document.getElementById('speechWarn');
+      if (!warn) return;
+      warn.style.display = 'block';
+      warn.innerText = '🔄 서버가 재시작되어 대기 데이터를 복구했습니다 (' + count + '명). 화면을 확인해 주세요.';
+      setTimeout(function () { warn.style.display = 'none'; }, 20000);
+    }
+
     socket.on('all_state_update', (data) => {
       lastState = data;
+      tryRestore(data);
+      saveMirror(data);
       if (data.serverTime) serverOffsetMs = new Date(data.serverTime).getTime() - Date.now();
       if (data.settings) {
         standardMinutes = data.settings.standardMinutes;
@@ -890,14 +966,17 @@
       broadcastCall(data.bankName, data.customer.ticketNumber, data.deskName);
     });
 
+    // 일부러 비우는 동작에서는 백업도 함께 지운다. 그래야 지운 대기가 되살아나지 않는다.
     function emergencyRepair() {
       if (confirm('전체 시스템을 비상 초기화 복구하시겠습니까?')) {
+        clearMirror();
         socket.emit('admin_emergency_repair');
       }
     }
 
     function resetAll() {
       if (confirm('전체 은행 번호표를 리셋하시겠습니까?')) {
+        clearMirror();
         socket.emit('admin_reset_tickets', { bank: 'all' });
       }
     }
@@ -910,12 +989,15 @@
 
     function closeDay() {
       if (confirm('일마감을 진행하시겠습니까?\n대기열과 창구가 비워지고 일일보고가 생성됩니다.\n(상담 실적 통계는 그대로 남습니다.)')) {
+        clearMirror();
         socket.emit('admin_day_close');
       }
     }
 
     socket.on('report_data', (report) => renderReport(report, false));
-    socket.on('day_closed', (report) => renderReport(report, true));
+    socket.on('day_closed', (report) => { clearMirror(); renderReport(report, true); });
+    // 다른 관리자 화면에서 비상 복구를 눌렀을 때도 이 화면의 백업을 지운다.
+    socket.on('emergency_repaired', clearMirror);
 
     function fmtMin(sec) {
       if (!sec) return '-';
