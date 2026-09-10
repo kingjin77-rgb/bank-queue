@@ -370,13 +370,21 @@
       const saved = localStorage.getItem('my_ticket_' + currentBank);
       if (saved) {
         try {
-          myTicket = JSON.parse(saved);
-          const flags = loadAnnounceFlags(myTicket.id);
-          announcedIssue = !!flags.issued;
-          announcedSoon = !!flags.soon;
-          showTicket();
-          return;
-        } catch (e) {}
+          const restored = JSON.parse(saved);
+          // 형식이 깨진 값이 남아 있으면 그대로 복원하지 않는다 (번호가 멈춘 채 발권이 안 되는 원인)
+          if (restored && restored.id && restored.ticketNumber) {
+            myTicket = restored;
+            ticketRestored = true;
+            const flags = loadAnnounceFlags(myTicket.id);
+            announcedIssue = !!flags.issued;
+            announcedSoon = !!flags.soon;
+            showTicket();
+            return;
+          }
+          localStorage.removeItem('my_ticket_' + currentBank);
+        } catch (e) {
+          localStorage.removeItem('my_ticket_' + currentBank);
+        }
       }
       socket.emit('issue_ticket', { bank: currentBank, name: '고객' }, function (res) {
         if (res && res.success) {
@@ -387,6 +395,24 @@
           showTicket();
         }
       });
+    }
+
+    // 휴대폰에 저장돼 있다가 복원된 번호표만 검증 대상이다. 이 번호표는 지금 연결보다 먼저 만들어졌으므로
+    // 서버가 처음 보내주는 상태가 곧 정답이다. 반대로 이번 화면에서 방금 발급받은 번호표는
+    // 다른 손님 때문에 만들어진 직전 스냅샷이 뒤늦게 도착할 수 있어 검증하지 않는다.
+    let ticketRestored = false;
+    let staleReissued = false;
+
+    function reissueIfTicketGone() {
+      if (staleReissued || !ticketRestored || !myTicket) return;
+      staleReissued = true;
+      clearAnnounceFlags(myTicket.id);
+      localStorage.removeItem('my_ticket_' + currentBank);
+      myTicket = null;
+      lastPosition = null;
+      announcedIssue = false;
+      announcedSoon = false;
+      autoIssue();
     }
 
     function showTicket() {
@@ -436,6 +462,17 @@
         showCompleteView();
         return;
       }
+
+      // 서버에 없는 번호표는 버리고 새로 발급받는다.
+      // (서버 재시작 / 일마감 / 번호 초기화 / 비상 복구 후에도 옛 번호표가 휴대폰에 남아 있으면
+      //  발권이 된 것처럼 보이지만 서버에는 등록이 안 돼 상담사앱·관리자앱에 아무것도 뜨지 않는다)
+      if (!inQueue && !isConsulting) {
+        reissueIfTicketGone();
+        return;
+      }
+
+      // 서버에 살아있는 번호표임이 확인됐으므로 더는 검증하지 않는다
+      ticketRestored = false;
 
       const idx = data.queue.findIndex(function (c) { return c.id === myTicket.id; });
       if (idx < 0) return;
