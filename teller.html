@@ -133,10 +133,10 @@
       <div class="metric"><div class="m-label">예상 대기</div><div class="m-value" id="estWait">-</div></div>
     </div>
 
-    <button class="btn btn-call" onclick="callNext()">다음 고객 호출</button>
+    <button class="btn btn-call" id="callBtn" onclick="callNext()">다음 고객 호출</button>
 
     <div class="btn-row">
-      <button class="btn btn-mid btn-recall" onclick="recall()">🔔 재호출</button>
+      <button class="btn btn-mid btn-recall" id="recallBtn" onclick="recall()">🔔 재호출</button>
       <button class="btn btn-mid btn-done" onclick="finishAndAutoCall()">상담 완료<br>+ 다음 호출</button>
     </div>
 
@@ -274,39 +274,6 @@
       }
       return out;
     }
-    function deskToKorean(deskName) {
-      const m = String(deskName || '').match(/\d+/);
-      return m ? numToKorean(m[0]) + '번 창구' : String(deskName || '창구');
-    }
-
-    const speechQueue = [];
-    let speaking = false, speechGuard = null;
-
-    function enqueueSpeech(text) {
-      speechQueue.push(text);
-      processSpeechQueue();
-    }
-    function processSpeechQueue() {
-      if (speaking || speechQueue.length === 0) return;
-      if (!('speechSynthesis' in window)) { speechQueue.length = 0; return; }
-      speaking = true;
-      const text = speechQueue.shift();
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = 'ko-KR';
-      utter.rate = 0.92;
-      utter.volume = 1.0;
-      const done = function () {
-        if (!speaking) return;
-        speaking = false;
-        clearTimeout(speechGuard);
-        setTimeout(processSpeechQueue, 250);
-      };
-      utter.onend = done;
-      utter.onerror = done;
-      speechGuard = setTimeout(done, 15000);
-      try { window.speechSynthesis.resume(); } catch (e) {}
-      window.speechSynthesis.speak(utter);
-    }
 
     function unlockAudio(announce) {
       audioReady = true;
@@ -315,14 +282,7 @@
       alarmAudio.volume = 1.0;
       if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(function () {});
       document.getElementById('audioWarn').style.display = 'none';
-      if (announce) enqueueSpeech('음성 안내가 켜졌습니다.');
     }
-    ['click', 'touchstart'].forEach(function (ev) {
-      window.addEventListener(ev, function () { unlockAudio(false); }, { once: true });
-    });
-    document.addEventListener('visibilitychange', function () {
-      if (!document.hidden && audioReady) keepAliveAudio.play().catch(function () {});
-    });
 
     function playChime() {
       try {
@@ -510,9 +470,6 @@
       if (data.bank !== bank) return;
       showArrival(data.ticket.ticketNumber, data.waitingCount);
       playChime();
-      setTimeout(function () {
-        enqueueSpeech('새 고객이 접수되었습니다. 대기 ' + numToKorean(data.waitingCount) + '명입니다.');
-      }, 700);
     });
 
     function showArrival(ticketNumber, waitingCount) {
@@ -527,7 +484,6 @@
       if (data.bank !== bank) return;
       if (data.action === 'remove' && data.removedDesk === myDesk) {
         myDesk = null;
-        enqueueSpeech('이 창구가 관리자에 의해 닫혔습니다. 창구를 다시 선택해 주세요.');
         openDeskSheet('select');
       }
       socket.emit('get_state', { bank: bank });
@@ -547,22 +503,36 @@
       return true;
     }
 
+    let isCalling = false;
+    function throttleCall(fn) {
+      if (isCalling) return;
+      isCalling = true;
+      fn();
+      setTimeout(() => { isCalling = false; }, 1200);
+    }
+
     function callNext() {
       if (!requireDesk()) return;
-      unlockAudio(false);
-      socket.emit('call_customer', { bank: bank, deskNumber: myDesk });
+      throttleCall(() => {
+        unlockAudio(false);
+        socket.emit('call_customer', { bank: bank, deskNumber: myDesk });
+      });
     }
 
     function recall() {
       if (!requireDesk()) return;
-      unlockAudio(false);
-      socket.emit('recall_customer', { bank: bank, deskNumber: myDesk });
+      throttleCall(() => {
+        unlockAudio(false);
+        socket.emit('recall_customer', { bank: bank, deskNumber: myDesk });
+      });
     }
 
     function finishAndAutoCall() {
       if (!requireDesk()) return;
-      unlockAudio(false);
-      socket.emit('complete_consultation', { bank: bank, deskNumber: myDesk, autoCall: true });
+      throttleCall(() => {
+        unlockAudio(false);
+        socket.emit('complete_consultation', { bank: bank, deskNumber: myDesk, autoCall: true });
+      });
     }
 
     function passCustomer() {
@@ -579,9 +549,11 @@
 
     function callSpecific(customerId, ticketNumber) {
       if (!requireDesk()) return;
-      unlockAudio(false);
-      socket.emit('call_customer', { bank: bank, deskNumber: myDesk, customerId: customerId });
-      showInfo(ticketNumber + '번 손님 호출');
+      throttleCall(() => {
+        unlockAudio(false);
+        socket.emit('call_customer', { bank: bank, deskNumber: myDesk, customerId: customerId });
+        showInfo(ticketNumber + '번 손님 호출');
+      });
     }
 
     function undoComplete() {

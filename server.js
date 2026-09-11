@@ -23,46 +23,6 @@ app.get('/healthz', (req, res) => {
   res.json({ ok: true, time: new Date().toISOString(), uptimeSec: Math.round(process.uptime()) });
 });
 
-const ROLE_MANIFEST = {
-  teller:   { name: '창구 상담사', short: '창구', page: '/teller.html', icon: null,       theme: null,      bg: '#f2f4f6' },
-  customer: { name: '번호표',      short: '번호표', page: '/kiosk.html', icon: null,      theme: null,      bg: '#f2f4f6' },
-  admin:    { name: '관리자 콘솔', short: '관리자', page: '/admin.html', icon: 'admin',    theme: '#0f172a', bg: '#0f172a' },
-  operator: { name: '진행요원 패널', short: '진행요원', page: '/operator.html', icon: 'operator', theme: '#0b101b', bg: '#0b101b' },
-  board:    { name: '전광판',      short: '전광판', page: '/display.html', icon: 'board', theme: '#05080f', bg: '#05080f' },
-  leader:   { name: '우리은행 팀장', short: '팀장', page: '/woori_leader.html', icon: 'woori', theme: '#0067ac', bg: '#f2f4f6' },
-  hub:      { name: '현장 포털',   short: '포털',  page: '/hub.html',    icon: 'operator', theme: '#0b101b', bg: '#0b101b' }
-};
-
-app.get('/manifest.webmanifest', (req, res) => {
-  const role = ROLE_MANIFEST[req.query.role] ? req.query.role : 'hub';
-  const cfg = ROLE_MANIFEST[role];
-  const bankKey = String(req.query.b || req.query.bank || '').toLowerCase().trim();
-  const bank = db.bankInfo[bankKey];
-
-  const iconName = cfg.icon || (bank ? bankKey : 'default');
-  const themeColor = cfg.theme || (bank ? bank.color : '#3182f6');
-  const label = bank ? bank.name : '현장 상담';
-  const startUrl = cfg.page + (bank ? '?b=' + bankKey : '');
-
-  res.type('application/manifest+json').json({
-    name: label + ' ' + cfg.name,
-    short_name: bank ? bank.name.slice(0, 6) : cfg.short,
-    description: '법무법인 제이엘 현장 상담 대기·호출 시스템',
-    start_url: startUrl,
-    scope: '/',
-    display: 'standalone',
-    orientation: role === 'board' ? 'landscape' : 'portrait',
-    background_color: cfg.bg,
-    theme_color: themeColor,
-    lang: 'ko',
-    icons: [
-      { src: '/icons/' + iconName + '-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-      { src: '/icons/' + iconName + '-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-      { src: '/icons/' + iconName + '-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
-    ]
-  });
-});
-
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 try {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -201,7 +161,7 @@ function buildReport() {
       passCount: bankPasses.length,
       waitingCount: (db.queues[b] || []).filter(c => c.status === 'waiting').length,
       deskCount: (db.desks[b] || []).length,
-      activeDeskCount: activeDeskCount(b),
+      activeDeskCount: (db.desks[b] || []).filter(d => !d.away).length,
       avgDurationSec: avg(bankLogs.map(l => l.durationSec || 0)),
       maxDurationSec: bankLogs.reduce((m, l) => Math.max(m, l.durationSec || 0), 0),
       avgWaitSec: avg(bankLogs.map(l => l.waitSec || 0)),
@@ -236,17 +196,13 @@ function buildReport() {
   };
 }
 
-function activeDeskCount(b) {
-  return (db.desks[b] || []).filter(d => !d.away).length;
-}
-
 let announceQueue = [];
 let announceBusy = false;
 let announceTimer = null;
 
 function estimateAnnounceMs() {
   const repeats = (db.settings && db.settings.repeatCount) ? Math.max(1, db.settings.repeatCount) : 1;
-  return 900 + repeats * 3800;
+  return 1000 + repeats * 3800;
 }
 
 function queueAnnouncement(payload) {
@@ -393,6 +349,9 @@ function broadcastBank(bank) {
   broadcastAll();
 }
 
+// 창구별 1.5초 중복 호출 방지 락
+const callThrottle = {};
+
 io.on('connection', (socket) => {
   socket.on('get_state', ({ bank }) => {
     const b = sanitizeBank(bank);
@@ -452,8 +411,14 @@ io.on('connection', (socket) => {
     if (callback) callback({ success: true, ticket });
   });
 
+  // 호출 중복 방지 (1.5초 내 재호출 차단)
   socket.on('call_customer', ({ bank, deskNumber, customerId }) => {
     const b = sanitizeBank(bank);
+    const deskKey = `${b}_${deskNumber}`;
+    const now = Date.now();
+    if (callThrottle[deskKey] && now - callThrottle[deskKey] < 1500) return;
+    callThrottle[deskKey] = now;
+
     const desk = (db.desks[b] || []).find(d => d.desk === parseInt(deskNumber));
     if (!desk) return;
 
@@ -483,6 +448,11 @@ io.on('connection', (socket) => {
 
   socket.on('recall_customer', ({ bank, deskNumber }) => {
     const b = sanitizeBank(bank);
+    const deskKey = `${b}_${deskNumber}`;
+    const now = Date.now();
+    if (callThrottle[deskKey] && now - callThrottle[deskKey] < 1500) return;
+    callThrottle[deskKey] = now;
+
     const desk = (db.desks[b] || []).find(d => d.desk === parseInt(deskNumber));
     if (!desk || !desk.currentCustomer) return;
 
