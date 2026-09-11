@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>상담 창구 전광판</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    :root {
+      --font-stack: "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+      --bg: #05080f;
+      --card-bg: #121a2a;
+      --text: #ffffff;
+      --text-sub: #94a3b8;
+      --border: #223049;
+      --success: #22c55e;
+      --accent: #38bdf8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; }
+    body { background: var(--bg); color: var(--text); font-weight: 700; letter-spacing: -0.4px; min-height: 100vh; padding: 20px; overflow-x: hidden; }
+
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border); padding-bottom: 14px; margin-bottom: 18px; }
+    .title { font-size: clamp(24px, 3vw, 38px); font-weight: 900; letter-spacing: -1px; }
+    .clock { font-size: clamp(22px, 2.6vw, 34px); font-weight: 900; color: var(--accent); }
+
+    .hero {
+      background: var(--card-bg); border: 3px solid var(--border); border-radius: 30px;
+      padding: clamp(20px, 3vw, 38px); margin-bottom: 22px; text-align: center;
+      transition: background 0.3s, border-color 0.3s;
+    }
+    .hero.flash { animation: heroFlash 0.85s ease-in-out 6; }
+    @keyframes heroFlash {
+      0%, 100% { background: var(--card-bg); }
+      50% { background: #1e3a5f; }
+    }
+    .hero-label { font-size: clamp(15px, 1.6vw, 21px); font-weight: 800; color: var(--text-sub); letter-spacing: 0.06em; }
+    .hero-main {
+      display: flex; align-items: center; justify-content: center; gap: clamp(14px, 3vw, 46px);
+      flex-wrap: wrap; margin-top: 10px;
+    }
+    .hero-bank { font-size: clamp(30px, 4.4vw, 62px); font-weight: 900; letter-spacing: -1.5px; }
+    .hero-num { font-size: clamp(74px, 13vw, 190px); font-weight: 900; line-height: 0.95; letter-spacing: -6px; color: var(--success); }
+    .hero-arrow { font-size: clamp(30px, 4vw, 58px); color: var(--text-sub); }
+    .hero-desk { font-size: clamp(34px, 5vw, 76px); font-weight: 900; letter-spacing: -2px; }
+    .hero-idle { font-size: clamp(28px, 3.4vw, 46px); font-weight: 900; color: #475569; padding: 18px 0; }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 20px; }
+    .bank-card { background: var(--card-bg); border-radius: 26px; padding: 22px; border: 2px solid var(--border); }
+    .bank-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 2px solid var(--border); padding-bottom: 12px; }
+    .bank-name { font-size: clamp(22px, 2.2vw, 30px); font-weight: 900; }
+    .queue-badge { background: #05080f; border: 2px solid var(--border); color: #fff; font-size: 17px; font-weight: 900; padding: 7px 16px; border-radius: 20px; }
+
+    .desk-list { display: flex; flex-direction: column; gap: 12px; }
+    .desk-row { display: flex; justify-content: space-between; align-items: center; background: #05080f; border-radius: 18px; padding: 16px 20px; border: 1px solid var(--border); }
+    .desk-title { font-size: clamp(17px, 1.6vw, 22px); font-weight: 900; color: var(--text-sub); }
+    .desk-meta { font-size: 14px; font-weight: 800; color: #64748b; margin-top: 3px; }
+    .desk-meta.over { color: #ef4444; }
+    .ticket-display { font-size: clamp(44px, 5vw, 72px); font-weight: 900; color: var(--success); letter-spacing: -2px; }
+    .ticket-display.idle { font-size: clamp(20px, 2vw, 26px); color: #475569; }
+    .bank-foot { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-size: 15px; font-weight: 800; color: var(--text-sub); }
+
+    #audioBtn {
+      position: fixed; bottom: 22px; right: 22px; background: #38bdf8; color: #000; border: none;
+      font-size: 18px; font-weight: 900; padding: 18px 30px; border-radius: 50px; cursor: pointer;
+      box-shadow: 0 8px 25px rgba(56,189,248,0.4); z-index: 100;
+    }
+  </style>
+  <link rel="stylesheet" href="/type.css">
+</head>
+<body>
+
+  <div class="header">
+    <div class="title" id="boardTitle">상담 창구 안내</div>
+    <div class="clock" id="clock">00:00:00</div>
+  </div>
+
+  <div class="hero" id="heroBox">
+    <div class="hero-label">현재 호출</div>
+    <div id="heroBody"><div class="hero-idle">호출을 기다리고 있습니다</div></div>
+  </div>
+
+  <div class="grid" id="gridContainer"></div>
+
+  <button id="audioBtn" onclick="activateAudio()">🔊 전광판 음성 켜기 (필수 클릭)</button>
+
+  <audio id="keepAliveAudio" src="/silent.wav" loop preload="auto" playsinline></audio>
+  <audio id="alarmAudio" src="/chime.wav" preload="auto" playsinline></audio>
+
+  <script>
+    const socket = io({ transports: ['websocket', 'polling'] });
+    const urlParams = new URLSearchParams(window.location.search);
+    function urlBank(fallback) {
+      const v = urlParams.get('bank') || urlParams.get('b');
+      return (v || fallback || '').toLowerCase().trim();
+    }
+    const targetBank = urlBank('') || null;
+
+    let standardMinutes = 15;
+    let serverOffsetMs = 0;
+    let audioReady = false;
+
+    const keepAliveAudio = document.getElementById('keepAliveAudio');
+    const alarmAudio = document.getElementById('alarmAudio');
+
+    function elapsedSec(iso) {
+      if (!iso) return 0;
+      return Math.max(0, Math.round((Date.now() + serverOffsetMs - new Date(iso).getTime()) / 1000));
+    }
+    function fmtMs(sec) {
+      return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+    }
+
+    function numToKorean(n) {
+      const num = parseInt(n, 10);
+      if (isNaN(num)) return String(n);
+      if (num === 0) return '영';
+      const digits = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
+      const units = ['', '십', '백', '천'];
+      let out = '', rest = num;
+      for (let i = 3; i >= 0; i--) {
+        const div = Math.pow(10, i);
+        const d = Math.floor(rest / div);
+        rest %= div;
+        if (d === 0) continue;
+        out += (d === 1 && i > 0 ? '' : digits[d]) + units[i];
+      }
+      return out;
+    }
+    function deskToKorean(deskName) {
+      const m = String(deskName || '').match(/\d+/);
+      return m ? numToKorean(m[0]) + '번 창구' : String(deskName || '창구');
+    }
+
+    const speechQueue = [];
+    let speaking = false, speechGuard = null;
+    function enqueueSpeech(text) { speechQueue.push(text); processSpeechQueue(); }
+    function processSpeechQueue() {
+      if (speaking || speechQueue.length === 0) return;
+      if (!('speechSynthesis' in window)) { speechQueue.length = 0; return; }
+      speaking = true;
+      const utter = new SpeechSynthesisUtterance(speechQueue.shift());
+      utter.lang = 'ko-KR';
+      utter.rate = 0.92;
+      utter.volume = 1.0;
+      const done = function () {
+        if (!speaking) return;
+        speaking = false;
+        clearTimeout(speechGuard);
+        setTimeout(processSpeechQueue, 280);
+      };
+      utter.onend = done;
+      utter.onerror = done;
+      speechGuard = setTimeout(done, 15000);
+      try { window.speechSynthesis.resume(); } catch (e) {}
+      window.speechSynthesis.speak(utter);
+    }
+
+    function activateAudio() {
+      audioReady = true;
+      keepAliveAudio.volume = 0.01;
+      keepAliveAudio.play().catch(function () {});
+      alarmAudio.volume = 1.0;
+      const btn = document.getElementById('audioBtn');
+      btn.innerText = '🔊 전광판 음성 켜짐 (정상)';
+      btn.style.background = '#22c55e';
+      enqueueSpeech('전광판 음성 안내가 켜졌습니다.');
+    }
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden && audioReady) keepAliveAudio.play().catch(function () {});
+    });
+
+    setInterval(function () {
+      document.getElementById('clock').innerText = new Date().toLocaleTimeString('ko-KR');
+    }, 1000);
+
+    var wakeLockRef = null;
+    function keepScreenAwake() {
+      if (!('wakeLock' in navigator)) return;
+      navigator.wakeLock.request('screen').then(function (lock) {
+        wakeLockRef = lock;
+      }).catch(function () {});
+    }
+    keepScreenAwake();
+    setInterval(function () {
+      if (!document.hidden && (!wakeLockRef || wakeLockRef.released)) keepScreenAwake();
+    }, 30000);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) keepScreenAwake();
+    });
+
+    function pingServer() {
+      fetch('/healthz', { cache: 'no-store' }).catch(function () {});
+    }
+    pingServer();
+    setInterval(pingServer, 4 * 60 * 1000);
+
+    socket.on('connect', function () { socket.emit('get_all_state'); });
+
+    let lastData = null;
+    socket.on('all_state_update', function (data) {
+      lastData = data;
+      if (data.serverTime) serverOffsetMs = new Date(data.serverTime).getTime() - Date.now();
+      if (data.settings) standardMinutes = data.settings.standardMinutes;
+      render(data);
+    });
+
+    setInterval(function () {
+      document.querySelectorAll('.desk-meta[data-called]').forEach(function (el) {
+        const iso = el.dataset.called;
+        if (!iso) return;
+        const sec = elapsedSec(iso);
+        const over = sec > standardMinutes * 60;
+        el.innerText = '상담 ' + fmtMs(sec);
+        el.className = over ? 'desk-meta over' : 'desk-meta';
+      });
+    }, 1000);
+
+    function render(data) {
+      const container = document.getElementById('gridContainer');
+      container.innerHTML = '';
+      const banks = targetBank ? [targetBank.toLowerCase()] : Object.keys(data.bankInfo);
+
+      if (targetBank && data.bankInfo[targetBank.toLowerCase()]) {
+        document.getElementById('boardTitle').innerText = data.bankInfo[targetBank.toLowerCase()].name + ' 창구 안내';
+      }
+
+      banks.forEach(function (b) {
+        const info = data.bankInfo[b] || { name: b.toUpperCase(), color: '#38bdf8' };
+        const desks = data.desks[b] || [];
+        const waiting = (data.queues[b] || []).filter(function (c) { return c.status === 'waiting'; });
+
+        const card = document.createElement('div');
+        card.className = 'bank-card';
+        card.style.borderTop = '8px solid ' + info.color;
+
+        let deskHtml = '';
+        desks.forEach(function (d) {
+          const busy = d.status === 'consulting' && d.currentCustomer;
+          const sec = busy ? elapsedSec(d.currentCustomer.calledAt) : 0;
+          const over = busy && sec > standardMinutes * 60;
+          deskHtml += '<div class="desk-row"><div>' +
+            '<div class="desk-title">' + d.name + '</div>' +
+            '<div class="desk-meta' + (over ? ' over' : '') + '" data-called="' + (busy ? d.currentCustomer.calledAt : '') + '">' +
+            (busy ? '상담 ' + fmtMs(sec) : '호출 대기') + '</div></div>' +
+            '<span class="ticket-display' + (busy ? '' : ' idle') + '">' +
+            (busy ? d.currentCustomer.ticketNumber + '번' : '대기중') + '</span></div>';
+        });
+
+        const est = desks.length ? Math.ceil(waiting.length / desks.length) * standardMinutes : 0;
+        card.innerHTML =
+          '<div class="bank-head"><span class="bank-name" style="color:' + info.color + ';">' + info.name + '</span>' +
+          '<span class="queue-badge">대기 ' + waiting.length + '명</span></div>' +
+          '<div class="desk-list">' + deskHtml + '</div>' +
+          '<div class="bank-foot"><span>완료 ' + (data.logs || []).filter(function (l) { return l.bank === b; }).length + '건</span>' +
+          '<span>예상 대기 약 ' + est + '분</span></div>';
+        container.appendChild(card);
+      });
+    }
+
+    socket.on('customer_called', function (data) {
+      if (targetBank && targetBank.toLowerCase() !== data.bank) return;
+
+      const info = (lastData && lastData.bankInfo && lastData.bankInfo[data.bank]) || { color: '#38bdf8' };
+      document.getElementById('heroBody').innerHTML =
+        '<div class="hero-main">' +
+        '<span class="hero-bank" style="color:' + info.color + ';">' + data.bankName + '</span>' +
+        '<span class="hero-num">' + data.customer.ticketNumber + '번</span>' +
+        '<span class="hero-arrow">➡</span>' +
+        '<span class="hero-desk">' + data.deskName + '</span>' +
+        '</div>';
+
+      const hero = document.getElementById('heroBox');
+      hero.style.borderColor = info.color;
+      hero.classList.remove('flash');
+      void hero.offsetWidth;
+      hero.classList.add('flash');
+    });
+
+    socket.on('play_announcement', function (data) {
+      if (targetBank && targetBank.toLowerCase() !== data.bank) return;
+      if (!audioReady) return;
+      try { alarmAudio.currentTime = 0; alarmAudio.play().catch(function () {}); } catch (e) {}
+      const msg = data.bankName + ', ' + numToKorean(data.customer.ticketNumber) + '번 고객님, ' + deskToKorean(data.deskName) + '로 오십시오.';
+      setTimeout(function () { enqueueSpeech(msg); }, 900);
+    });
+  </script>
+  <script src="/pwa.js" data-role="board"></script>
+</body>
+</html>

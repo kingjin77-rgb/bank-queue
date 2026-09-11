@@ -15,18 +15,14 @@ const io = new Server(server, {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 발권 전용 링크(/kiosk.html?b=xx)는 고객 발권 화면(index.html)과 동일 - 기존 QR/주소 유지
 app.get(['/kiosk', '/kiosk.html'], (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// 관리 화면이 열려 있는 동안 서버가 절전으로 내려가지 않도록 하는 확인용 주소
 app.get('/healthz', (req, res) => {
   res.json({ ok: true, time: new Date().toISOString(), uptimeSec: Math.round(process.uptime()) });
 });
 
-// ===== 홈 화면 앱 설치용 매니페스트 =====
-// 역할과 은행에 따라 앱 이름/아이콘/시작주소가 달라지므로 서버에서 만들어 준다.
 const ROLE_MANIFEST = {
   teller:   { name: '창구 상담사', short: '창구', page: '/teller.html', icon: null,       theme: null,      bg: '#f2f4f6' },
   customer: { name: '번호표',      short: '번호표', page: '/kiosk.html', icon: null,      theme: null,      bg: '#f2f4f6' },
@@ -67,19 +63,12 @@ app.get('/manifest.webmanifest', (req, res) => {
   });
 });
 
-// 기본값은 앱 폴더라 재배포하면 사라진다. Render 에 영구 디스크를 붙이고 DATA_DIR 을
-// 그 경로(예: /data)로 지정하면 재배포·재기동에도 저장 파일이 그대로 남는다.
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 try {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 } catch (err) {}
 const BACKUP_FILE = path.join(DATA_DIR, 'queue_db_backup.json');
 
-// 푸본현대생명 공식 그린(#00A88F) 적용
-// 현장 QR 안내장에 인쇄되어 나간 5개 상담처. 여기 등록된 은행만 서버가 재시작해도
-// (배포, 절전 후 재기동, 비상 복구 등) 그대로 유지된다. 관리자 콘솔의 "은행 추가"로
-// 나중에 늘린 곳은 메모리에만 있어 재시작하면 사라지므로, 현장에 QR 을 붙여 쓰는
-// 상담처는 반드시 여기에 등록해 둔다.
 const INITIAL_BANKS = {
   kb: { name: '국민은행', color: '#ffbc00', sub: '#fff9e6', btnText: '#2b2b2b' },
   shinhan: { name: '신한은행', color: '#0046ff', sub: '#e8f0fe', btnText: '#ffffff' },
@@ -88,9 +77,6 @@ const INITIAL_BANKS = {
   jl: { name: '법무법인 제이엘', color: '#8b0029', sub: '#fbe9ee', btnText: '#ffffff' }
 };
 
-// 상담처별 현장 창구 수. 배포하면 서버 컨테이너가 새로 뜨면서 저장 파일이 사라지므로,
-// 관리자 콘솔에서 늘린 창구는 다음 배포 때 여기 값으로 돌아온다.
-// 현장 상시 운영 창구 수가 바뀌면 이 기본값을 함께 고쳐야 한다.
 const INITIAL_DESKS = {
   kb: [
     { desk: 1, name: '1번 창구', status: 'idle', currentCustomer: null, away: false },
@@ -114,14 +100,11 @@ const INITIAL_DESKS = {
   ]
 };
 
-// 현장 운영 기본 설정 (관리자 콘솔에서 실시간 변경)
 const INITIAL_SETTINGS = {
-  // 당일 상담 운영시간 (예: 16시 ~ 20시). 시간대별 상담 실적 집계의 기준이 된다.
   openHour: 9,
   closeHour: 18,
-  // 대기 고객에게 보여줄 1인당 예상 상담 소요시간(분). 예상 대기시간 계산과 창구 지연 표시에 쓴다.
   standardMinutes: 15,
-  repeatCount: 2         // 호출 방송 반복 횟수
+  repeatCount: 1
 };
 
 let db = {
@@ -142,7 +125,6 @@ function loadBackup() {
       if (parsed && parsed.queues) {
         db = parsed;
         db.bankInfo = JSON.parse(JSON.stringify(INITIAL_BANKS));
-        // 이전 버전 백업 호환
         if (!Array.isArray(db.completedLogs)) db.completedLogs = [];
         if (!Array.isArray(db.passedLogs)) db.passedLogs = [];
         db.settings = { ...INITIAL_SETTINGS, ...(db.settings || {}) };
@@ -158,7 +140,6 @@ function saveBackup() {
   } catch (err) {}
 }
 
-// 초 단위 차이 (안전하게 0 이상)
 function secBetween(fromIso, toIso) {
   const a = new Date(fromIso).getTime();
   const b2 = new Date(toIso).getTime();
@@ -166,7 +147,6 @@ function secBetween(fromIso, toIso) {
   return Math.max(0, Math.round((b2 - a) / 1000));
 }
 
-// 현장은 한국이고 Render 서버는 UTC로 돌아가므로, 시간대별 집계는 항상 한국시간 기준으로 계산한다.
 const SEOUL_HOUR_FMT = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', hour: 'numeric', hour12: false });
 function hourInSeoul(iso) {
   const d = new Date(iso);
@@ -180,7 +160,6 @@ function avg(arr) {
   return Math.round(arr.reduce((x, y) => x + y, 0) / arr.length);
 }
 
-// 일일보고 통계: 은행별 / 창구별 / 시간대별 건수, 평균 상담시간, 평균 대기시간, 부재패스
 function buildReport() {
   const logs = db.completedLogs || [];
   const passes = db.passedLogs || [];
@@ -189,7 +168,6 @@ function buildReport() {
 
   const hours = [];
   for (let h = openHour; h <= closeHour; h++) hours.push(h);
-  // 설정한 영업시간 밖에 완료된 상담도 표에서 빠지지 않도록 실제 기록 시간대를 합친다.
   logs.forEach(l => {
     const h = hourInSeoul(l.completedAt);
     if (h >= 0 && !hours.includes(h)) hours.push(h);
@@ -258,22 +236,17 @@ function buildReport() {
   };
 }
 
-// 자리를 비우지 않고 실제로 응대 가능한 창구 수 (예상 대기시간 계산 기준)
 function activeDeskCount(b) {
   return (db.desks[b] || []).filter(d => !d.away).length;
 }
 
-// 여러 상담사가 동시에 고객을 호출해도 방송 음성이 서로 겹치지 않도록
-// 관리자 콘솔/전광판의 '음성 재생 신호'는 여기서 한 줄로 줄 세워 내보낸다.
-// (화면에 번호가 뜨는 건 즉시 그대로 - customer_called 는 지금처럼 바로 나간다.
-//  단지 '소리 내는 시점'만 이 큐를 통해 순서대로 지연시킨다.)
 let announceQueue = [];
 let announceBusy = false;
-let announceTimer = null;   // 예약된 다음 방송 타이머 - 비상 복구 등으로 강제 초기화할 때 반드시 함께 취소해야 한다
+let announceTimer = null;
 
 function estimateAnnounceMs() {
-  const repeats = Math.max(2, (db.settings && db.settings.repeatCount) || 2); // 전광판은 항상 2회 재생
-  return 900 + repeats * 4200; // 차임벨 + 반복 횟수만큼 여유있게 잡는다
+  const repeats = (db.settings && db.settings.repeatCount) ? Math.max(1, db.settings.repeatCount) : 1;
+  return 900 + repeats * 3800;
 }
 
 function queueAnnouncement(payload) {
@@ -293,8 +266,6 @@ function processAnnounceQueue() {
   }, estimateAnnounceMs());
 }
 
-// 방송 대기열을 통째로 비운다. announceBusy 만 되돌리고 예약된 타이머를 취소하지 않으면
-// 옛 타이머가 나중에 뒤늦게 발화해 그 사이 새로 들어온 방송을 예정보다 일찍 끊어버릴 수 있다.
 function resetAnnounceQueue() {
   if (announceTimer) {
     clearTimeout(announceTimer);
@@ -309,10 +280,6 @@ function sanitizeBank(b) {
   return db.bankInfo[bank] ? bank : 'kb';
 }
 
-// ===== 관리자 콘솔 백업 복구 =====
-// 이 서버는 대기 데이터를 메모리에 들고 있어서 재시작(배포, 절전 후 재기동)하면 비어버린다.
-// 관리자 콘솔이 마지막 상태를 자기 PC 에 저장해 두었다가 되돌려주면 아래에서 되살린다.
-// 값은 브라우저에서 오므로 형태를 일일이 검사한다 - 이상한 값이 서버를 죽이면 현장이 멈춘다.
 function hasLiveData() {
   const banks = Object.keys(db.bankInfo);
   if (banks.some(b => (db.queues[b] || []).length > 0)) return true;
@@ -385,7 +352,7 @@ function broadcastAll() {
     bankInfo: db.bankInfo,
     queues: db.queues,
     desks: db.desks,
-    ticketSequence: db.ticketSequence,   // 관리자 콘솔 백업이 발권 번호를 그대로 이어가는 데 쓴다
+    ticketSequence: db.ticketSequence,
     logs: db.completedLogs,
     passes: db.passedLogs,
     settings: db.settings,
@@ -394,8 +361,6 @@ function broadcastAll() {
   saveBackup();
 }
 
-// 설정 변경처럼 전 화면에 영향을 주는 변경은 은행별 state_update 까지 함께 보낸다.
-// (상담사앱과 고객화면은 state_update 로 동작하므로 이게 없으면 설정이 늦게 반영된다)
 function broadcastEverywhere() {
   Object.keys(db.bankInfo).forEach((b) => {
     io.emit('state_update', {
@@ -475,7 +440,6 @@ io.on('connection', (socket) => {
 
     db.queues[b].push(ticket);
 
-    // 상담사 앱 접수 알림용 (자기 은행만 골라 쓰도록 bank 를 함께 보낸다)
     io.emit('ticket_issued', {
       bank: b,
       bankName: db.bankInfo[b] ? db.bankInfo[b].name : b.toUpperCase(),
@@ -548,10 +512,9 @@ io.on('connection', (socket) => {
       createdAt: completedCust.createdAt,
       calledAt: completedCust.calledAt,
       completedAt,
-      // 상담 소요시간(호출 -> 완료), 대기시간(발권 -> 호출)
       durationSec: completedCust.calledAt ? secBetween(completedCust.calledAt, completedAt) : 0,
       waitSec: completedCust.createdAt && completedCust.calledAt ? secBetween(completedCust.createdAt, completedCust.calledAt) : 0,
-      customer: JSON.parse(JSON.stringify(completedCust))   // 실수로 완료했을 때 되돌리기 위해 보관
+      customer: JSON.parse(JSON.stringify(completedCust))
     });
 
     db.queues[b] = (db.queues[b] || []).filter(c => c.id !== completedCust.id);
@@ -585,7 +548,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 부재 패스: 호출했는데 오지 않은 고객을 창구에서 내리고 대기열에서 제외
   socket.on('pass_customer', ({ bank, deskNumber }) => {
     const b = sanitizeBank(bank);
     const desk = (db.desks[b] || []).find(d => d.desk === parseInt(deskNumber));
@@ -600,7 +562,7 @@ io.on('connection', (socket) => {
       deskName: desk.name,
       ticketNumber: passed.ticketNumber,
       passedAt: new Date().toISOString(),
-      customer: JSON.parse(JSON.stringify(passed))          // 손님이 다시 오면 되살리기 위해 보관
+      customer: JSON.parse(JSON.stringify(passed))
     });
     db.queues[b] = (db.queues[b] || []).filter(c => c.id !== passed.id);
     desk.status = 'idle';
@@ -616,25 +578,21 @@ io.on('connection', (socket) => {
     broadcastBank(b);
   });
 
-  // 자리 비움 / 복귀. 비운 창구는 예상 대기시간 계산에서 빠진다.
   socket.on('set_desk_away', ({ bank, deskNumber, away }) => {
     const b = sanitizeBank(bank);
     const desk = (db.desks[b] || []).find(d => d.desk === parseInt(deskNumber));
     if (!desk) return;
-    // 상담 중에는 자리를 비울 수 없다.
     if (away && desk.currentCustomer) return;
     desk.away = !!away;
     broadcastBank(b);
   });
 
-  // 상담 완료를 잘못 눌렀을 때 되돌리기 (기본 5분 이내)
   socket.on('undo_complete', ({ bank, deskNumber }, callback) => {
     const b = sanitizeBank(bank);
     const desk = (db.desks[b] || []).find(d => d.desk === parseInt(deskNumber));
     const done = (typeof callback === 'function') ? callback : () => {};
     if (!desk) return done({ success: false, message: '창구를 찾을 수 없습니다.' });
 
-    // 이 창구에서 가장 최근에 완료된 건 찾기
     let idx = -1;
     for (let i = db.completedLogs.length - 1; i >= 0; i--) {
       const l = db.completedLogs[i];
@@ -648,7 +606,6 @@ io.on('connection', (socket) => {
       return done({ success: false, message: '완료한 지 5분이 지나 되돌릴 수 없습니다.' });
     }
 
-    // 완료 후 자동으로 다음 고객을 부른 상태라면 그 고객을 대기열 맨 앞으로 돌려놓는다.
     if (desk.currentCustomer) {
       const cur = desk.currentCustomer;
       cur.status = 'waiting';
@@ -673,7 +630,6 @@ io.on('connection', (socket) => {
     done({ success: true, ticketNumber: restored.ticketNumber });
   });
 
-  // 부재 처리했던 손님이 다시 왔을 때 대기열 맨 앞으로 되살리기
   socket.on('restore_passed', ({ bank, ticketNumber }, callback) => {
     const b = sanitizeBank(bank);
     const done = (typeof callback === 'function') ? callback : () => {};
@@ -693,7 +649,7 @@ io.on('connection', (socket) => {
     delete cust.desk; delete cust.deskName; delete cust.calledAt;
 
     db.queues[b] = (db.queues[b] || []).filter(c => c.id !== cust.id);
-    db.queues[b].unshift(cust);   // 기다리셨던 분이므로 맨 앞으로
+    db.queues[b].unshift(cust);
     db.passedLogs.splice(idx, 1);
 
     broadcastBank(b);
@@ -736,12 +692,10 @@ io.on('connection', (socket) => {
 
     let removedDesk = null;
     if (action === 'add') {
-      // 번호가 겹치지 않도록 현재 최대 번호 다음으로 만든다.
       const nextNum = list.reduce((m, d) => Math.max(m, d.desk), 0) + 1;
       list.push({ desk: nextNum, name: `${nextNum}번 창구`, status: 'idle', currentCustomer: null, away: false });
     } else if (action === 'remove' && list.length > 1) {
       const last = list[list.length - 1];
-      // 상담 중인 고객이 있으면 대기열 맨 앞으로 되돌린 뒤 창구를 없앤다.
       if (last.currentCustomer) {
         const cust = last.currentCustomer;
         cust.status = 'waiting';
@@ -782,7 +736,6 @@ io.on('connection', (socket) => {
     broadcastEverywhere();
   });
 
-  // 표준 상담시간 등 현장 설정 변경
   socket.on('admin_set_settings', (patch) => {
     const next = { ...db.settings };
     if (patch && patch.standardMinutes != null) {
@@ -801,13 +754,11 @@ io.on('connection', (socket) => {
       const h = parseInt(patch.closeHour, 10);
       if (!isNaN(h) && h >= 0 && h <= 23) next.closeHour = h;
     }
-    // 종료 시각이 시작보다 빠르면 설정을 받아들이지 않는다.
     if (next.closeHour < next.openHour) return;
     db.settings = next;
     broadcastEverywhere();
   });
 
-  // 마감 전에도 언제든 중간 보고서 조회
   socket.on('admin_get_report', () => {
     socket.emit('report_data', buildReport());
   });
@@ -819,16 +770,16 @@ io.on('connection', (socket) => {
       db.ticketSequence[b] = 0;
       (db.desks[b] || []).forEach(d => { d.status = 'idle'; d.currentCustomer = null; });
     });
-    // 은행별로 나눠 방송하면 '일부만 비워진 상태'가 밖으로 나가고, 관리자 콘솔이 그걸
-    // 백업으로 저장해 리셋한 대기가 되살아난다. 다 비운 뒤 한 번에 방송한다.
+    if (bank === 'all') {
+      db.passedLogs = [];
+    } else {
+      db.passedLogs = db.passedLogs.filter(l => l.bank !== sanitizeBank(bank));
+    }
     broadcastEverywhere();
   });
 
   socket.on('admin_emergency_repair', () => {
     db.bankInfo = JSON.parse(JSON.stringify(INITIAL_BANKS));
-    // 창구 '개수'는 그날의 현장 인원 배치이므로 복구해도 그대로 두고,
-    // 꼬인 상태(상담중 표시, 부재, 창구에 남은 고객)와 번호만 깨끗하게 정리한다.
-    // 창구가 하나도 없는 상담처만 기본값으로 되돌린다.
     const baseDesks = JSON.parse(JSON.stringify(INITIAL_DESKS));
     const repairedDesks = {};
     Object.keys(db.bankInfo).forEach(b => {
@@ -842,8 +793,6 @@ io.on('connection', (socket) => {
         away: false
       }));
     });
-    // 창구에서 상담 중이던 고객은 사라지지 않도록 대기열 맨 앞으로 돌려놓는다.
-    // (복구를 눌렀다고 손님이 없어지면 안 된다. 상담사가 다시 호출하면 된다.)
     Object.keys(db.bankInfo).forEach(b => {
       const backToQueue = (db.desks[b] || [])
         .map(d => d.currentCustomer)
@@ -861,18 +810,12 @@ io.on('connection', (socket) => {
     });
 
     db.desks = repairedDesks;
-    // 대기 손님과 당일 실적은 지우지 않는다. 번호표를 처음부터 다시 시작하려면
-    // 관리자 콘솔의 "전체 번호표 리셋"을 쓰면 된다.
     db.settings = { ...INITIAL_SETTINGS, ...db.settings };
-    // 방송 대기열도 함께 비운다 - 밀린 음성 방송이 있었다면 복구와 함께 초기화한다.
     resetAnnounceQueue();
     io.emit('emergency_repaired');
     broadcastEverywhere();
   });
 
-  // 관리자 콘솔이 보관하던 마지막 상태로 대기 데이터를 되살린다.
-  // 이미 데이터가 들어있는 서버에는 적용하지 않으므로, 관리자 화면이 여러 대 열려 있어도
-  // 먼저 도착한 한 번만 반영되고 나머지는 조용히 무시된다.
   socket.on('admin_restore_state', (snapshot, callback) => {
     const done = (ok, reason, restored) => {
       if (typeof callback === 'function') callback({ ok, reason: reason || '', restored: restored || 0 });
@@ -887,7 +830,6 @@ io.on('connection', (socket) => {
       db.queues[b] = queue;
       restored += queue.length;
 
-      // 창구 배치(개수)와 상담 중이던 고객도 함께 되살린다.
       const rawDesks = Array.isArray((snapshot.desks || {})[b]) ? snapshot.desks[b] : [];
       const deskCount = rawDesks.length > 0
         ? Math.min(rawDesks.length, 50)
@@ -905,7 +847,6 @@ io.on('connection', (socket) => {
         };
       });
 
-      // 번호가 겹치지 않도록, 저장된 발권 번호와 실제 남은 번호 중 큰 값에서 이어간다.
       const savedSeq = safeCount((snapshot.ticketSequence || {})[b], 100000);
       const maxInQueue = queue.reduce((m, c) => Math.max(m, c.ticketNumber), 0);
       const maxAtDesk = db.desks[b].reduce(
@@ -934,16 +875,18 @@ io.on('connection', (socket) => {
     const report = buildReport();
     report.closedAt = new Date().toISOString();
 
-    // 대기열과 창구만 비우고, 보고 통계(로그)는 유지한다.
     Object.keys(db.bankInfo).forEach(b => {
       db.queues[b] = [];
-      (db.desks[b] || []).forEach(d => { d.status = 'idle'; d.currentCustomer = null; });
+      db.ticketSequence[b] = 0;
+      (db.desks[b] || []).forEach(d => { d.status = 'idle'; d.currentCustomer = null; d.away = false; });
     });
+    db.passedLogs = [];
+    resetAnnounceQueue();
+
     broadcastEverywhere();
     io.emit('day_closed', report);
   });
 
-  // 마감 보고까지 끝낸 뒤 통계를 완전히 비우는 별도 동작
   socket.on('admin_clear_logs', () => {
     db.completedLogs = [];
     db.passedLogs = [];
@@ -951,7 +894,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// Render 무료 플랜 슬립 방지 (15분 무접속 시 서버가 잠들어 현장에서 첫 접속이 느려짐)
 const SELF_URL = process.env.SELF_URL || 'https://bank-queue.onrender.com';
 setInterval(() => {
   try {
@@ -959,13 +901,9 @@ setInterval(() => {
     const req = client.get(SELF_URL, (res) => res.resume());
     req.on('error', () => {});
     req.setTimeout(15000, () => req.destroy());
-  } catch (err) {
-    // 현장 운영 중에는 어떤 경우에도 서버가 죽으면 안 된다.
-  }
+  } catch (err) {}
 }, 10 * 60 * 1000);
 
-// 현장 운영 중 예기치 못한 오류로 서버가 내려가는 것을 막는 안전장치.
-// (상담 대기열은 메모리에 있으므로 프로세스가 죽으면 전체 현장이 멈춘다)
 process.on('uncaughtException', (err) => {
   console.error('[uncaughtException]', err && err.stack ? err.stack : err);
 });
