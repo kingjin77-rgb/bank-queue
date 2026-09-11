@@ -468,14 +468,14 @@
       window.speechSynthesis.speak(utter);
     }
 
-    function broadcastCall(bankName, ticketNum, deskName) {
+    function broadcastCall(bankName, ticketNum, deskName, forceCount) {
       lastCallData = { bankName, ticketNum, deskName };
       if (!audioUnlocked) return;
 
       try { window.speechSynthesis.cancel(); } catch (e) {}
 
       const msg = callMessage(bankName, ticketNum, deskName);
-      const targetRepeats = Math.min(3, Math.max(1, repeatCount || 1));
+      const targetRepeats = forceCount ? forceCount : Math.min(3, Math.max(1, repeatCount || 1));
       let currentStep = 0;
 
       function playNext() {
@@ -512,14 +512,14 @@
 
     function testSoundDirect() {
       initAudioContext();
-      broadcastCall('국민은행', 12, '1번 창구');
+      broadcastCall('국민은행', 12, '1번 창구', 1);
     }
 
     function repeatLastCall() {
       if (!lastCallData) return alert('아직 호출 내역이 없습니다.');
       initAudioContext();
       audioUnlocked = true;
-      broadcastCall(lastCallData.bankName, lastCallData.ticketNum, lastCallData.deskName);
+      broadcastCall(lastCallData.bankName, lastCallData.ticketNum, lastCallData.deskName, 1);
     }
 
     socket.on('connect', () => { socket.emit('get_all_state'); });
@@ -832,7 +832,7 @@
     });
 
     socket.on('play_announcement', (data) => {
-      broadcastCall(data.bankName, data.customer.ticketNumber, data.deskName);
+      broadcastCall(data.bankName, data.customer.ticketNumber, data.deskName, data.repeatCount || repeatCount);
     });
 
     function waitingTotal() {

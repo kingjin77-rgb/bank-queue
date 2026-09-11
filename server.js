@@ -258,6 +258,7 @@ function processAnnounceQueue() {
   if (announceBusy || announceQueue.length === 0) return;
   announceBusy = true;
   const payload = announceQueue.shift();
+  payload.repeatCount = (db.settings && db.settings.repeatCount) ? Math.max(1, db.settings.repeatCount) : 1;
   io.emit('play_announcement', payload);
   announceTimer = setTimeout(() => {
     announceTimer = null;
@@ -871,7 +872,6 @@ io.on('connection', (socket) => {
     done(true, '', restored);
   });
 
-  // 일마감: 실적(completedLogs)은 그대로 두고, 대기열, 창구, 부재고객, 번호표 순번을 당일 리셋
   socket.on('admin_day_close', () => {
     const report = buildReport();
     report.closedAt = new Date().toISOString();
