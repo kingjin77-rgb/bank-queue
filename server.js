@@ -196,40 +196,22 @@ function buildReport() {
   };
 }
 
-let announceQueue = [];
-let announceBusy = false;
-let announceTimer = null;
-
-function estimateAnnounceMs() {
-  const repeats = (db.settings && db.settings.repeatCount) ? Math.max(1, db.settings.repeatCount) : 1;
-  return 1000 + repeats * 3800;
-}
+let lastAnnouncedId = null;
+let lastAnnouncedTime = 0;
 
 function queueAnnouncement(payload) {
-  announceQueue.push(payload);
-  processAnnounceQueue();
-}
-
-function processAnnounceQueue() {
-  if (announceBusy || announceQueue.length === 0) return;
-  announceBusy = true;
-  const payload = announceQueue.shift();
+  const customerId = payload.customer && payload.customer.id;
+  const now = Date.now();
+  if (customerId && customerId === lastAnnouncedId && now - lastAnnouncedTime < 2500) {
+    return; // 동일 고객 2.5초 내 중복 방송 완벽 차단
+  }
+  if (customerId) {
+    lastAnnouncedId = customerId;
+    lastAnnouncedTime = now;
+  }
+  // 관리자 설정된 반복 횟수(repeatCount)를 정확히 실어 보냄
   payload.repeatCount = (db.settings && db.settings.repeatCount) ? Math.max(1, db.settings.repeatCount) : 1;
   io.emit('play_announcement', payload);
-  announceTimer = setTimeout(() => {
-    announceTimer = null;
-    announceBusy = false;
-    processAnnounceQueue();
-  }, estimateAnnounceMs());
-}
-
-function resetAnnounceQueue() {
-  if (announceTimer) {
-    clearTimeout(announceTimer);
-    announceTimer = null;
-  }
-  announceQueue = [];
-  announceBusy = false;
 }
 
 function sanitizeBank(b) {
@@ -349,7 +331,6 @@ function broadcastBank(bank) {
   broadcastAll();
 }
 
-// 창구별 1.5초 중복 호출 방지 락
 const callThrottle = {};
 
 io.on('connection', (socket) => {
@@ -411,7 +392,6 @@ io.on('connection', (socket) => {
     if (callback) callback({ success: true, ticket });
   });
 
-  // 호출 중복 방지 (1.5초 내 재호출 차단)
   socket.on('call_customer', ({ bank, deskNumber, customerId }) => {
     const b = sanitizeBank(bank);
     const deskKey = `${b}_${deskNumber}`;
