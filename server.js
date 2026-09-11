@@ -871,6 +871,7 @@ io.on('connection', (socket) => {
     done(true, '', restored);
   });
 
+  // 일마감: 실적(completedLogs)은 그대로 두고, 대기열, 창구, 부재고객, 번호표 순번을 당일 리셋
   socket.on('admin_day_close', () => {
     const report = buildReport();
     report.closedAt = new Date().toISOString();
