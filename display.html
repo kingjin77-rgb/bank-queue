@@ -18,7 +18,7 @@
       --success: #22c55e;
       --accent: #38bdf8;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-stack); }
     body { background: var(--bg); color: var(--text); font-weight: 700; letter-spacing: -0.4px; min-height: 100vh; padding: 20px; overflow-x: hidden; }
 
     .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border); padding-bottom: 14px; margin-bottom: 18px; }
@@ -60,12 +60,6 @@
     .ticket-display { font-size: clamp(44px, 5vw, 72px); font-weight: 900; color: var(--success); letter-spacing: -2px; }
     .ticket-display.idle { font-size: clamp(20px, 2vw, 26px); color: #475569; }
     .bank-foot { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-size: 15px; font-weight: 800; color: var(--text-sub); }
-
-    #audioBtn {
-      position: fixed; bottom: 22px; right: 22px; background: #38bdf8; color: #000; border: none;
-      font-size: 18px; font-weight: 900; padding: 18px 30px; border-radius: 50px; cursor: pointer;
-      box-shadow: 0 8px 25px rgba(56,189,248,0.4); z-index: 100;
-    }
   </style>
   <link rel="stylesheet" href="/type.css">
 </head>
@@ -83,11 +77,6 @@
 
   <div class="grid" id="gridContainer"></div>
 
-  <button id="audioBtn" onclick="activateAudio()">🔊 전광판 음성 켜기 (필수 클릭)</button>
-
-  <audio id="keepAliveAudio" src="/silent.wav" loop preload="auto" playsinline></audio>
-  <audio id="alarmAudio" src="/chime.wav" preload="auto" playsinline></audio>
-
   <script>
     const socket = io({ transports: ['websocket', 'polling'] });
     const urlParams = new URLSearchParams(window.location.search);
@@ -99,10 +88,6 @@
 
     let standardMinutes = 15;
     let serverOffsetMs = 0;
-    let audioReady = false;
-
-    const keepAliveAudio = document.getElementById('keepAliveAudio');
-    const alarmAudio = document.getElementById('alarmAudio');
 
     function elapsedSec(iso) {
       if (!iso) return 0;
@@ -111,65 +96,6 @@
     function fmtMs(sec) {
       return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
     }
-
-    function numToKorean(n) {
-      const num = parseInt(n, 10);
-      if (isNaN(num)) return String(n);
-      if (num === 0) return '영';
-      const digits = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
-      const units = ['', '십', '백', '천'];
-      let out = '', rest = num;
-      for (let i = 3; i >= 0; i--) {
-        const div = Math.pow(10, i);
-        const d = Math.floor(rest / div);
-        rest %= div;
-        if (d === 0) continue;
-        out += (d === 1 && i > 0 ? '' : digits[d]) + units[i];
-      }
-      return out;
-    }
-    function deskToKorean(deskName) {
-      const m = String(deskName || '').match(/\d+/);
-      return m ? numToKorean(m[0]) + '번 창구' : String(deskName || '창구');
-    }
-
-    const speechQueue = [];
-    let speaking = false, speechGuard = null;
-    function enqueueSpeech(text) { speechQueue.push(text); processSpeechQueue(); }
-    function processSpeechQueue() {
-      if (speaking || speechQueue.length === 0) return;
-      if (!('speechSynthesis' in window)) { speechQueue.length = 0; return; }
-      speaking = true;
-      const utter = new SpeechSynthesisUtterance(speechQueue.shift());
-      utter.lang = 'ko-KR';
-      utter.rate = 0.92;
-      utter.volume = 1.0;
-      const done = function () {
-        if (!speaking) return;
-        speaking = false;
-        clearTimeout(speechGuard);
-        setTimeout(processSpeechQueue, 280);
-      };
-      utter.onend = done;
-      utter.onerror = done;
-      speechGuard = setTimeout(done, 15000);
-      try { window.speechSynthesis.resume(); } catch (e) {}
-      window.speechSynthesis.speak(utter);
-    }
-
-    function activateAudio() {
-      audioReady = true;
-      keepAliveAudio.volume = 0.01;
-      keepAliveAudio.play().catch(function () {});
-      alarmAudio.volume = 1.0;
-      const btn = document.getElementById('audioBtn');
-      btn.innerText = '🔊 전광판 음성 켜짐 (정상)';
-      btn.style.background = '#22c55e';
-      enqueueSpeech('전광판 음성 안내가 켜졌습니다.');
-    }
-    document.addEventListener('visibilitychange', function () {
-      if (!document.hidden && audioReady) keepAliveAudio.play().catch(function () {});
-    });
 
     setInterval(function () {
       document.getElementById('clock').innerText = new Date().toLocaleTimeString('ko-KR');
@@ -259,6 +185,7 @@
       });
     }
 
+    // 시각적 호출 애니메이션만 작동 (소리 코드는 완전히 제거됨)
     socket.on('customer_called', function (data) {
       if (targetBank && targetBank.toLowerCase() !== data.bank) return;
 
@@ -276,14 +203,6 @@
       hero.classList.remove('flash');
       void hero.offsetWidth;
       hero.classList.add('flash');
-    });
-
-    socket.on('play_announcement', function (data) {
-      if (targetBank && targetBank.toLowerCase() !== data.bank) return;
-      if (!audioReady) return;
-      try { alarmAudio.currentTime = 0; alarmAudio.play().catch(function () {}); } catch (e) {}
-      const msg = data.bankName + ', ' + numToKorean(data.customer.ticketNumber) + '번 고객님, ' + deskToKorean(data.deskName) + '로 오십시오.';
-      setTimeout(function () { enqueueSpeech(msg); }, 900);
     });
   </script>
   <script src="/pwa.js" data-role="board"></script>
