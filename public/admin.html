@@ -171,8 +171,8 @@
         <div class="amp-pill">
           <span class="amp-label">멘트 반복</span>
           <select id="repeatSelect" onchange="onRepeatChange()">
-            <option value="1">1회</option>
-            <option value="2" selected>2회</option>
+            <option value="1" selected>1회</option>
+            <option value="2">2회</option>
             <option value="3">3회</option>
           </select>
         </div>
@@ -378,7 +378,7 @@
     keepScreenAwake();
 
     let masterVolume = 1.0;
-    let repeatCount = 2;
+    let repeatCount = 1;
     let lastCallData = null;
     let keepAliveNode = null;
 
@@ -578,11 +578,12 @@
     }
 
     // 전체 호출 방송 브로드캐스트
-    function broadcastCall(bankName, ticketNum, deskName) {
+    function broadcastCall(bankName, ticketNum, deskName, times) {
       lastCallData = { bankName, ticketNum, deskName };
       if (!audioUnlocked) return;
       const msg = callMessage(bankName, ticketNum, deskName);
-      for (let i = 0; i < repeatCount; i++) {
+      const n = Math.min(3, Math.max(1, times || repeatCount || 1));
+      for (let i = 0; i < n; i++) {
         enqueueSpeech(msg, i === 0); // 첫 회만 차임벨
       }
     }
@@ -643,7 +644,7 @@
     // ===== 대기 데이터 자동 백업/복구 =====
     // 서버는 대기 데이터를 메모리에만 들고 있어 재시작하면 통째로 비어버린다.
     // 이 화면이 마지막 상태를 이 PC 에 저장해 두었다가, 빈 서버로 다시 연결되면 되돌려준다.
-    const MIRROR_KEY = 'jl_state_mirror';
+    const MIRROR_KEY = 'jl_state_mirror_jeonju';
     let restoreTried = false;
 
     function todayKey() {
@@ -700,9 +701,12 @@
       if (restoreTried || mirrorPaused() || !stateIsEmpty(data)) return;
       let mirror = null;
       try { mirror = JSON.parse(localStorage.getItem(MIRROR_KEY) || 'null'); } catch (e) {}
-      if (!mirrorHasData(mirror)) return;
-
       restoreTried = true;
+      if (!mirrorHasData(mirror)) {
+        if (data.restoring) socket.emit('admin_restore_none');
+        return;
+      }
+
       socket.emit('admin_restore_state', mirror, (res) => {
         if (res && res.ok) {
           showRestoreNotice(res.restored);
@@ -919,11 +923,14 @@
         btn.style.color = info.btnText || '#fff';
         btn.innerText = info.name;
         btn.onclick = function () {
-          socket.emit('issue_ticket', { bank: b, name: '대리발권' }, function (res) {
+          socket.emit('issue_ticket', { bank: b, name: '대리발권', proxy: true }, function (res) {
             if (res && res.success) {
               document.getElementById('proxyLog').innerText =
                 '[발권 완료] ' + res.ticket.bankName + ' ' + res.ticket.ticketNumber + '번 · ' +
                 new Date().toLocaleTimeString('ko-KR');
+            } else {
+              document.getElementById('proxyLog').innerText =
+                '[발권 안 됨] ' + ((res && res.message) || '잠시 후 다시 눌러 주세요.');
             }
           });
         };
@@ -969,8 +976,15 @@
         `최근 호출: ${data.bankName} ${data.customer.ticketNumber}번 고객님 → ${data.deskName} (${new Date().toLocaleTimeString('ko-KR')})`;
     });
 
+    // 같은 손님·같은 창구 호출이 3초 안에 다시 오면 한 번만 방송한다(재접속·중복 신호 대비).
+    let lastAnnounceKey = '', lastAnnounceAt = 0;
     socket.on('play_announcement', (data) => {
-      broadcastCall(data.bankName, data.customer.ticketNumber, data.deskName);
+      const key = data.bank + '|' + data.customer.id + '|' + data.desk;
+      const now = Date.now();
+      if (key === lastAnnounceKey && now - lastAnnounceAt < 3000) return;
+      lastAnnounceKey = key;
+      lastAnnounceAt = now;
+      broadcastCall(data.bankName, data.customer.ticketNumber, data.deskName, data.repeatCount);
     });
 
     function waitingTotal() {

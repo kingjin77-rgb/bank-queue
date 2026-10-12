@@ -83,6 +83,7 @@
     /* ===== 상담 완료 ===== */
     #completeSection { display: none; }
     #blockedSection { display: none; }
+    .first-notice { background: #fbe9ee; color: #8b0029; border: 1.5px solid #f0c4d0; border-radius: 18px; padding: 14px 16px; font-size: 15px; font-weight: 800; line-height: 1.5; margin-bottom: 14px; text-align: center; }
     .hold-badge { display: inline-block; background: #fff4e6; color: #e8590c; font-size: 13px; font-weight: 900; padding: 7px 14px; border-radius: 12px; }
     .done-card { background: var(--card); border-radius: 28px; padding: 28px 20px; text-align: center; box-shadow: 0 8px 28px rgba(0,0,0,0.07); }
     .done-badge { display: inline-block; background: #e6fcf5; color: #0ca678; font-size: 13px; font-weight: 900; padding: 7px 14px; border-radius: 12px; }
@@ -115,6 +116,7 @@
   <main>
     <!-- 대기 중 -->
     <section id="ticketSection">
+      <div class="first-notice" id="jlFirstNotice" style="display:none;"></div>
       <div class="ticket-card">
         <div class="t-label">내 대기번호</div>
         <div class="t-number" id="myNumDisplay">-</div>
@@ -154,7 +156,7 @@
           진행 중인 상담을 마치신 뒤에<br>이곳 번호표를 받으실 수 있습니다.
         </div>
         <button class="btn-big btn-brand" style="margin-top:18px;" id="blockedGoBtn" onclick="goToHeldTicket()">내 번호표 보기</button>
-        <div class="t-hint" style="text-align:center; margin-top:12px;">
+        <div class="t-hint" style="text-align:center; margin-top:12px;" id="blockedHint">
           상담이 끝나면 이 화면에서 자동으로 번호표가 발급됩니다.
         </div>
       </div>
@@ -163,13 +165,14 @@
     <!-- 상담 완료 -->
     <section id="completeSection">
       <div class="done-card">
-        <span class="done-badge">상담 완료</span>
-        <div class="done-title">상담이 완료되었습니다.</div>
-        <div class="done-desc">추가 상담이 필요하시면<br>아래에서 기관을 선택해주세요.</div>
+        <span class="done-badge" id="doneBadge">상담 완료</span>
+        <div class="done-title" id="doneTitle">상담이 완료되었습니다.</div>
+        <div class="done-desc" id="doneDesc">추가 상담이 필요하시면<br>아래에서 기관을 선택해주세요.</div>
+        <button class="btn-big btn-brand" style="margin-top:16px; display:none;" id="doneHeldBtn" onclick="goToHeldTicket()"></button>
         <div class="bank-grid" id="bankSelectGrid"></div>
       </div>
 
-      <div class="jl-banner">
+      <div class="jl-banner" id="jlBanner">
         <span class="jl-tag">전문 법률 자문</span>
         <div class="jl-title">법무법인 제이엘 분양전환 센터</div>
         <div class="jl-desc">
@@ -201,16 +204,18 @@
       const v = urlParams.get('bank') || urlParams.get('b');
       return (v || fallback || '').toLowerCase().trim();
     }
-    let currentBank = urlBank('kb');
+    // 법무법인 제이엘 상담을 먼저 받아야 은행 번호표가 나온다. 주소가 없으면 제이엘로.
+    const JL = 'jl';
+    let currentBank = urlBank(JL);
+    const fromBank = (urlParams.get('from') || '').toLowerCase().trim();
 
-    // 은행별 고유 브랜드 컬러 (서버 연결 전에도 즉시 적용)
+    // 기관별 고유 브랜드 컬러 (서버 연결 전에도 즉시 적용)
     const LOCAL_BANK_THEMES = {
-      kb:      { name: '국민은행',     color: '#ffbc00', sub: '#fff9e6', btnText: '#2b2b2b' },
+      jl:      { name: '법무법인 제이엘', color: '#8b0029', sub: '#fbe9ee', btnText: '#ffffff' },
+      nh:      { name: 'NH농협은행',   color: '#1f8a3b', sub: '#e7f5ea', btnText: '#ffffff' },
       shinhan: { name: '신한은행',     color: '#0046ff', sub: '#e8f0fe', btnText: '#ffffff' },
-      woori:   { name: '우리은행',     color: '#0067ac', sub: '#e6f3fa', btnText: '#ffffff' },
-      fubon:   { name: '푸본현대생명', color: '#00A88F', sub: '#e6f7f4', btnText: '#ffffff' },
-      hana:    { name: '하나은행',     color: '#008485', sub: '#e6f4f4', btnText: '#ffffff' },
-      jl:      { name: '법무법인 제이엘', color: '#8b0029', sub: '#fbe9ee', btnText: '#ffffff' }
+      kb:      { name: '국민은행',     color: '#ffbc00', sub: '#fff9e6', btnText: '#2b2b2b' },
+      fubon:   { name: '푸본현대생명', color: '#00A88F', sub: '#e6f7f4', btnText: '#ffffff' }
     };
 
     function applyTheme(info) {
@@ -223,36 +228,84 @@
       document.getElementById('themeColorMeta').setAttribute('content', info.color);
       document.title = info.name + ' 상담 번호표';
     }
-    applyTheme(LOCAL_BANK_THEMES[currentBank] || LOCAL_BANK_THEMES.kb);
+    applyTheme(LOCAL_BANK_THEMES[currentBank] || LOCAL_BANK_THEMES.jl);
+
+    /* ================= 저장소 =================
+       저장소를 막아 둔 인앱 브라우저에서도 페이지가 멈추지 않도록 실패하면 메모리에 둔다. */
+    const memStore = {};
+    const store = {
+      get: function (k) {
+        try { const v = localStorage.getItem(k); if (v !== null) return v; } catch (e) {}
+        return Object.prototype.hasOwnProperty.call(memStore, k) ? memStore[k] : null;
+      },
+      set: function (k, v) {
+        memStore[k] = String(v);
+        try { localStorage.setItem(k, String(v)); } catch (e) {}
+      },
+      remove: function (k) {
+        delete memStore[k];
+        try { localStorage.removeItem(k); } catch (e) {}
+      }
+    };
+
+    function cookieGet(name) {
+      try {
+        const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+        return m ? decodeURIComponent(m[1]) : '';
+      } catch (e) { return ''; }
+    }
+
+    // 이 폰을 구분하는 값. 제이엘 상담을 마쳤는지, 번호를 이미 받았는지 서버가 이걸로 판단한다.
+    function getDeviceId() {
+      let id = store.get('jl_device_id') || cookieGet('jl_device_id');
+      if (!/^[A-Za-z0-9-]{8,64}$/.test(id || '')) {
+        id = (window.crypto && typeof window.crypto.randomUUID === 'function')
+          ? window.crypto.randomUUID()
+          : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12) + '-' + Math.random().toString(36).slice(2, 12);
+      }
+      store.set('jl_device_id', id);
+      try { document.cookie = 'jl_device_id=' + id + '; max-age=2592000; path=/; SameSite=Lax'; } catch (e) {}
+      return id;
+    }
+    const DEVICE_ID = getDeviceId();
+
+    function todayKey(v) {
+      const d = v ? new Date(v) : new Date();
+      return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+    }
+
+    // 폰에 저장된 이 기관 번호표. 어제 받은 번호는 버린다.
+    function readTicket() {
+      const raw = store.get('my_ticket_' + currentBank);
+      if (!raw) return null;
+      try {
+        const t = JSON.parse(raw);
+        if (t && t.id && t.ticketNumber && todayKey(t.createdAt) === todayKey()) return t;
+      } catch (e) {}
+      store.remove('my_ticket_' + currentBank);
+      return null;
+    }
+    function saveTicket(t) { store.set('my_ticket_' + currentBank, JSON.stringify(t)); }
 
     const socket = io({ transports: ['websocket', 'polling'] });
     let myTicket = null;
     let bankName = (LOCAL_BANK_THEMES[currentBank] || {}).name || '상담';
+    let lastBankInfo = null;
+    let repeatCount = 1;
     let alertsOn = false;
     let announcedIssue = false;
     let announcedSoon = false;
     let lastPosition = null;
 
     // 휴대폰 화면이 꺼졌다 켜지면 모바일 브라우저가 페이지를 조용히 다시 불러오는 경우가 흔하다.
-    // 이때 안내를 이미 들었는지 여부가 자바스크립트 메모리에만 있으면 초기화되어
-    // 같은 번호표에 대한 안내 멘트가 계속 반복된다. 번호표 아이디 기준으로 저장해 둔다.
-    function announceStorageKey(ticketId) {
-      return 'jl_ann_' + currentBank + '_' + ticketId;
-    }
+    // 안내를 이미 들었는지 번호표 아이디 기준으로 저장해 같은 안내가 반복되지 않게 한다.
+    function announceStorageKey(ticketId) { return 'jl_ann_' + currentBank + '_' + ticketId; }
     function loadAnnounceFlags(ticketId) {
-      try {
-        const raw = localStorage.getItem(announceStorageKey(ticketId));
-        return raw ? JSON.parse(raw) : {};
-      } catch (e) { return {}; }
+      try { const raw = store.get(announceStorageKey(ticketId)); return raw ? JSON.parse(raw) : {}; } catch (e) { return {}; }
     }
     function saveAnnounceFlags(ticketId, patch) {
-      try {
-        const cur = loadAnnounceFlags(ticketId);
-        localStorage.setItem(announceStorageKey(ticketId), JSON.stringify(Object.assign(cur, patch)));
-      } catch (e) {}
-    }
-    function clearAnnounceFlags(ticketId) {
-      try { localStorage.removeItem(announceStorageKey(ticketId)); } catch (e) {}
+      const cur = loadAnnounceFlags(ticketId);
+      store.set(announceStorageKey(ticketId), JSON.stringify(Object.assign(cur, patch)));
     }
 
     /* ================= 음성 / 알림 ================= */
@@ -294,12 +347,11 @@
       if (speaking || speechQueue.length === 0) return;
       if (!('speechSynthesis' in window)) { speechQueue.length = 0; return; }
       speaking = true;
-      const text = speechQueue.shift();
-      const utter = new SpeechSynthesisUtterance(text);
+      const utter = new SpeechSynthesisUtterance(speechQueue.shift());
       utter.lang = 'ko-KR';
       utter.rate = 0.92;
       utter.volume = 1.0;
-      const done = () => {
+      const done = function () {
         if (!speaking) return;
         speaking = false;
         clearTimeout(speechGuard);
@@ -315,13 +367,8 @@
     // 알림 켜기: 브라우저 오디오 잠금 해제 + 백그라운드 오디오 세션 유지 + 알림 권한
     function enableAlerts() {
       alertsOn = true;
-
-      // 무음 오디오를 계속 재생해 두면 화면이 꺼지거나 다른 앱을 보고 있어도
-      // 호출 시점에 알림음을 낼 수 있다 (모바일 브라우저의 오디오 세션 유지).
       keepAliveAudio.volume = 0.01;
       keepAliveAudio.play().catch(function () {});
-
-      // 알람 오디오도 사용자 터치 시점에 한 번 재생해 잠금을 풀어둔다.
       alarmAudio.volume = 1.0;
       alarmAudio.play().then(function () {
         alarmAudio.pause();
@@ -347,7 +394,7 @@
       btn.classList.add('on');
       btn.innerText = '🔔 호출 알림이 켜졌습니다';
 
-      // 화면이 꺼졌다 켜지며 페이지가 조용히 다시 불려도 이 확인 멘트를 또 말하지 않는다.
+      // 화면이 꺼졌다 켜지며 페이지가 다시 불려도 이 확인 멘트를 또 말하지 않는다.
       const already = myTicket ? !!loadAnnounceFlags(myTicket.id).confirmed : false;
       if (!already) {
         enqueueSpeech('호출 알림이 켜졌습니다. 순서가 되면 음성으로 안내해 드리겠습니다.');
@@ -381,59 +428,57 @@
       } catch (e) {}
     }
 
-    /* ===== 타 기관 중복 발권 차단 =====
-       한 분이 여러 기관 번호표를 미리 다 뽑아두면, 창구에서 불러도 다른 기관에 가 계셔서
-       순번이 계속 밀리고 뒤에 분들이 손해를 본다. 그래서 진행 중인 상담이 끝나기 전에는
-       다른 기관 번호표를 발급하지 않는다. */
-    let heldOther = null;      // 다른 기관에 살아있는 번호표
-    let issueDecided = false;  // 이번 연결에서 발권 여부를 정했는지
+    /* ================= 화면 ================= */
 
-    function storedTickets() {
-      const list = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (!key || key.indexOf('my_ticket_') !== 0) continue;
-        try {
-          const t = JSON.parse(localStorage.getItem(key));
-          if (t && t.id && t.ticketNumber) {
-            list.push({ bank: key.slice('my_ticket_'.length), ticket: t });
-          }
-        } catch (e) {}
-      }
-      return list;
-    }
-
-    // 서버 전체 상태에 그 번호표가 아직 남아 있는지 (대기 중이거나 창구에서 상담 중)
-    function ticketIsLive(state, bank, id) {
-      const queue = (state.queues || {})[bank] || [];
-      if (queue.some(function (c) { return c.id === id; })) return true;
-      const desks = (state.desks || {})[bank] || [];
-      return desks.some(function (d) { return d.currentCustomer && d.currentCustomer.id === id; });
-    }
-
-    // 다른 기관에 살아있는 번호표를 찾는다. 이미 끝난 번호표는 휴대폰에서 정리한다.
-    function findHeldOtherTicket(state) {
-      let held = null;
-      storedTickets().forEach(function (x) {
-        if (x.bank === currentBank) return;
-        if (ticketIsLive(state, x.bank, x.ticket.id)) {
-          if (!held) held = x;
-        } else {
-          localStorage.removeItem('my_ticket_' + x.bank);
-        }
+    function show(section) {
+      ['ticketSection', 'blockedSection', 'completeSection'].forEach(function (id) {
+        document.getElementById(id).style.display = (id === section) ? 'block' : 'none';
       });
-      return held;
     }
 
-    function showBlockedView(held, bankInfo) {
+    function nameOf(bank) {
+      if (lastBankInfo && lastBankInfo[bank]) return lastBankInfo[bank].name;
+      return (LOCAL_BANK_THEMES[bank] || {}).name || bank;
+    }
+
+    // 은행 QR 을 먼저 찍고 제이엘로 넘어온 손님에게 순서를 알려준다.
+    if (currentBank === JL && fromBank && fromBank !== JL && LOCAL_BANK_THEMES[fromBank]) {
+      const n = document.getElementById('jlFirstNotice');
+      n.innerHTML = '분양전환 상담(법무법인 제이엘)을 먼저 받으신 뒤<br>' + nameOf(fromBank) + ' 상담을 받으실 수 있습니다.';
+      n.style.display = 'block';
+    }
+
+    function setHint(text) { document.getElementById('statusHint').innerText = text; }
+
+    function showTicket() {
+      show('ticketSection');
+      document.getElementById('reissueBtn').style.display = 'none';
+      document.getElementById('myNumDisplay').innerText = myTicket.ticketNumber;
+      socket.emit('get_state', { bank: currentBank });
+    }
+
+    // 번호가 없는 상태(부재 처리, 번호 초기화)에서 "다시 받기" 버튼을 보여준다.
+    function showReissue(message) {
+      show('ticketSection');
+      myTicket = null;
+      lastPosition = null;
+      closeOverlay();
+      document.getElementById('myNumDisplay').innerText = '-';
+      document.getElementById('myWaitDisplay').innerText = '-';
+      document.getElementById('myEtaDisplay').innerText = '-';
+      setHint(message);
+      document.getElementById('reissueBtn').style.display = 'flex';
+    }
+
+    let heldOther = null;   // 이 손님이 지금 갖고 있는 다른 기관 번호
+
+    function showBlockedView(held) {
       heldOther = held;
-      const heldName = (bankInfo && bankInfo[held.bank] && bankInfo[held.bank].name)
-        || held.ticket.bankName || held.bank;
-      document.getElementById('ticketSection').style.display = 'none';
-      document.getElementById('completeSection').style.display = 'none';
-      document.getElementById('blockedSection').style.display = 'block';
+      myTicket = null;
+      show('blockedSection');
+      const heldName = nameOf(held.bank) || held.bankName;
       document.getElementById('blockedTitle').innerText =
-        heldName + ' ' + held.ticket.ticketNumber + '번 번호표를 이미 받으셨습니다';
+        heldName + ' ' + held.ticketNumber + '번 번호표를 이미 받으셨습니다';
       document.getElementById('blockedDesc').innerHTML =
         heldName + ' 상담을 마치신 뒤에<br>' + bankName + ' 번호표를 받으실 수 있습니다.';
       document.getElementById('blockedGoBtn').innerText = heldName + ' 번호표 보기';
@@ -441,96 +486,164 @@
 
     function goToHeldTicket() {
       if (!heldOther) return;
-      location.href = 'index.html?bank=' + encodeURIComponent(heldOther.bank);
+      location.href = '/index.html?bank=' + encodeURIComponent(heldOther.bank);
     }
 
-    // 전체 상태를 받아 발권할지 막을지 정한다. 상태가 안 오면(네트워크 문제) 손님이
-    // 번호표를 못 받는 일이 없도록 그냥 발급한다.
-    function decideIssue(state) {
-      if (myTicket) return;
+    // 상담 완료 화면. 제이엘을 마친 손님에게는 은행만 고르게 한다.
+    function showDoneView(heldElsewhere) {
+      const jlDone = currentBank === JL;
+      show('completeSection');
+      closeOverlay();
+      myTicket = null;
+      lastPosition = null;
+      heldOther = heldElsewhere || null;
 
-      if (state) {
-        // 이 기관 번호표를 이미 갖고 계시면 막지 않고 그대로 보여드린다.
-        const mine = storedTickets().filter(function (x) { return x.bank === currentBank; })[0];
-        const holdsThisBank = mine && ticketIsLive(state, currentBank, mine.ticket.id);
+      document.getElementById('brandName').innerText = jlDone ? '법무법인 제이엘' : '상담 완료';
+      document.getElementById('brandSub').innerText = jlDone ? '분양전환 상담 완료' : '이용해 주셔서 감사합니다';
+      document.getElementById('doneBadge').innerText = jlDone ? '분양전환 상담 완료' : '상담 완료';
+      document.getElementById('doneTitle').innerText = jlDone ? '법무법인 제이엘 상담을 마치셨습니다.' : '상담이 완료되었습니다.';
+      document.getElementById('doneDesc').innerHTML = jlDone
+        ? '이제 은행 상담 차례입니다.<br>상담받으실 은행을 선택해 주세요.'
+        : '추가 상담이 필요하시면<br>아래에서 기관을 선택해주세요.';
+      document.getElementById('jlBanner').style.display = 'none';
 
-        if (!holdsThisBank) {
-          const held = findHeldOtherTicket(state);
-          if (held) {
-            issueDecided = true;
-            showBlockedView(held, state.bankInfo);
-            return;
-          }
-        }
-        if (heldOther) {   // 다른 기관 상담이 끝났다 - 막아둔 화면을 풀고 발급한다
-          heldOther = null;
-          issueDecided = false;
-          document.getElementById('blockedSection').style.display = 'none';
-        }
+      const heldBtn = document.getElementById('doneHeldBtn');
+      if (heldElsewhere) {
+        heldBtn.innerText = nameOf(heldElsewhere.bank) + ' ' + heldElsewhere.ticketNumber + '번 번호표 보기';
+        heldBtn.style.display = 'flex';
+      } else {
+        heldBtn.style.display = 'none';
       }
-
-      if (issueDecided) return;
-      issueDecided = true;
-      autoIssue();
+      renderBankSelection();
     }
 
-    /* ================= 발권 / 상태 ================= */
+    function renderBankSelection() {
+      const grid = document.getElementById('bankSelectGrid');
+      const info = lastBankInfo || LOCAL_BANK_THEMES;
+      grid.innerHTML = '';
+      Object.keys(info).forEach(function (b) {
+        if (b === JL) return;   // 제이엘은 이미 마친 상담
+        const it = info[b];
+        const btn = document.createElement('button');
+        btn.className = 'bank-pick';
+        btn.style.borderColor = it.color;
+        btn.style.color = it.color;
+        btn.innerText = it.name;
+        btn.onclick = function () {
+          // 지금 기관을 다시 고르면 같은 주소라 새로고침만 되므로, 바로 새 번호를 요청한다.
+          if (b === currentBank) { resolve({ fresh: true }); return; }
+          window.location.href = '/index.html?b=' + b;
+        };
+        grid.appendChild(btn);
+      });
+    }
 
-    function autoIssue() {
-      const saved = localStorage.getItem('my_ticket_' + currentBank);
-      if (saved) {
-        try {
-          const restored = JSON.parse(saved);
-          // 형식이 깨진 값이 남아 있으면 그대로 복원하지 않는다 (번호가 멈춘 채 발권이 안 되는 원인)
-          if (restored && restored.id && restored.ticketNumber) {
-            myTicket = restored;
-            ticketRestored = true;
-            const flags = loadAnnounceFlags(myTicket.id);
-            announcedIssue = !!flags.issued;
-            announcedSoon = !!flags.soon;
-            showTicket();
-            return;
-          }
-          localStorage.removeItem('my_ticket_' + currentBank);
-        } catch (e) {
-          localStorage.removeItem('my_ticket_' + currentBank);
+    /* ================= 발권 판정 =================
+       번호표를 줄지, 막을지, 제이엘로 보낼지는 전부 서버가 정한다. 이 화면은 그 결과만 보여준다.
+       (손님 폰이 스스로 판단하면 화면이 꺼져 있던 경우·탭 두 개·되돌리기 등에서 어긋난다) */
+    let resolving = false;
+    let resolveAgain = null;
+    let retryTimer = null;
+    let navigated = false;
+
+    function resolve(opts) {
+      opts = opts || {};
+      if (navigated) return;
+      if (resolving) { resolveAgain = opts; return; }
+      if (!socket.connected) return;            // 다시 연결되면 connect 에서 부른다
+      clearTimeout(retryTimer);
+      resolving = true;
+
+      const stored = readTicket();
+      const req = {
+        bank: currentBank,
+        deviceId: DEVICE_ID,
+        name: '고객',
+        jlAttest: store.get('jl_proof') || '',
+        prevTicketId: stored ? stored.id : '',
+        fresh: !!opts.fresh,
+        // 폰에 번호가 있었다면 사라진 이유만 묻고, 새 번호는 손님이 버튼을 눌러야 받는다.
+        checkOnly: !!stored && !opts.fresh
+      };
+
+      socket.timeout(8000).emit('issue_ticket', req, function (err, res) {
+        resolving = false;
+        if (err || !res) {
+          retryTimer = setTimeout(function () { resolve(opts); }, 3000);
+        } else {
+          handleVerdict(res, opts);
         }
-      }
-      socket.emit('issue_ticket', { bank: currentBank, name: '고객' }, function (res) {
-        if (res && res.success) {
-          myTicket = res.ticket;
-          localStorage.setItem('my_ticket_' + currentBank, JSON.stringify(myTicket));
-          announcedIssue = false;
-          announcedSoon = false;
-          showTicket();
+        if (resolveAgain) {
+          const next = resolveAgain;
+          resolveAgain = null;
+          resolve(next);
         }
       });
     }
 
-    // 휴대폰에 저장돼 있다가 복원된 번호표만 검증 대상이다. 이 번호표는 지금 연결보다 먼저 만들어졌으므로
-    // 서버가 처음 보내주는 상태가 곧 정답이다. 반대로 이번 화면에서 방금 발급받은 번호표는
-    // 다른 손님 때문에 만들어진 직전 스냅샷이 뒤늦게 도착할 수 있어 검증하지 않는다.
-    let ticketRestored = false;
-    let staleReissued = false;
+    function handleVerdict(res, opts) {
+      if (res.jlProof) store.set('jl_proof', res.jlProof);
 
-    function reissueIfTicketGone() {
-      if (staleReissued || !ticketRestored || !myTicket) return;
-      staleReissued = true;
-      clearAnnounceFlags(myTicket.id);
-      localStorage.removeItem('my_ticket_' + currentBank);
-      myTicket = null;
-      lastPosition = null;
-      announcedIssue = false;
-      announcedSoon = false;
-      autoIssue();
-    }
-
-    function showTicket() {
-      document.getElementById('ticketSection').style.display = 'block';
-      document.getElementById('completeSection').style.display = 'none';
-      document.getElementById('reissueBtn').style.display = 'none';
-      document.getElementById('myNumDisplay').innerText = myTicket.ticketNumber;
-      socket.emit('get_state', { bank: currentBank });
+      switch (res.status) {
+        case 'ticket': {
+          const isNew = !myTicket || myTicket.id !== res.ticket.id;
+          myTicket = res.ticket;
+          saveTicket(myTicket);
+          heldOther = null;
+          if (isNew) {
+            const flags = loadAnnounceFlags(myTicket.id);
+            announcedIssue = !!flags.issued;
+            announcedSoon = !!flags.soon;
+          }
+          showTicket();
+          if (res.held) setHint('법무법인 제이엘 상담이 끝나면 호출해 드립니다.');
+          // 화면이 꺼져 있는 동안 호출됐다면 호출 화면을 다시 띄워 준다(소리 없이).
+          if (myTicket.status === 'called' && myTicket.deskName) {
+            document.getElementById('coNum').innerText = myTicket.ticketNumber + '번';
+            document.getElementById('coDesk').innerText = myTicket.deskName;
+            document.getElementById('coNote').innerText = nameOf(currentBank) + ' ' + myTicket.deskName + '로 와주시기 바랍니다.';
+            document.getElementById('callOverlay').style.display = 'flex';
+            setHint('호출되었습니다. 창구로 와주세요.');
+          }
+          break;
+        }
+        case 'blocked':
+          showBlockedView(res.held);
+          break;
+        case 'jl_required':
+          navigated = true;
+          location.replace('/index.html?bank=' + JL + '&from=' + encodeURIComponent(currentBank));
+          break;
+        case 'unknown_bank':
+          navigated = true;
+          location.replace('/index.html?bank=' + JL);
+          break;
+        case 'jl_done':
+        case 'completed': {
+          const stored = readTicket();
+          if (stored && alertsOn && !loadAnnounceFlags(stored.id).done) {
+            saveAnnounceFlags(stored.id, { done: true });
+            enqueueSpeech(currentBank === JL
+              ? '분양전환 상담이 완료되었습니다. 이제 은행 상담을 받으실 차례입니다.'
+              : '상담이 완료되었습니다. 추가 상담이 필요하시면 기관을 선택해 주세요.');
+          }
+          showDoneView(res.heldElsewhere);
+          break;
+        }
+        case 'passed':
+          showReissue('호출에 응답하지 않아 순번이 취소되었습니다.');
+          break;
+        case 'gone':
+          showReissue('번호표가 초기화되었습니다. 아래 버튼을 눌러 다시 받아 주세요.');
+          break;
+        case 'wait':
+          show('ticketSection');
+          setHint('서버를 준비하고 있습니다. 잠시만 기다려 주세요.');
+          retryTimer = setTimeout(function () { resolve(opts); }, 3000);
+          break;
+        default:
+          setHint('화면을 새로고침해 주세요.');
+      }
     }
 
     // 발권 안내 멘트 (알림을 켠 뒤에 한 번만)
@@ -547,70 +660,69 @@
       enqueueSpeech(msg);
     }
 
-    socket.on('connect', function () {
-      // 발권 전에 다른 기관 번호표가 살아있는지 먼저 확인한다.
-      issueDecided = false;
-      socket.emit('get_all_state');
-      setTimeout(function () { if (!issueDecided) decideIssue(null); }, 3000);
-    });
+    socket.on('connect', function () { resolve(); });
 
     socket.on('all_state_update', function (data) {
-      renderBankSelection(data.bankInfo);
-      if (data.bankInfo && data.bankInfo[currentBank]) {
-        bankName = data.bankInfo[currentBank].name;
+      if (data.bankInfo) {
+        lastBankInfo = data.bankInfo;
+        if (data.bankInfo[currentBank]) bankName = data.bankInfo[currentBank].name;
       }
-      decideIssue(data);
+      if (data.settings && data.settings.repeatCount) repeatCount = data.settings.repeatCount;
+      // 다른 기관 번호 때문에 막혀 있었는데 그 번호가 끝났으면 다시 판정받는다.
+      if (heldOther && document.getElementById('blockedSection').style.display === 'block') {
+        const b = heldOther.bank, id = heldOther.id;
+        const live = ((data.queues || {})[b] || []).some(function (c) { return c.id === id; }) ||
+          ((data.desks || {})[b] || []).some(function (d) { return d.currentCustomer && d.currentCustomer.id === id; });
+        if (!live) resolve();
+      }
     });
 
     socket.on('state_update', function (data) {
       if (data.bank !== currentBank) return;
       if (data.bankInfo) { applyTheme(data.bankInfo); bankName = data.bankInfo.name; }
+      if (data.settings && data.settings.repeatCount) repeatCount = data.settings.repeatCount;
       if (!myTicket) return;
 
       const inQueue = data.queue.some(function (c) { return c.id === myTicket.id; });
       const isConsulting = data.desks.some(function (d) { return d.currentCustomer && d.currentCustomer.id === myTicket.id; });
 
-      // 상담이 끝나 대기열에서 빠지면 완료 화면으로
-      if (!inQueue && !isConsulting && myTicket.status === 'called') {
-        showCompleteView();
+      // 내 번호가 사라졌다 - 완료인지, 부재인지, 초기화인지 서버에 묻는다.
+      if (!inQueue && !isConsulting) { resolve(); return; }
+
+      // 호출/대기 상태는 서버 기준으로 맞춘다(완료 되돌리기·비상 복구로 다시 대기가 될 수 있다).
+      const entry = data.queue.find(function (c) { return c.id === myTicket.id; });
+      myTicket.status = isConsulting ? 'called' : (entry ? entry.status : myTicket.status);
+
+      const idx = data.queue.filter(function (c) { return c.status === 'waiting'; })
+        .findIndex(function (c) { return c.id === myTicket.id; });
+
+      if (isConsulting || myTicket.status === 'called') {
+        setHint('호출되었습니다. 창구로 와주세요.');
         return;
       }
-
-      // 서버에 없는 번호표는 버리고 새로 발급받는다.
-      // (서버 재시작 / 일마감 / 번호 초기화 / 비상 복구 후에도 옛 번호표가 휴대폰에 남아 있으면
-      //  발권이 된 것처럼 보이지만 서버에는 등록이 안 돼 상담사앱·관리자앱에 아무것도 뜨지 않는다)
-      if (!inQueue && !isConsulting) {
-        reissueIfTicketGone();
-        return;
-      }
-
-      // 서버에 살아있는 번호표임이 확인됐으므로 더는 검증하지 않는다
-      ticketRestored = false;
-
-      const idx = data.queue.findIndex(function (c) { return c.id === myTicket.id; });
       if (idx < 0) return;
 
       const stdMin = (data.settings && data.settings.standardMinutes) || 15;
-      const deskCount = (data.desks || []).length || 1;
+      const deskCount = (data.desks || []).filter(function (d) { return !d.away; }).length || 1;
       const eta = Math.ceil(idx / deskCount) * stdMin;
 
       document.getElementById('myWaitDisplay').innerText = idx + '명';
       document.getElementById('myEtaDisplay').innerText = idx === 0 ? '곧 호출' : '약 ' + eta + '분';
 
-      const hint = document.getElementById('statusHint');
-      if (myTicket.status === 'called') {
-        hint.innerText = '호출되었습니다. 창구로 와주세요.';
+      const held = (data.heldIds || []).indexOf(myTicket.id) >= 0;
+      if (held) {
+        setHint('법무법인 제이엘 상담이 끝나면 호출해 드립니다.');
       } else if (idx === 0) {
-        hint.innerText = '다음 차례입니다. 창구 앞에서 대기해주세요.';
+        setHint('다음 차례입니다. 창구 앞에서 대기해주세요.');
       } else {
-        hint.innerText = '현재 ' + idx + '분이 대기 중입니다. 순서가 되면 알려드립니다.';
+        setHint('현재 ' + idx + '분이 대기 중입니다. 순서가 되면 알려드립니다.');
       }
 
       lastPosition = idx;
       announceTicketIfReady();
 
       // 내 차례가 임박하면 한 번만 안내
-      if (alertsOn && idx === 0 && !announcedSoon && myTicket.status !== 'called') {
+      if (alertsOn && idx === 0 && !held && !announcedSoon) {
         announcedSoon = true;
         saveAnnounceFlags(myTicket.id, { soon: true });
         playAlarm();
@@ -620,18 +732,27 @@
       if (idx > 0) announcedSoon = false;
     });
 
+    // 같은 호출 신호가 겹쳐 와도 한 번만 울린다(재호출은 3초 뒤부터 다시 울림).
+    let lastCallKey = '', lastCallAt = 0;
+
     socket.on('customer_called', function (data) {
       if (data.bank !== currentBank || !myTicket) return;
       if (data.customer.id !== myTicket.id) return;
 
       myTicket.status = 'called';
-      localStorage.setItem('my_ticket_' + currentBank, JSON.stringify(myTicket));
+      saveTicket(myTicket);
 
       document.getElementById('coNum').innerText = myTicket.ticketNumber + '번';
       document.getElementById('coDesk').innerText = data.deskName;
       document.getElementById('coNote').innerText = data.bankName + ' ' + data.deskName + '로 와주시기 바랍니다.';
       document.getElementById('callOverlay').style.display = 'flex';
-      document.getElementById('statusHint').innerText = '호출되었습니다. 창구로 와주세요.';
+      setHint('호출되었습니다. 창구로 와주세요.');
+
+      const key = data.customer.id + '|' + data.desk;
+      const now = Date.now();
+      if (key === lastCallKey && now - lastCallAt < 3000) return;
+      lastCallKey = key;
+      lastCallAt = now;
 
       playAlarm();
       showNotification(
@@ -639,9 +760,10 @@
         data.deskName + '로 와주시기 바랍니다.'
       );
 
-      // 알림음이 먼저 울린 뒤 음성 안내 (2회)
+      // 알림음이 먼저 울린 뒤 음성 안내 (관리자 콘솔에서 정한 횟수만큼)
       const msg = data.bankName + ', ' + numToKorean(myTicket.ticketNumber) + '번 고객님, ' + deskToKorean(data.deskName) + '로 오십시오.';
-      setTimeout(function () { enqueueSpeech(msg); enqueueSpeech(msg); }, 1400);
+      const times = Math.min(3, Math.max(1, repeatCount || 1));
+      setTimeout(function () { for (let i = 0; i < times; i++) enqueueSpeech(msg); }, 1400);
     });
 
     function closeOverlay() {
@@ -652,61 +774,20 @@
     socket.on('customer_passed', function (data) {
       if (data.bank !== currentBank || !myTicket) return;
       if (data.customer.id !== myTicket.id) return;
-
-      clearAnnounceFlags(myTicket.id);
-      localStorage.removeItem('my_ticket_' + currentBank);
-      myTicket = null;
-      lastPosition = null;
-      closeOverlay();
-      document.getElementById('myNumDisplay').innerText = '-';
-      document.getElementById('myWaitDisplay').innerText = '-';
-      document.getElementById('myEtaDisplay').innerText = '-';
-      document.getElementById('statusHint').innerText = '호출에 응답하지 않아 순번이 취소되었습니다.';
-      document.getElementById('reissueBtn').style.display = 'flex';
+      showReissue('호출에 응답하지 않아 순번이 취소되었습니다.');
       if (alertsOn) enqueueSpeech('호출에 응답이 없어 순번이 취소되었습니다. 다시 번호표를 받아 주세요.');
     });
 
     function reissueTicket() {
       document.getElementById('reissueBtn').style.display = 'none';
-      document.getElementById('statusHint').innerText = '번호표를 발급하고 있습니다.';
+      setHint('번호표를 발급하고 있습니다.');
       announcedIssue = false;
       announcedSoon = false;
-      autoIssue();
+      resolve({ fresh: true });
     }
 
-    // 상담 완료 -> 다른 기관 선택 화면
-    function showCompleteView() {
-      localStorage.removeItem('my_ticket_' + currentBank);
-      myTicket = null;
-      lastPosition = null;
-      closeOverlay();
-      document.getElementById('ticketSection').style.display = 'none';
-      document.getElementById('completeSection').style.display = 'block';
-      document.getElementById('brandName').innerText = '상담 완료';
-      document.getElementById('brandSub').innerText = '이용해 주셔서 감사합니다';
-      if (alertsOn) enqueueSpeech('상담이 완료되었습니다. 추가 상담이 필요하시면 기관을 선택해 주세요.');
-    }
-
-    function renderBankSelection(bankInfo) {
-      const grid = document.getElementById('bankSelectGrid');
-      if (!bankInfo) return;
-      grid.innerHTML = '';
-      Object.keys(bankInfo).forEach(function (b) {
-        const info = bankInfo[b];
-        const btn = document.createElement('button');
-        btn.className = 'bank-pick';
-        btn.style.borderColor = info.color;
-        btn.style.color = info.color;
-        btn.innerText = info.name;
-        btn.onclick = function () { window.location.href = '/index.html?b=' + b; };
-        grid.appendChild(btn);
-      });
-    }
-
-    socket.on('emergency_repaired', function () {
-      localStorage.clear();
-      window.location.reload();
-    });
+    // 비상 복구는 손님 번호를 지우지 않는다. 내 번호 상태만 다시 확인한다.
+    socket.on('emergency_repaired', function () { resolve(); });
 
     // 첫 터치에도 오디오 잠금을 풀어둔다 (버튼을 못 누른 경우 대비)
     ['click', 'touchstart'].forEach(function (ev) {

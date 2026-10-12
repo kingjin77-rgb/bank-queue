@@ -74,6 +74,7 @@
     .btn-away.on { background: #4e5968; color: #fff; border-color: #4e5968; }
     .q-chip { cursor: pointer; }
     .q-chip.passed { background: #ffeaec; color: var(--danger); }
+    .q-chip.held { background: #fbe9ee; color: #8b0029; border: 1.5px dashed #d98ba0; cursor: not-allowed; }
     .away-banner { background: #4e5968; color: #fff; border-radius: 18px; padding: 14px; font-size: 16px; font-weight: 900; text-align: center; margin-top: 14px; display: none; }
 
     /* ===== 대기열 ===== */
@@ -227,15 +228,14 @@
       const v = urlParams.get('bank') || urlParams.get('b');
       return (v || fallback || '').toLowerCase().trim();
     }
-    const bank = urlBank('kb');
+    const bank = urlBank('jl');
 
     const LOCAL_BANK_THEMES = {
-      kb:      { name: '국민은행',       color: '#ffbc00', sub: '#fff9e6', btnText: '#2b2b2b' },
+      jl:      { name: '법무법인 제이엘', color: '#8b0029', sub: '#fbe9ee', btnText: '#ffffff' },
+      nh:      { name: 'NH농협은행',     color: '#1f8a3b', sub: '#e7f5ea', btnText: '#ffffff' },
       shinhan: { name: '신한은행',       color: '#0046ff', sub: '#e8f0fe', btnText: '#ffffff' },
-      woori:   { name: '우리은행',       color: '#0067ac', sub: '#e6f3fa', btnText: '#ffffff' },
-      fubon:   { name: '푸본현대생명',   color: '#00A88F', sub: '#e6f7f4', btnText: '#ffffff' },
-      hana:    { name: '하나은행',       color: '#008485', sub: '#e6f4f4', btnText: '#ffffff' },
-      jl:      { name: '법무법인 제이엘', color: '#8b0029', sub: '#fbe9ee', btnText: '#ffffff' }
+      kb:      { name: '국민은행',       color: '#ffbc00', sub: '#fff9e6', btnText: '#2b2b2b' },
+      fubon:   { name: '푸본현대생명',   color: '#00A88F', sub: '#e6f7f4', btnText: '#ffffff' }
     };
 
     function applyTheme(info) {
@@ -251,13 +251,12 @@
     }
 
     let bankName = (LOCAL_BANK_THEMES[bank] || {}).name || '은행';
-    applyTheme(LOCAL_BANK_THEMES[bank] || LOCAL_BANK_THEMES.kb);
+    applyTheme(LOCAL_BANK_THEMES[bank] || LOCAL_BANK_THEMES.jl);
 
     const socket = io({ transports: ['websocket', 'polling'] });
 
-    // 창구는 한 번 고르면 새로고침해도 유지된다.
-    const DESK_KEY = 'fixed_desk_' + bank;
-    let myDesk = parseInt(localStorage.getItem(DESK_KEY) || urlParams.get('desk') || '', 10);
+    // 창구는 기억하지 않는다. 새로고침하면 담당 창구를 다시 고른다.
+    let myDesk = parseInt(urlParams.get('desk') || '', 10);
     if (isNaN(myDesk)) myDesk = null;
 
     let allDesks = [];
@@ -266,62 +265,11 @@
     let currentCalledAt = null;
     let audioReady = false;
     let sheetMode = 'select';
-    let knownTicketIds = null;   // 접수 알림용 (첫 동기화는 알리지 않음)
 
     /* ================= 음성 ================= */
 
     const keepAliveAudio = document.getElementById('keepAliveAudio');
     const alarmAudio = document.getElementById('alarmAudio');
-
-    function numToKorean(n) {
-      const num = parseInt(n, 10);
-      if (isNaN(num)) return String(n);
-      if (num === 0) return '영';
-      const digits = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
-      const units = ['', '십', '백', '천'];
-      let out = '', rest = num;
-      for (let i = 3; i >= 0; i--) {
-        const div = Math.pow(10, i);
-        const d = Math.floor(rest / div);
-        rest %= div;
-        if (d === 0) continue;
-        out += (d === 1 && i > 0 ? '' : digits[d]) + units[i];
-      }
-      return out;
-    }
-    function deskToKorean(deskName) {
-      const m = String(deskName || '').match(/\d+/);
-      return m ? numToKorean(m[0]) + '번 창구' : String(deskName || '창구');
-    }
-
-    const speechQueue = [];
-    let speaking = false, speechGuard = null;
-
-    function enqueueSpeech(text) {
-      speechQueue.push(text);
-      processSpeechQueue();
-    }
-    function processSpeechQueue() {
-      if (speaking || speechQueue.length === 0) return;
-      if (!('speechSynthesis' in window)) { speechQueue.length = 0; return; }
-      speaking = true;
-      const text = speechQueue.shift();
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = 'ko-KR';
-      utter.rate = 0.92;
-      utter.volume = 1.0;
-      const done = function () {
-        if (!speaking) return;
-        speaking = false;
-        clearTimeout(speechGuard);
-        setTimeout(processSpeechQueue, 250);
-      };
-      utter.onend = done;
-      utter.onerror = done;
-      speechGuard = setTimeout(done, 15000);
-      try { window.speechSynthesis.resume(); } catch (e) {}
-      window.speechSynthesis.speak(utter);
-    }
 
     // 어떤 조작을 하든 오디오 잠금이 풀리도록 (음성 호출은 절대 빠지면 안 됨)
     function unlockAudio(announce) {
@@ -331,7 +279,7 @@
       alarmAudio.volume = 1.0;
       if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(function () {});
       document.getElementById('audioWarn').style.display = 'none';
-      if (announce) enqueueSpeech('음성 안내가 켜졌습니다.');
+      if (announce) playChime();
     }
     ['click', 'touchstart'].forEach(function (ev) {
       window.addEventListener(ev, function () { unlockAudio(false); }, { once: true });
@@ -377,8 +325,8 @@
       const isMove = sheetMode === 'move';
       document.getElementById('sheetTitle').innerText = isMove ? '창구 이동' : '창구를 선택하세요';
       document.getElementById('sheetDesc').innerText = isMove
-        ? '이동할 창구를 누르면 즉시 옮겨집니다. 선택한 창구는 새로고침해도 유지됩니다.'
-        : '선택한 창구는 새로고침을 해도 그대로 유지됩니다.';
+        ? '이동할 창구를 누르면 즉시 이동합니다.'
+        : '담당하실 창구를 선택해 주세요.';
       document.getElementById('sheetCancel').style.display = (isMove && myDesk) ? 'block' : 'none';
       renderDeskOptions();
       document.getElementById('deskModal').classList.add('show');
@@ -408,7 +356,6 @@
     function chooseDesk(deskNo) {
       unlockAudio(false);
       myDesk = deskNo;
-      localStorage.setItem(DESK_KEY, String(deskNo));
       closeDeskSheet();
       syncDeskUi();
       socket.emit('get_state', { bank: bank });
@@ -460,7 +407,6 @@
       // 관리자가 창구를 없앴는데 그게 내 창구였다면 즉시 다시 고르게 한다.
       if (myDesk && !allDesks.some(function (d) { return d.desk === myDesk; })) {
         myDesk = null;
-        localStorage.removeItem(DESK_KEY);
         openDeskSheet('select');
       }
       if (!myDesk && bankValid) {
@@ -488,11 +434,21 @@
       if (waiting.length === 0) {
         qBox.innerHTML = '<div class="q-empty">대기 중인 고객이 없습니다.</div>';
       } else {
-        waiting.forEach(function (c, i) {
+        const held = data.heldIds || [];
+        let firstMarked = false;
+        waiting.forEach(function (c) {
           const chip = document.createElement('div');
-          chip.className = 'q-chip' + (i === 0 ? ' first' : '');
-          chip.innerText = c.ticketNumber + '번';
-          chip.onclick = function () { callSpecific(c.id, c.ticketNumber); };
+          // 제이엘에서 상담 중인 손님은 은행이 부를 수 없다(제이엘 상담이 끝나면 풀림).
+          if (held.indexOf(c.id) >= 0) {
+            chip.className = 'q-chip held';
+            chip.innerText = c.ticketNumber + '번 · 제이엘 상담중';
+            chip.onclick = function () { showInfo(c.ticketNumber + '번 손님은 법무법인 제이엘 상담 중입니다'); };
+          } else {
+            chip.className = 'q-chip' + (firstMarked ? '' : ' first');
+            firstMarked = true;
+            chip.innerText = c.ticketNumber + '번';
+            chip.onclick = function () { callSpecific(c.id, c.ticketNumber); };
+          }
           qBox.appendChild(chip);
         });
       }
@@ -541,9 +497,6 @@
       if (data.bank !== bank) return;
       showArrival(data.ticket.ticketNumber, data.waitingCount);
       playChime();
-      setTimeout(function () {
-        enqueueSpeech('새 고객이 접수되었습니다. 대기 ' + numToKorean(data.waitingCount) + '명입니다.');
-      }, 700);
     });
 
     function showArrival(ticketNumber, waitingCount) {
@@ -559,8 +512,7 @@
       if (data.bank !== bank) return;
       if (data.action === 'remove' && data.removedDesk === myDesk) {
         myDesk = null;
-        localStorage.removeItem(DESK_KEY);
-        enqueueSpeech('이 창구가 관리자에 의해 닫혔습니다. 창구를 다시 선택해 주세요.');
+        alert('이 창구가 관리자에 의해 닫혔습니다. 창구를 다시 선택해 주세요.');
         openDeskSheet('select');
       }
       socket.emit('get_state', { bank: bank });
@@ -574,7 +526,23 @@
       playChime();
     });
 
+    // 서버가 호출을 거절한 경우 (손님이 법무법인 제이엘 상담 중)
+    socket.on('call_refused', function (data) {
+      if (data.bank !== bank) return;
+      showInfo(data.message);
+      alert(data.message);
+    });
+
     /* ================= 조작 ================= */
+
+    // 호출 버튼 연타 방지 (같은 손님이 두 번 불리지 않게)
+    let isCalling = false;
+    function throttleCall(fn) {
+      if (isCalling) return;
+      isCalling = true;
+      fn();
+      setTimeout(function () { isCalling = false; }, 1200);
+    }
 
     function requireDesk() {
       if (!bankValid) {
@@ -587,20 +555,26 @@
 
     function callNext() {
       if (!requireDesk()) return;
-      unlockAudio(false);
-      socket.emit('call_customer', { bank: bank, deskNumber: myDesk });
+      throttleCall(function () {
+        unlockAudio(false);
+        socket.emit('call_customer', { bank: bank, deskNumber: myDesk });
+      });
     }
 
     function recall() {
       if (!requireDesk()) return;
-      unlockAudio(false);
-      socket.emit('recall_customer', { bank: bank, deskNumber: myDesk });
+      throttleCall(function () {
+        unlockAudio(false);
+        socket.emit('recall_customer', { bank: bank, deskNumber: myDesk });
+      });
     }
 
     function finishAndAutoCall() {
       if (!requireDesk()) return;
-      unlockAudio(false);
-      socket.emit('complete_consultation', { bank: bank, deskNumber: myDesk, autoCall: true });
+      throttleCall(function () {
+        unlockAudio(false);
+        socket.emit('complete_consultation', { bank: bank, deskNumber: myDesk, autoCall: true });
+      });
     }
 
     function passCustomer() {
@@ -618,9 +592,11 @@
     // 지정 호출: 대기열에서 특정 손님을 바로 부른다
     function callSpecific(customerId, ticketNumber) {
       if (!requireDesk()) return;
-      unlockAudio(false);
-      socket.emit('call_customer', { bank: bank, deskNumber: myDesk, customerId: customerId });
-      showInfo(ticketNumber + '번 손님 호출');
+      throttleCall(function () {
+        unlockAudio(false);
+        socket.emit('call_customer', { bank: bank, deskNumber: myDesk, customerId: customerId });
+        showInfo(ticketNumber + '번 손님 호출');
+      });
     }
 
     // 상담 완료를 잘못 눌렀을 때 되돌리기
@@ -684,6 +660,7 @@
         btn.innerHTML = '<span>' + d.name + '</span><span class="d-sub">' +
           (d.away ? '자리 비움' : (busy ? d.currentCustomer.ticketNumber + '번 상담 중' : '비어 있음')) + '</span>';
         btn.onclick = function () {
+          if (busy) { alert(d.name + '은(는) 지금 상담 중이라 전달할 수 없습니다.'); return; }
           socket.emit('transfer_customer', { bank: bank, fromDesk: myDesk, toDesk: d.desk });
           closeTransfer();
           showInfo(d.name + '으로 전달');
@@ -693,8 +670,7 @@
     }
 
     socket.on('emergency_repaired', function () {
-      localStorage.removeItem(DESK_KEY);
-      window.location.reload();
+      socket.emit('get_state', { bank: bank });
     });
   </script>
   <script src="/pwa.js" data-role="teller"></script>
