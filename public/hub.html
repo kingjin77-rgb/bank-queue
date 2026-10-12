@@ -77,18 +77,17 @@
     // 서버에 실제로 등록된 기관만 노출한다.
     // (등록되지 않은 은행 주소로 접속하면 엉뚱한 은행 고객을 호출하게 되므로)
     var BANKS = [
-      { id: 'kb',      name: 'KB국민은행',     color: '#ffbc00', text: '#2b2b2b' },
-      { id: 'woori',   name: '우리은행',       color: '#0067ac', text: '#ffffff' },
+      { id: 'jl',      name: '법무법인 제이엘', color: '#8b0029', text: '#ffffff' },
+      { id: 'nh',      name: 'NH농협은행',     color: '#1f8a3b', text: '#ffffff' },
       { id: 'shinhan', name: '신한은행',       color: '#0046ff', text: '#ffffff' },
-      { id: 'fubon',   name: '푸본현대생명',   color: '#00A88F', text: '#ffffff' },
-      { id: 'jl',      name: '법무법인 제이엘', color: '#8b0029', text: '#ffffff' }
+      { id: 'kb',      name: 'KB국민은행',     color: '#ffbc00', text: '#2b2b2b' },
+      { id: 'fubon',   name: '푸본현대생명',   color: '#00A88F', text: '#ffffff' }
     ];
 
     var ADMIN_LINKS = [
       { ico: '📢', label: '앰프 / 총괄 관리자 콘솔', url: '/admin.html' },
       { ico: '⚡', label: '제이엘 진행요원 패널',    url: '/operator.html' },
-      { ico: '📺', label: '대형 종합 전광판',        url: '/display.html' },
-      { ico: '📈', label: '우리은행 팀장 모니터링',  url: '/woori_leader.html' }
+      { ico: '📺', label: '대형 종합 전광판',        url: '/display.html' }
     ];
 
     function toast(msg) {

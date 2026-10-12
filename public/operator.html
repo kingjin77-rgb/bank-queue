@@ -263,10 +263,12 @@
         btn.style.color = bank.btnText || '#fff';
         btn.innerText = bank.name + ' 대리 발권';
         btn.onclick = function () {
-          socket.emit('issue_ticket', { bank: bank.id, name: '대리발권' }, function (res) {
+          socket.emit('issue_ticket', { bank: bank.id, name: '대리발권', proxy: true }, function (res) {
             if (res && res.success) {
               toast('[발권 완료] ' + res.ticket.bankName + ' ' + res.ticket.ticketNumber + '번');
               closeProxyModal();
+            } else {
+              toast('[발권 안 됨] ' + ((res && res.message) || '잠시 후 다시 눌러 주세요.'));
             }
           });
         };

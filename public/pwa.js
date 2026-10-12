@@ -69,7 +69,7 @@
   if (isStandalone()) return;   // 이미 앱으로 실행 중
 
   var dismissKey = 'pwa_dismissed_' + role + '_' + (bank || 'all');
-  if (localStorage.getItem(dismissKey) === '1') return;
+  try { if (localStorage.getItem(dismissKey) === '1') return; } catch (e) {}
 
   function showInAppWarning(appName) {
     function render() {

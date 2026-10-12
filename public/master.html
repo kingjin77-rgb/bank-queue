@@ -69,13 +69,13 @@
         <h2>🔗 전체 바로가기 링크</h2>
         <div class="link-group">
           <a href="/admin.html" target="_blank" class="btn-link"><span>현장 총괄 관리자 (스피커/창구)</span> <span>열기 ↗</span></a>
-          <a href="/woori_leader.html" target="_blank" class="btn-link"><span>우리은행 팀장 원격관제</span> <span>열기 ↗</span></a>
           <a href="/display.html" target="_blank" class="btn-link"><span>현장 종합 전광판 (TV용)</span> <span>열기 ↗</span></a>
           <div style="margin-top: 4px; font-size: 13px; color: #64748b; font-weight: 700;">상담사 창구:</div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
-            <a href="/teller.html?bank=kb" target="_blank" class="btn-link" style="font-size: 13px; padding: 10px;">국민 창구</a>
-            <a href="/teller.html?bank=woori" target="_blank" class="btn-link" style="font-size: 13px; padding: 10px;">우리 창구</a>
+            <a href="/teller.html?bank=jl" target="_blank" class="btn-link" style="font-size: 13px; padding: 10px;">제이엘 창구</a>
+            <a href="/teller.html?bank=nh" target="_blank" class="btn-link" style="font-size: 13px; padding: 10px;">농협 창구</a>
             <a href="/teller.html?bank=shinhan" target="_blank" class="btn-link" style="font-size: 13px; padding: 10px;">신한 창구</a>
+            <a href="/teller.html?bank=kb" target="_blank" class="btn-link" style="font-size: 13px; padding: 10px;">국민 창구</a>
             <a href="/teller.html?bank=fubon" target="_blank" class="btn-link" style="font-size: 13px; padding: 10px;">푸본 창구</a>
           </div>
         </div>
@@ -86,9 +86,10 @@
         <h2>🛠 1인 단독 가상 테스트 툴</h2>
         <div style="display: flex; flex-direction: column; gap: 8px;">
           <select id="testBank" style="height: 48px; border-radius: 12px; background:#0f172a; color:#fff; border:1px solid var(--border); font-size:15px; padding:0 10px;">
-            <option value="kb">국민은행 테스트</option>
-            <option value="woori">우리은행 테스트</option>
+            <option value="jl">법무법인 제이엘 테스트</option>
+            <option value="nh">NH농협은행 테스트</option>
             <option value="shinhan">신한은행 테스트</option>
+            <option value="kb">국민은행 테스트</option>
             <option value="fubon">푸본현대 테스트</option>
           </select>
           <button style="height: 44px; background: var(--primary); color: #000; border:none; border-radius:12px; font-weight:800; cursor:pointer;" onclick="testIssue()">1. 가상 번호표 발권</button>
@@ -156,7 +157,7 @@
 
     function testIssue() {
       const bank = document.getElementById('testBank').value;
-      socket.emit('issue_ticket', { bank, name: '테스트고객' }, (res) => {
+      socket.emit('issue_ticket', { bank, name: '테스트고객', proxy: true }, (res) => {
         if (res && res.success) addLog(`[가상발권] ${bank} ${res.ticket.ticketNumber}번 발권됨`);
       });
     }
