@@ -319,7 +319,7 @@
     }
     function nowSlotKey() {
       const now = Date.now();
-      // 시간이 겹치면(앞 타임 끝, 다음 타임 10분 전) 늦게 시작하는 타임을 보여준다.
+      // 시간이 겹치면(첫 타임 30분 전 등) 늦게 시작하는 타임을 보여준다.
       const hits = slotsOf().filter(function (s) { return s.winStart != null && now >= s.winStart && now < s.winEnd; });
       const hit = hits[hits.length - 1];
       return hit ? hit.key : null;
