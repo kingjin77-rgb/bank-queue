@@ -135,6 +135,8 @@ function maskPhone(v) {
 // 원본의 '오전 12시'는 일요일 10·11시 다음 시간대라 낮 12시로 본다.
 function parseSlot(v) {
   const raw = String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, 60);
+  // '상시' 시간대(현장 테스트용 등)는 언제 와도 예약으로 인정한다.
+  if (/상시/.test(raw)) return { raw, key: '0000 상시', label: '상시(언제나)', startMs: null, always: true };
   const m = /(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일\s*(?:\(\s*([^)]*)\))?\s*(오전|오후|낮|저녁|밤)?\s*(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분)?/.exec(raw);
   if (!m) return { raw, key: 'z ' + raw, label: raw || '시간 미기재', startMs: null };
   const y = +m[1], mo = +m[2], d = +m[3], min = m[7] ? +m[7] : 0;
@@ -165,7 +167,8 @@ function normalizeReservationRows(rows) {
     byId.set(id, {
       id, seq: Number.isFinite(seq) ? seq : null, dong, ho,
       phone: ph.phone, last4: ph.last4,
-      slot: sl.raw, slotKey: sl.key, slotLabel: sl.label, startMs: sl.startMs,
+      slot: sl.raw, slotKey: sl.key, slotLabel: sl.label, startMs: sl.startMs, always: !!sl.always,
+      note: safeText(r.note, 20, ''),
       dup, others: 0
     });
   });
@@ -183,6 +186,7 @@ function normalizeReservationRows(rows) {
     days[d].last = Math.max(days[d].last, e.startMs);
   });
   list.forEach(e => {
+    if (e.always) { e.winStart = 0; e.winEnd = 8.64e15; return; }
     if (e.startMs == null) { e.winStart = null; e.winEnd = null; return; }
     const d = days[e.slotKey.slice(0, 10)];
     e.winStart = e.startMs - (e.startMs === d.first ? RESERVE_EDGE_MIN : RESERVE_EARLY_MIN) * 60000;
@@ -1145,6 +1149,74 @@ io.on('connection', (socket) => {
       customer: passed
     });
     broadcastBank(b);
+  });
+
+  // ===== 번호표 강제 종료 (현장안내·관리자) =====
+  // QR 로 번호표를 받고 오지 않거나 다른 곳에 가 있는 손님의 번호를 직원이 끝낸다.
+  //  done   : 상담 끝난 것으로 처리. 제이엘이면 그 손님 폰에 은행 선택 화면이 뜨고 은행 번호표를 받을 수 있다.
+  //  cancel : 번호 취소(부재와 같음). 손님 폰에는 '다시 받기'가 뜬다.
+  function findLiveTicket(b, ticketNumber) {
+    const n = parseInt(ticketNumber, 10);
+    if (!Number.isFinite(n)) return null;
+    const desk = (db.desks[b] || []).find(d => d.currentCustomer && d.currentCustomer.ticketNumber === n);
+    if (desk) return { cust: desk.currentCustomer, desk };
+    const cust = (db.queues[b] || []).find(c => c.ticketNumber === n);
+    return cust ? { cust, desk: null } : null;
+  }
+  function ticketInfo(b, f) {
+    const c = f.cust;
+    return {
+      bank: b, bankName: db.bankInfo[b].name, ticketNumber: c.ticketNumber,
+      status: f.desk ? 'consulting' : c.status, deskName: f.desk ? f.desk.name : (c.deskName || ''),
+      walkin: !!c.walkin, reserved: !!c.reserved, proxy: !c.deviceId, createdAt: c.createdAt
+    };
+  }
+  socket.on('staff_ticket_lookup', (payload, callback) => {
+    const ack = typeof callback === 'function' ? callback : () => {};
+    const p = payload || {};
+    const b = knownBank(p.bank);
+    if (!b) return ack({ ok: false, reason: 'bank' });
+    const f = findLiveTicket(b, p.ticketNumber);
+    if (!f) return ack({ ok: false, reason: 'not_found' });
+    ack({ ok: true, ticket: ticketInfo(b, f) });
+  });
+  socket.on('staff_force_end', (payload, callback) => {
+    const ack = typeof callback === 'function' ? callback : () => {};
+    const p = payload || {};
+    const b = knownBank(p.bank);
+    if (!b) return ack({ ok: false, reason: 'bank' });
+    const f = findLiveTicket(b, p.ticketNumber);
+    if (!f) return ack({ ok: false, reason: 'not_found' });
+    const c = f.cust;
+    const now = new Date().toISOString();
+    const info = ticketInfo(b, f);
+    if (p.mode === 'done') {
+      db.completedLogs.push({
+        bank: b, bankName: db.bankInfo[b].name,
+        desk: f.desk ? f.desk.desk : 0, deskName: f.desk ? f.desk.name : '직원 종료',
+        ticketNumber: c.ticketNumber, ticketId: c.id, deviceId: c.deviceId || '',
+        createdAt: c.createdAt, calledAt: c.calledAt || now, completedAt: now,
+        durationSec: c.calledAt ? secBetween(c.calledAt, now) : 0,
+        waitSec: c.createdAt ? secBetween(c.createdAt, c.calledAt || now) : 0,
+        forced: true,
+        customer: clone(c)
+      });
+    } else if (p.mode === 'cancel') {
+      if (!Array.isArray(db.passedLogs)) db.passedLogs = [];
+      db.passedLogs.push({
+        bank: b, bankName: db.bankInfo[b].name,
+        desk: f.desk ? f.desk.desk : 0, deskName: f.desk ? f.desk.name : '직원 취소',
+        ticketNumber: c.ticketNumber, ticketId: c.id, deviceId: c.deviceId || '',
+        passedAt: now, forced: true,
+        customer: clone(c)
+      });
+    } else {
+      return ack({ ok: false, reason: 'mode' });
+    }
+    db.queues[b] = (db.queues[b] || []).filter(x => x.id !== c.id);
+    if (f.desk) { f.desk.status = 'idle'; f.desk.currentCustomer = null; }
+    broadcastBank(b);
+    ack({ ok: true, mode: p.mode, ticket: info });
   });
 
   // 자리 비움 / 복귀. 비운 창구는 예상 대기시간 계산에서 빠진다.
