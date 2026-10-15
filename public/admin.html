@@ -248,6 +248,7 @@
         <button class="btn-act btn-dark" id="gateBtn" style="min-width: 220px;" onclick="toggleGate()">-</button>
       </div>
       <div style="font-size: 13px; color: #94a3b8; margin-top: 10px; line-height: 1.6;">
+        <b style="color:#fff;">명단은 여기서 한 번만 올리면 모든 직원 화면에 바로 반영됩니다.</b> 다시 올리면 새 명단으로 <b style="color:#fff;">교체</b>되고(누적 아님), 이미 확인한 분은 그대로 유지됩니다.<br>
         연락처는 가운데 4자리를 가린 채로만 서버에 올라갑니다. 이 PC 에서 '예약자 확인 화면 → 엑셀로 받기' 를 누르면 원본 연락처가 들어간 도착 현황을 받을 수 있습니다.
       </div>
     </div>
@@ -1056,9 +1057,10 @@
       return { phone: (/^01\d/.test(d) ? d.slice(0, 3) : '***') + '-****-' + last4, last4: last4 };
     }
 
+    // 서버 재시작 때 복구용 저장본. 지워진 명단은 '지움' 기록(version)만 남긴다.
     function rvSaveSnapshot() {
-      if (!rvState.listId) { try { localStorage.removeItem(RV_SNAP_KEY); } catch (e) {} return; }
-      lsSet(RV_SNAP_KEY, JSON.stringify({ listId: rvState.listId, list: rvState.list, marks: rvState.marks, savedAt: Date.now() }));
+      if (!rvState.listId && !rvState.version) return;   // 막 켜진 빈 서버면 저장본을 건드리지 않는다
+      lsSet(RV_SNAP_KEY, JSON.stringify({ listId: rvState.listId, version: rvState.version || 0, list: rvState.list, marks: rvState.marks, savedAt: Date.now() }));
     }
     function rvLoadSnapshot() {
       try {
@@ -1069,7 +1071,7 @@
     }
     function rvApply(res) {
       rvState = {
-        listId: res.listId || '', list: res.list || [], marks: res.marks || {},
+        listId: res.listId || '', list: res.list || [], marks: res.marks || {}, version: res.version || 0,
         gate: !!res.gate, gateSetting: res.gateSetting !== false
       };
       rvSaveSnapshot();
@@ -1089,6 +1091,14 @@
       renderReserveStatus();
     });
 
+    const rvUpTime = function(ms) {
+      try {
+        const o = {};
+        new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+          .formatToParts(new Date(ms)).forEach(function (x) { o[x.type] = x.value; });
+        return o.month + '/' + o.day + ' ' + o.hour + ':' + o.minute;
+      } catch (e) { return ''; }
+    };
     function renderReserveStatus() {
       const st = document.getElementById('rvStatus');
       const total = rvState.list.length;
@@ -1099,7 +1109,9 @@
         st.innerText = '올라간 예약자 명단이 없습니다. 아래에서 엑셀을 골라 올려 주세요. (명단이 없으면 누구나 QR 로 발권)';
       } else {
         st.style.color = '#22c55e';
-        st.innerText = '예약자 ' + total + '명 · 도착 확인 ' + done + '명 (QR 자동 ' + auto + ' · 직원 ' + (done - auto) + ')';
+        let up = '';
+        if (rvState.version) up = ' · ' + rvUpTime(rvState.version) + ' 올린 명단';
+        st.innerText = '예약자 ' + total + '명' + up + ' · 도착 확인 ' + done + '명 (QR 자동 ' + auto + ' · 직원 ' + (done - auto) + ')';
       }
       const gt = document.getElementById('gateText');
       const gb = document.getElementById('gateBtn');

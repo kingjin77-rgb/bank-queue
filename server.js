@@ -112,7 +112,8 @@ const RESERVE_EDGE_MIN = 30;      // 하루의 첫 타임은 30분 먼저, 마�
 const RESERVE_MAX_ROWS = 3000;
 
 function emptyReservations() {
-  return { listId: '', list: [], marks: {}, cleared: [] };
+  // version: 명단을 올리거나 지운 서버 시각. 재시작 후 복구할 때 가장 최근 명단 하나로 모으는 기준.
+  return { listId: '', list: [], marks: {}, cleared: [], version: 0 };
 }
 
 function pad2(n) { return String(n).padStart(2, '0'); }
@@ -225,8 +226,17 @@ function normalizeReservations() {
     listId: norm.listId,
     list: norm.list,
     marks,
-    cleared: (Array.isArray(R.cleared) ? R.cleared : []).filter(x => typeof x === 'string').slice(-20)
+    cleared: (Array.isArray(R.cleared) ? R.cleared : []).filter(x => typeof x === 'string').slice(-20),
+    version: cleanVersion(R.version)
   };
+}
+
+function cleanVersion(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 && n <= Date.now() + 60000 ? n : 0;
+}
+function bumpReserveVersion() {
+  db.reservations.version = Math.max(Date.now(), db.reservations.version + 1);
 }
 
 function reserveGateOn() {
@@ -248,6 +258,7 @@ function reservePayload() {
     list: R.list,
     marks,
     cleared: R.cleared,
+    version: R.version,
     gate: reserveGateOn(),
     gateSetting: db.settings.reserveGate !== false,
     earlyMin: RESERVE_EARLY_MIN,
@@ -274,22 +285,42 @@ function setReserveMark(id, fields) {
   return m;
 }
 
-// 서버가 비어 있으면(재배포·절전 후 재기동) 폰 저장본으로 명단을 되살리고,
-// 같은 명단이면 표시를 항목별 최신 시각 기준으로 합친다. 바뀐 게 있으면 true.
+// 서버가 재시작되면(재배포·절전 후 재기동) 메모리가 비므로 폰·PC 저장본으로 명단을 되살린다.
+// 명단은 관리자 화면 한 곳에서만 올리고, 올리거나 지울 때마다 version(서버 시각)이 오른다.
+// 저장본이 서버보다 새 version 이면 그 명단(또는 '지움')을 따르고, 오래된 명단은 무시한다.
+// 그래서 재시작 후 어떤 폰이 먼저 붙어도 가장 최근에 올린 명단 하나로 모인다.
+// 같은 명단이면 확인 표시를 항목별 최신 시각 기준으로 합친다. 바뀐 게 있으면 true.
 function mergeReserveSnapshot(snap) {
-  if (!snap || typeof snap !== 'object' || typeof snap.listId !== 'string' || !snap.listId) return false;
+  if (!snap || typeof snap !== 'object' || typeof snap.listId !== 'string') return false;
   const R = db.reservations;
-  if (R.cleared.includes(snap.listId)) return false;
+  const v = cleanVersion(snap.version);
+  // 막 켜진 빈 서버는 version 이 없는 예전 저장본도 받아들인다.
+  const freshServer = R.version === 0 && !R.list.length;
+  const newer = v > R.version || (freshServer && v === 0 && !!snap.listId);
   let changed = false;
-  if (!R.list.length) {
+
+  if (newer && snap.listId !== R.listId) {
+    if (!snap.listId) {
+      // 명단을 지운 기록이 더 최근이다.
+      if (R.listId) R.cleared = R.cleared.concat([R.listId]).slice(-20);
+      R.list = []; R.listId = ''; R.marks = {}; R.version = v;
+      return true;
+    }
+    if (R.cleared.includes(snap.listId) && v <= R.version) return false;
     const norm = normalizeReservationRows(Array.isArray(snap.list) ? snap.list : []);
     if (!norm.list.length || norm.listId !== snap.listId) return false;
+    const keep = {};
+    norm.list.forEach(e => { if (R.marks[e.id]) keep[e.id] = R.marks[e.id]; });
     R.list = norm.list;
     R.listId = norm.listId;
-    R.marks = {};
+    R.marks = keep;
+    R.version = v;
     changed = true;
+  } else if (snap.listId && snap.listId === R.listId && v > R.version) {
+    R.version = v;
   }
-  if (snap.listId !== R.listId || !snap.marks || typeof snap.marks !== 'object') return changed;
+
+  if (!snap.listId || snap.listId !== R.listId || !snap.marks || typeof snap.marks !== 'object') return changed;
   const ids = new Set(R.list.map(e => e.id));
   Object.keys(snap.marks).slice(0, RESERVE_MAX_ROWS).forEach((id) => {
     if (!ids.has(id)) return;
@@ -962,6 +993,7 @@ io.on('connection', (socket) => {
     R.listId = norm.listId;
     R.marks = keep;
     R.cleared = R.cleared.filter(x => x !== norm.listId);
+    bumpReserveVersion();
     saveBackup();
     io.to('reserve').emit('reserve_state', reservePayload());
     broadcastAll();
@@ -978,6 +1010,7 @@ io.on('connection', (socket) => {
     R.list = [];
     R.listId = '';
     R.marks = {};
+    bumpReserveVersion();
     saveBackup();
     io.to('reserve').emit('reserve_state', reservePayload());
     broadcastAll();
