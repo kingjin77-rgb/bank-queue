@@ -303,10 +303,9 @@
       lastAnnounceAt = now;
       try { alarmAudio.currentTime = 0; alarmAudio.play().catch(function () {}); } catch (e) {}
       // 제이엘 시간예약 운영 중에는 예약 고객 / 현장 접수 고객을 구분해 부른다.
-      const kind = data.customer.walkin ? '현장 접수 고객' : (data.customer.reserved ? '예약 고객' : '');
-      const msg = kind
-        ? data.bankName + ', ' + kind + ' ' + numToKorean(data.customer.ticketNumber) + '번, ' + deskToKorean(data.deskName) + '로 오십시오.'
-        : data.bankName + ', ' + numToKorean(data.customer.ticketNumber) + '번 고객님, ' + deskToKorean(data.deskName) + '로 오십시오.';
+      // 예: '법무법인 제이엘, 예약 일번 고객님, 일번 창구로 오십시오.'
+      const kind = data.customer.walkin ? '현장 접수 ' : (data.customer.reserved ? '예약 ' : '');
+      const msg = data.bankName + ', ' + kind + numToKorean(data.customer.ticketNumber) + '번 고객님, ' + deskToKorean(data.deskName) + '로 오십시오.';
       const times = Math.min(3, Math.max(1, data.repeatCount || 1));
       setTimeout(function () { for (let i = 0; i < times; i++) enqueueSpeech(msg); }, 900);
     });

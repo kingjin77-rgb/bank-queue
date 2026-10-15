@@ -533,14 +533,14 @@
     // 새 고객 접수 알림 - 내 은행만
     socket.on('ticket_issued', function (data) {
       if (data.bank !== bank) return;
-      const kind = data.ticket.walkin ? '현장 접수 고객 ' : (data.ticket.reserved ? '예약 고객 ' : '');
+      const kind = data.ticket.walkin ? '현장 접수 ' : (data.ticket.reserved ? '예약 ' : '');
       showArrival(data.ticket.ticketNumber, data.waitingCount, kind);
       playChime();
     });
 
     function showArrival(ticketNumber, waitingCount, kind) {
       const t = document.getElementById('arrivalToast');
-      t.innerText = '🎫 ' + (kind || '') + ticketNumber + '번 ' + (kind ? '' : '고객 ') + '접수 · 대기 ' + waitingCount + '명';
+      t.innerText = '🎫 ' + (kind || '') + ticketNumber + '번 고객 접수 · 대기 ' + waitingCount + '명';
       t.style.display = 'block';
       clearTimeout(showArrival._t);
       showArrival._t = setTimeout(function () { t.style.display = 'none'; }, 4000);
