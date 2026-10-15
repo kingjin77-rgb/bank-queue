@@ -1,0 +1,38 @@
+■ 전주 현장 링크 모음 (법무법인 제이엘 상담 대기 시스템)
+
+[1] 현장알림앱 · 스피커 연결 (관리자 PC 1대, 하루 종일 켜두기)
+https://bank-queue.onrender.com/admin.html
+
+[2] 현장안내앱 · 예약자 확인 + 대리발권 (안내 직원 여러 명 동시 사용)
+https://bank-queue.onrender.com/reserve.html
+
+[3] 상담사앱 (자기 창구 링크만 여세요 · 열면 그 창구로 바로 시작)
+- 법무법인 제이엘 1번 창구: https://bank-queue.onrender.com/teller.html?b=jl&desk=1
+- 법무법인 제이엘 2번 창구: https://bank-queue.onrender.com/teller.html?b=jl&desk=2
+- 법무법인 제이엘 3번 창구: https://bank-queue.onrender.com/teller.html?b=jl&desk=3
+- 법무법인 제이엘 4번 창구: https://bank-queue.onrender.com/teller.html?b=jl&desk=4
+- 법무법인 제이엘 5번 창구: https://bank-queue.onrender.com/teller.html?b=jl&desk=5
+- NH농협은행 1번 창구: https://bank-queue.onrender.com/teller.html?b=nh&desk=1
+- NH농협은행 2번 창구: https://bank-queue.onrender.com/teller.html?b=nh&desk=2
+- 신한은행 1번 창구: https://bank-queue.onrender.com/teller.html?b=shinhan&desk=1
+- 신한은행 2번 창구: https://bank-queue.onrender.com/teller.html?b=shinhan&desk=2
+- 신한은행 3번 창구: https://bank-queue.onrender.com/teller.html?b=shinhan&desk=3
+- 국민은행 1번 창구: https://bank-queue.onrender.com/teller.html?b=kb&desk=1
+- 국민은행 2번 창구: https://bank-queue.onrender.com/teller.html?b=kb&desk=2
+- 푸본현대생명 1번 창구: https://bank-queue.onrender.com/teller.html?b=fubon&desk=1
+
+[4] 전광판 (TV) · 관리자 스피커와 같은 공간이면 소리는 한쪽만 켜기
+https://bank-queue.onrender.com/display.html
+
+[5] 진행요원 (전체 창구 현황 · 대리발권)
+https://bank-queue.onrender.com/operator.html
+
+[6] 고객 QR 주소 (게시물에 인쇄된 주소)
+- 법무법인 제이엘: https://bank-queue.onrender.com/index.html?b=jl
+- NH농협은행: https://bank-queue.onrender.com/index.html?b=nh
+- 신한은행: https://bank-queue.onrender.com/index.html?b=shinhan
+- 국민은행: https://bank-queue.onrender.com/index.html?b=kb
+- 푸본현대생명: https://bank-queue.onrender.com/index.html?b=fubon
+
+[7] 전체 포털 (모든 링크 한 화면)
+https://bank-queue.onrender.com/hub.html
