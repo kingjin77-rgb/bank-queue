@@ -113,7 +113,8 @@ const RESERVE_MAX_ROWS = 3000;
 
 function emptyReservations() {
   // version: 명단을 올리거나 지운 서버 시각. 재시작 후 복구할 때 가장 최근 명단 하나로 모으는 기준.
-  return { listId: '', list: [], marks: {}, cleared: [], version: 0 };
+  // source: 'seed'(서버 고정 명단) | 'upload'(관리자가 올림) | 'restore'(재시작 후 저장본으로 복구)
+  return { listId: '', list: [], marks: {}, cleared: [], version: 0, source: '' };
 }
 
 function pad2(n) { return String(n).padStart(2, '0'); }
@@ -231,7 +232,8 @@ function normalizeReservations() {
     list: norm.list,
     marks,
     cleared: (Array.isArray(R.cleared) ? R.cleared : []).filter(x => typeof x === 'string').slice(-20),
-    version: cleanVersion(R.version)
+    version: cleanVersion(R.version),
+    source: typeof R.source === 'string' ? R.source.slice(0, 10) : ''
   };
 }
 
@@ -263,6 +265,8 @@ function reservePayload() {
     marks,
     cleared: R.cleared,
     version: R.version,
+    source: R.source,
+    seedLocked: reserveSeedLocked,
     gate: reserveGateOn(),
     gateSetting: db.settings.reserveGate !== false,
     earlyMin: RESERVE_EARLY_MIN,
@@ -319,6 +323,7 @@ function mergeReserveSnapshot(snap) {
     R.listId = norm.listId;
     R.marks = keep;
     R.version = v;
+    R.source = 'restore';
     changed = true;
   } else if (snap.listId && snap.listId === R.listId && v > R.version) {
     R.version = v;
@@ -418,6 +423,49 @@ function loadBackup() {
   normalizeDb();
 }
 loadBackup();
+
+// ===== 서버 고정 예약자 명단 =====
+// 저장소가 공개라 명단은 암호화해 data/reserve_seed.enc 에 두고, 비밀번호는 Render 환경변수
+// RESERVE_KEY 에만 둔다(연락처는 가운데를 가린 채로 암호화). 서버가 켜질 때마다 이 명단으로 시작하므로
+// 재배포·재시작해도 명단이 비지 않는다. 관리자가 나중에 새 명단을 올리면 그쪽이 더 최근이라 교체된다.
+const RESERVE_SEED_FILE = path.join(__dirname, 'data', 'reserve_seed.enc');
+let reserveSeedLocked = false;   // 고정 명단 파일은 있는데 비밀번호가 없거나 틀림
+function readReserveSeed() {
+  if (!fs.existsSync(RESERVE_SEED_FILE)) return null;
+  const keyText = String(process.env.RESERVE_KEY || '').trim();
+  try {
+    const key = Buffer.from(keyText, 'base64');
+    if (key.length !== 32) throw new Error('RESERVE_KEY 없음 또는 길이 틀림');
+    const f = JSON.parse(fs.readFileSync(RESERVE_SEED_FILE, 'utf8'));
+    const dec = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(f.iv, 'base64'));
+    dec.setAuthTag(Buffer.from(f.tag, 'base64'));
+    const plain = Buffer.concat([dec.update(Buffer.from(f.data, 'base64')), dec.final()]).toString('utf8');
+    reserveSeedLocked = false;
+    return JSON.parse(plain);
+  } catch (err) {
+    reserveSeedLocked = true;
+    console.log('[예약자 명단] 서버 고정 명단을 열지 못했습니다. Render 환경변수 RESERVE_KEY 를 확인하세요.');
+    return null;
+  }
+}
+function loadReserveSeed() {
+  const seed = readReserveSeed();
+  if (!seed || !Array.isArray(seed.rows)) return;
+  const v = cleanVersion(seed.seedVersion);
+  const R = db.reservations;
+  if (R.version > v) return;                 // 저장 파일에 더 최근 명단(또는 지운 기록)이 있다
+  if (R.version === v && R.list.length) return;
+  const norm = normalizeReservationRows(seed.rows);
+  if (!norm.list.length) return;
+  const keep = {};
+  norm.list.forEach(e => { if (R.marks[e.id]) keep[e.id] = R.marks[e.id]; });
+  R.list = norm.list;
+  R.listId = norm.listId;
+  R.marks = keep;
+  R.version = v;
+  R.source = 'seed';
+}
+loadReserveSeed();
 
 function saveBackup() {
   try {
@@ -997,6 +1045,7 @@ io.on('connection', (socket) => {
     R.listId = norm.listId;
     R.marks = keep;
     R.cleared = R.cleared.filter(x => x !== norm.listId);
+    R.source = 'upload';
     bumpReserveVersion();
     saveBackup();
     io.to('reserve').emit('reserve_state', reservePayload());

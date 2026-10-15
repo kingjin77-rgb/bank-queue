@@ -297,7 +297,7 @@
       const changedList = res.listId !== state.listId;
       state = {
         listId: res.listId || '', list: res.list || [], marks: res.marks || {}, cleared: res.cleared || [],
-        version: res.version || 0, gate: !!res.gate, gateSetting: res.gateSetting !== false, earlyMin: res.earlyMin || 10, slotMin: res.slotMin || 60
+        version: res.version || 0, source: res.source || '', gate: !!res.gate, gateSetting: res.gateSetting !== false, earlyMin: res.earlyMin || 10, slotMin: res.slotMin || 60
       };
       pending = {};
       saveSnapshot();
@@ -353,7 +353,7 @@
       document.getElementById('stDone').innerText = done;
       // 모두 같은 명단을 보는지 확인할 수 있게 명단 기준(인원·올린 시각)을 보여준다.
       document.getElementById('listInfo').innerText = total
-        ? '명단 ' + total + '명' + (state.version ? ' · ' + upTime(state.version) + ' 관리자 화면에서 올림' : '') + ' · 모든 직원 화면 공통'
+        ? '명단 ' + total + '명' + (state.source === 'seed' ? ' · 서버 고정 명단' : (state.version ? ' · ' + upTime(state.version) + ' 관리자 화면에서 올림' : '')) + ' · 모든 직원 화면 공통'
         : '';
       document.getElementById('stAll').innerText = total;
 

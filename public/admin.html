@@ -1091,6 +1091,7 @@
     function rvApply(res) {
       rvState = {
         listId: res.listId || '', list: res.list || [], marks: res.marks || {}, version: res.version || 0,
+        source: res.source || '', seedLocked: !!res.seedLocked,
         gate: !!res.gate, gateSetting: res.gateSetting !== false
       };
       rvSaveSnapshot();
@@ -1124,13 +1125,16 @@
       const done = rvState.list.filter(function (e) { const m = rvState.marks[e.id]; return m && m.on; }).length;
       const auto = rvState.list.filter(function (e) { const m = rvState.marks[e.id]; return m && m.on && m.via === 'qr'; }).length;
       if (!total) {
-        st.style.color = '#fbbf24';
-        st.innerText = '올라간 예약자 명단이 없습니다. 아래에서 엑셀을 골라 올려 주세요. (명단이 없으면 누구나 QR 로 발권)';
+        st.style.color = rvState.seedLocked ? '#f87171' : '#fbbf24';
+        st.innerText = rvState.seedLocked
+          ? '⚠ 서버 고정 명단이 잠겨 있습니다(Render 환경변수 RESERVE_KEY 필요). 지금은 명단이 없어 누구나 QR 로 발권됩니다. 급하면 아래에서 엑셀을 올려 주세요.'
+          : '올라간 예약자 명단이 없습니다. 아래에서 엑셀을 골라 올려 주세요. (명단이 없으면 누구나 QR 로 발권)';
       } else {
         st.style.color = '#22c55e';
-        let up = '';
-        if (rvState.version) up = ' · ' + rvUpTime(rvState.version) + ' 올린 명단';
-        st.innerText = '예약자 ' + total + '명' + up + ' · 도착 확인 ' + done + '명 (QR 자동 ' + auto + ' · 직원 ' + (done - auto) + ')';
+        const src = rvState.source === 'seed' ? '서버 고정 명단'
+          : (rvState.source === 'upload' ? (rvState.version ? rvUpTime(rvState.version) + ' 관리자가 올린 명단' : '관리자가 올린 명단')
+          : (rvState.version ? rvUpTime(rvState.version) + ' 올린 명단' : '명단'));
+        st.innerText = '예약자 ' + total + '명 · ' + src + ' · 도착 확인 ' + done + '명 (QR 자동 ' + auto + ' · 직원 ' + (done - auto) + ')';
       }
       const gt = document.getElementById('gateText');
       const gb = document.getElementById('gateBtn');
