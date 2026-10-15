@@ -41,7 +41,7 @@ const INITIAL_BANKS = {
 
 // 상담처별 기본 창구 수. 현장에서 관리자 콘솔로 늘리고 줄일 수 있다.
 // 배포하면 저장 파일이 사라지므로 상시 운영 창구 수가 바뀌면 이 값도 고친다.
-const INITIAL_DESK_COUNTS = { jl: 5, nh: 2, shinhan: 2, kb: 2, fubon: 1 };
+const INITIAL_DESK_COUNTS = { jl: 5, nh: 2, shinhan: 3, kb: 2, fubon: 1 };
 
 function makeDesks(count) {
   return Array.from({ length: count }, (_, i) => ({
@@ -53,7 +53,8 @@ const INITIAL_SETTINGS = {
   openHour: 9,
   closeHour: 18,
   standardMinutes: 15,
-  repeatCount: 1          // 호출 방송 반복 횟수
+  repeatCount: 1,         // 호출 방송 반복 횟수
+  reserveGate: true       // 예약자 명단이 있으면 제이엘 번호표는 예약 시간대의 예약자만 QR 로 받는다
 };
 
 function clone(v) { return JSON.parse(JSON.stringify(v)); }
@@ -66,7 +67,8 @@ const ROLE_MANIFEST = {
   admin:    { name: '관리자 콘솔', short: '관리자', page: '/admin.html', icon: 'admin', theme: '#0f172a', bg: '#0f172a' },
   operator: { name: '진행요원 패널', short: '진행요원', page: '/operator.html', icon: 'operator', theme: '#0b101b', bg: '#0b101b' },
   board:    { name: '전광판', short: '전광판', page: '/display.html', icon: 'board', theme: '#05080f', bg: '#05080f' },
-  hub:      { name: '현장 포털', short: '포털', page: '/hub.html', icon: 'operator', theme: '#0b101b', bg: '#0b101b' }
+  hub:      { name: '현장 포털', short: '포털', page: '/hub.html', icon: 'operator', theme: '#0b101b', bg: '#0b101b' },
+  reserve:  { name: '예약자 확인', short: '예약자', page: '/reserve.html', icon: 'operator', theme: '#8b0029', bg: '#f2f4f6' }
 };
 
 app.get('/manifest.webmanifest', (req, res) => {
@@ -99,6 +101,237 @@ app.get('/manifest.webmanifest', (req, res) => {
   });
 });
 
+// ===== 예약자 확인 (현장 직원 공유) =====
+// 시간대마다 예약 인원이 정해져 있어 예약자가 우선이다. 제이엘 QR 에서 동·호수를 넣으면
+// 지금이 그 세대의 예약 시간대일 때만 번호표가 나오고, 예약자 화면에 '확인'이 자동으로 찍힌다.
+// 예약이 없거나 시간대가 다르면 현장 직원에게 안내하고, 직원이 대리발권으로 접수한다.
+// 연락처는 가운데를 가린 채로만 보관한다(서버·공유 화면·폰 저장본 어디에도 전체 번호 없음).
+const RESERVE_EARLY_MIN = 10;     // 예약 시각보다 이만큼 먼저 와도 인정
+const RESERVE_SLOT_MIN = 60;      // 예약 시간대 길이 (1시간 단위 예약)
+const RESERVE_EDGE_MIN = 30;      // 하루의 첫 타임은 30분 먼저, 마지막 타임은 끝나고 30분까지 인정
+const RESERVE_MAX_ROWS = 3000;
+
+function emptyReservations() {
+  return { listId: '', list: [], marks: {}, cleared: [] };
+}
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+// 엑셀 숫자 칸(308 / '308.0' / '308동')을 같은 값으로 맞춘다.
+function unitNo(v) {
+  const s = String(v == null ? '' : v).trim().replace(/\.0+$/, '');
+  return s.replace(/\D/g, '').replace(/^0+/, '').slice(0, 8);
+}
+
+function maskPhone(v) {
+  const d = String(v == null ? '' : v).replace(/\D/g, '');
+  if (d.length < 4) return { phone: '', last4: '' };
+  const last4 = d.slice(-4);
+  return { phone: (/^01\d/.test(d) ? d.slice(0, 3) : '***') + '-****-' + last4, last4 };
+}
+
+// '2026년 10월 17일(토) 오후 5시' -> 정렬 키, 화면 표기, 시작 시각(한국 시간)
+// 원본의 '오전 12시'는 일요일 10·11시 다음 시간대라 낮 12시로 본다.
+function parseSlot(v) {
+  const raw = String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, 60);
+  const m = /(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일\s*(?:\(\s*([^)]*)\))?\s*(오전|오후|낮|저녁|밤)?\s*(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분)?/.exec(raw);
+  if (!m) return { raw, key: 'z ' + raw, label: raw || '시간 미기재', startMs: null };
+  const y = +m[1], mo = +m[2], d = +m[3], min = m[7] ? +m[7] : 0;
+  let h = +m[6];
+  if ((m[5] === '오후' || m[5] === '저녁' || m[5] === '밤') && h < 12) h += 12;
+  if (h > 23 || min > 59 || mo < 1 || mo > 12 || d < 1 || d > 31) return { raw, key: 'z ' + raw, label: raw, startMs: null };
+  const startMs = Date.UTC(y, mo - 1, d, h - 9, min);
+  const ampm = h < 12 ? '오전' : (h === 12 ? '낮' : '오후');
+  const label = `${mo}월 ${d}일${m[4] ? '(' + m[4].trim().slice(0, 2) + ')' : ''} ${ampm} ${h > 12 ? h - 12 : h}시${min ? ' ' + min + '분' : ''}`;
+  return { raw, key: `${y}-${pad2(mo)}-${pad2(d)} ${pad2(h)}:${pad2(min)}`, label, startMs };
+}
+
+// 관리자 화면이 올린 행(또는 폰 저장본)을 서버 명단으로 만든다. 완전히 같은 신청은 하나로 합친다.
+function normalizeReservationRows(rows) {
+  const byId = new Map();
+  (Array.isArray(rows) ? rows : []).slice(0, RESERVE_MAX_ROWS).forEach((r) => {
+    if (!r || typeof r !== 'object') return;
+    const dong = unitNo(r.dong);
+    const ho = unitNo(r.ho);
+    if (!dong || !ho) return;
+    const ph = maskPhone(r.phone);
+    const sl = parseSlot(r.slot);
+    const id = crypto.createHash('sha1').update([dong, ho, ph.last4, sl.key].join('|')).digest('hex').slice(0, 12);
+    const dup = Math.min(Math.max(parseInt(r.dup, 10) || 1, 1), 99);
+    const seq = parseInt(r.seq, 10);
+    const cur = byId.get(id);
+    if (cur) { cur.dup = Math.min(cur.dup + dup, 99); return; }
+    byId.set(id, {
+      id, seq: Number.isFinite(seq) ? seq : null, dong, ho,
+      phone: ph.phone, last4: ph.last4,
+      slot: sl.raw, slotKey: sl.key, slotLabel: sl.label, startMs: sl.startMs,
+      dup, others: 0
+    });
+  });
+  const list = Array.from(byId.values()).sort((a, b) =>
+    a.slotKey.localeCompare(b.slotKey) || (+a.dong - +b.dong) || (+a.ho - +b.ho));
+  const perUnit = {};
+  list.forEach(e => { const k = e.dong + '-' + e.ho; perUnit[k] = (perUnit[k] || 0) + 1; });
+  // 예약 인정 시간: 각 타임 시작 10분 전 ~ 끝. 그날 첫 타임은 30분 전부터, 마지막 타임은 끝나고 30분까지.
+  const days = {};
+  list.forEach(e => {
+    if (e.startMs == null) return;
+    const d = e.slotKey.slice(0, 10);
+    days[d] = days[d] || { first: e.startMs, last: e.startMs };
+    days[d].first = Math.min(days[d].first, e.startMs);
+    days[d].last = Math.max(days[d].last, e.startMs);
+  });
+  list.forEach(e => {
+    if (e.startMs == null) { e.winStart = null; e.winEnd = null; return; }
+    const d = days[e.slotKey.slice(0, 10)];
+    e.winStart = e.startMs - (e.startMs === d.first ? RESERVE_EDGE_MIN : RESERVE_EARLY_MIN) * 60000;
+    e.winEnd = e.startMs + (RESERVE_SLOT_MIN + (e.startMs === d.last ? RESERVE_EDGE_MIN : 0)) * 60000;
+  });
+  list.forEach(e => { e.others = perUnit[e.dong + '-' + e.ho] - 1; });
+  const listId = list.length
+    ? crypto.createHash('sha1').update(list.map(e => e.id).sort().join(',')).digest('hex').slice(0, 16)
+    : '';
+  return { list, listId };
+}
+
+function cleanMark(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const at = Number(raw.at);
+  if (!Number.isFinite(at) || at <= 0 || at > Date.now() + 60000) return null;
+  const ticket = parseInt(raw.ticket, 10);
+  return {
+    on: raw.on === true,
+    at,
+    by: safeText(raw.by, 20, ''),
+    via: raw.via === 'qr' ? 'qr' : 'staff',
+    ticket: Number.isFinite(ticket) && ticket > 0 ? ticket : null
+  };
+}
+
+function normalizeReservations() {
+  const R = db.reservations && typeof db.reservations === 'object' ? db.reservations : emptyReservations();
+  const norm = normalizeReservationRows(Array.isArray(R.list) ? R.list : []);
+  const marks = {};
+  const ids = new Set(norm.list.map(e => e.id));
+  Object.keys(R.marks || {}).forEach((id) => {
+    if (!ids.has(id)) return;
+    const m = cleanMark(R.marks[id]);
+    if (!m) return;
+    const dev = safeDeviceId(R.marks[id].dev);
+    if (dev) m.dev = dev;
+    marks[id] = m;
+  });
+  db.reservations = {
+    listId: norm.listId,
+    list: norm.list,
+    marks,
+    cleared: (Array.isArray(R.cleared) ? R.cleared : []).filter(x => typeof x === 'string').slice(-20)
+  };
+}
+
+function reserveGateOn() {
+  return db.settings.reserveGate !== false && db.reservations.list.length > 0;
+}
+
+// 폰에 보내는 표시 정보에는 어느 폰이 받았는지(deviceId)를 넣지 않는다.
+function publicMark(m) {
+  if (!m) return null;
+  return { on: m.on, at: m.at, by: m.by, via: m.via, ticket: m.ticket };
+}
+
+function reservePayload() {
+  const R = db.reservations;
+  const marks = {};
+  Object.keys(R.marks).forEach(id => { marks[id] = publicMark(R.marks[id]); });
+  return {
+    listId: R.listId,
+    list: R.list,
+    marks,
+    cleared: R.cleared,
+    gate: reserveGateOn(),
+    gateSetting: db.settings.reserveGate !== false,
+    earlyMin: RESERVE_EARLY_MIN,
+    slotMin: RESERVE_SLOT_MIN,
+    serverTime: Date.now()
+  };
+}
+
+function setReserveMark(id, fields) {
+  const R = db.reservations;
+  const prev = R.marks[id];
+  const at = Math.max(Date.now(), prev ? prev.at + 1 : 0);
+  const m = {
+    on: fields.on === true,
+    at,
+    by: safeText(fields.by, 20, ''),
+    via: fields.via === 'qr' ? 'qr' : 'staff',
+    ticket: fields.on && fields.ticket ? fields.ticket : null
+  };
+  if (fields.on && fields.dev) m.dev = fields.dev;
+  R.marks[id] = m;
+  io.to('reserve').emit('reserve_mark', { listId: R.listId, id, mark: publicMark(m) });
+  saveBackup();
+  return m;
+}
+
+// 서버가 비어 있으면(재배포·절전 후 재기동) 폰 저장본으로 명단을 되살리고,
+// 같은 명단이면 표시를 항목별 최신 시각 기준으로 합친다. 바뀐 게 있으면 true.
+function mergeReserveSnapshot(snap) {
+  if (!snap || typeof snap !== 'object' || typeof snap.listId !== 'string' || !snap.listId) return false;
+  const R = db.reservations;
+  if (R.cleared.includes(snap.listId)) return false;
+  let changed = false;
+  if (!R.list.length) {
+    const norm = normalizeReservationRows(Array.isArray(snap.list) ? snap.list : []);
+    if (!norm.list.length || norm.listId !== snap.listId) return false;
+    R.list = norm.list;
+    R.listId = norm.listId;
+    R.marks = {};
+    changed = true;
+  }
+  if (snap.listId !== R.listId || !snap.marks || typeof snap.marks !== 'object') return changed;
+  const ids = new Set(R.list.map(e => e.id));
+  Object.keys(snap.marks).slice(0, RESERVE_MAX_ROWS).forEach((id) => {
+    if (!ids.has(id)) return;
+    const m = cleanMark(snap.marks[id]);
+    if (!m) return;
+    const cur = R.marks[id];
+    if (!cur || m.at > cur.at) { R.marks[id] = m; changed = true; }
+  });
+  return changed;
+}
+
+// 동·호수로 지금 시간대의 예약을 찾는다.
+function checkReservation(dongIn, hoIn, deviceId) {
+  const R = db.reservations;
+  const dong = unitNo(dongIn);
+  const ho = unitNo(hoIn);
+  if (!dong || !ho) return { ok: false, reason: 'input' };
+  const mine = R.list.filter(e => e.dong === dong && e.ho === ho);
+  if (!mine.length) return { ok: false, reason: 'none' };
+  // 이 폰이 이미 이 세대 예약으로 번호를 받았으면(부재 후 다시 받기 등) 그대로 인정
+  const bound = mine.find(e => { const m = R.marks[e.id]; return m && m.on && m.dev === deviceId; });
+  if (bound) return { ok: true, entry: bound };
+  const now = Date.now();
+  const inSlot = mine.filter(e => e.winStart != null && now >= e.winStart && now < e.winEnd);
+  if (!inSlot.length) return { ok: false, reason: 'time', slots: mine.map(e => e.slotLabel) };
+  // 다른 폰이 이미 이 예약으로 번호를 받았으면 같은 예약으로 또 받을 수 없다.
+  const free = inSlot.find(e => { const m = R.marks[e.id]; return !(m && m.on && m.dev && m.dev !== deviceId); });
+  if (!free) return { ok: false, reason: 'used', slots: inSlot.map(e => e.slotLabel) };
+  return { ok: true, entry: free };
+}
+
+// 동·호수를 마구 넣어 보는 것을 막는다 (폰마다 1분에 8번까지)
+const reserveTries = new Map();
+function reserveTooFast(deviceId) {
+  const now = Date.now();
+  const list = (reserveTries.get(deviceId) || []).filter(t => now - t < 60000);
+  list.push(now);
+  reserveTries.set(deviceId, list);
+  if (reserveTries.size > 5000) reserveTries.clear();
+  return list.length > 8;
+}
+
 // 기본값은 앱 폴더라 재배포하면 사라진다. Render 에 영구 디스크를 붙이고 DATA_DIR 을
 // 그 경로(예: /data)로 지정하면 재배포·재기동에도 저장 파일이 그대로 남는다.
 const DATA_DIR = process.env.DATA_DIR || __dirname;
@@ -114,7 +347,8 @@ let db = {
   ticketSequence: {},
   completedLogs: [],
   passedLogs: [],
-  settings: { ...INITIAL_SETTINGS }
+  settings: { ...INITIAL_SETTINGS },
+  reservations: emptyReservations()
 };
 
 // 등록된 상담처마다 대기열/창구/번호가 있게 하고, 지난 현장의 상담처(예: 우리은행) 자료는 지운다.
@@ -136,6 +370,7 @@ function normalizeDb() {
   db.completedLogs = db.completedLogs.filter(l => l && INITIAL_BANKS[l.bank]);
   db.passedLogs = db.passedLogs.filter(l => l && INITIAL_BANKS[l.bank]);
   db.settings = { ...INITIAL_SETTINGS, ...(db.settings || {}) };
+  normalizeReservations();
 }
 
 function loadBackup() {
@@ -353,6 +588,8 @@ function restoreCustomer(raw, bank) {
     status: raw.status === 'called' ? 'called' : 'waiting',
     createdAt: safeTime(raw.createdAt)
   };
+  if (raw.walkin === true) customer.walkin = true;
+  else if (raw.reserved === true) customer.reserved = true;
 
   const desk = parseInt(raw.desk, 10);
   if (Number.isFinite(desk) && desk > 0 && desk <= 50) {
@@ -520,7 +757,7 @@ function broadcastBank(bank) {
   broadcastAll();
 }
 
-function createTicket(b, deviceId, name, phone) {
+function createTicket(b, deviceId, name, phone, opts) {
   if (db.ticketSequence[b] == null) db.ticketSequence[b] = 0;
   if (!db.queues[b]) db.queues[b] = [];
   db.ticketSequence[b] += 1;
@@ -536,7 +773,13 @@ function createTicket(b, deviceId, name, phone) {
     status: 'waiting',
     createdAt: new Date().toISOString()
   };
-  db.queues[b].push(ticket);
+  if (opts && opts.walkin) ticket.walkin = true;
+  else if (opts && opts.reserved) ticket.reserved = true;
+  // 시간예약자 우선: 예약자 번호표는 기다리는 현장 접수 손님보다 앞에 선다.
+  // 현장 접수가 없으면 지금처럼 맨 뒤에 붙는다.
+  const firstWalkin = ticket.reserved ? db.queues[b].findIndex(c => c.walkin && c.status === 'waiting') : -1;
+  if (firstWalkin >= 0) db.queues[b].splice(firstWalkin, 0, ticket);
+  else db.queues[b].push(ticket);
 
   // 상담사 앱 접수 알림용 (자기 기관만 골라 쓰도록 bank 를 함께 보낸다)
   io.emit('ticket_issued', {
@@ -602,7 +845,12 @@ io.on('connection', (socket) => {
 
     if (p.proxy) {
       if (restoring()) return ack({ success: false, status: 'wait', message: '서버 복구 중입니다. 잠시 후 다시 눌러 주세요.' });
-      const t = createTicket(b, '', p.name || '대리발권', p.phone);
+      // 제이엘 대리발권은 '예약자'(우선)와 '현장접수'(예약자 다음)로 나눠 발권한다.
+      const jlKind = b === JL && reserveGateOn();
+      const t = createTicket(b, '', p.name || '대리발권', p.phone, {
+        walkin: jlKind && p.walkin === true,
+        reserved: jlKind && p.walkin !== true
+      });
       return ack({ success: true, status: 'ticket', ticket: t });
     }
 
@@ -653,8 +901,87 @@ io.on('connection', (socket) => {
     // 화면이 열려 있던 손님 폰들이 한꺼번에 새 번호를 뽑아 대기열이 유령 번호로 차는 것을 막는다.
     if (p.checkOnly) return ack({ success: false, status: 'gone' });
 
+    // 시간예약자 우선: 예약자 명단이 올라와 있으면 제이엘 번호표는 지금 예약 시간대의 예약자만 받는다.
+    // 예약이 없거나 시간대가 다르면 현장 직원 안내(대리발권으로 현장 접수).
+    if (b === JL && reserveGateOn()) {
+      // 현장 접수: 예약이 없는 손님이 버튼을 누르면 시간과 관계없이 발권(예약자 다음 순서로 호출)
+      if (p.walkin === true) {
+        const t = createTicket(b, deviceId, '현장접수', p.phone, { walkin: true });
+        return ack({ success: true, status: 'ticket', ticket: t, jlProof: jlId });
+      }
+      const r = p.reserve && typeof p.reserve === 'object' ? p.reserve : null;
+      if (!r) return ack({ success: false, status: 'reserve_required' });
+      if (reserveTooFast(deviceId)) return ack({ success: false, status: 'reserve_denied', reason: 'slow' });
+      const v = checkReservation(r.dong, r.ho, deviceId);
+      if (!v.ok) return ack({ success: false, status: 'reserve_denied', reason: v.reason, slots: v.slots || [] });
+      const t = createTicket(b, deviceId, p.name, p.phone, { reserved: true });
+      setReserveMark(v.entry.id, { on: true, by: 'QR 자동', via: 'qr', ticket: t.ticketNumber, dev: deviceId });
+      return ack({
+        success: true, status: 'ticket', ticket: t, jlProof: jlId,
+        reserve: { dong: v.entry.dong, ho: v.entry.ho, slotLabel: v.entry.slotLabel }
+      });
+    }
+
     const t = createTicket(b, deviceId, p.name, p.phone);
     return ack({ success: true, status: 'ticket', ticket: t, jlProof: jlId });
+  });
+
+  // ===== 예약자 확인 화면 / 관리자 명단 =====
+  // 접속하면 폰 저장본을 보내 서버가 비어 있을 때 복구하고, 최신 상태를 받아 간다.
+  socket.on('reserve_hello', (snap, callback) => {
+    socket.join('reserve');
+    let changed = false;
+    try { changed = mergeReserveSnapshot(snap); } catch (err) { changed = false; }
+    if (changed) {
+      saveBackup();
+      socket.to('reserve').emit('reserve_state', reservePayload());
+    }
+    if (typeof callback === 'function') callback(reservePayload());
+  });
+
+  socket.on('reserve_mark', (payload, callback) => {
+    const ack = typeof callback === 'function' ? callback : () => {};
+    const p = payload || {};
+    const R = db.reservations;
+    if (typeof p.id !== 'string' || !R.list.some(e => e.id === p.id)) return ack({ ok: false, reason: 'not_found' });
+    if (p.listId && p.listId !== R.listId) return ack({ ok: false, reason: 'list_changed' });
+    const m = setReserveMark(p.id, { on: p.on === true, by: p.by, via: 'staff' });
+    ack({ ok: true, id: p.id, mark: publicMark(m) });
+  });
+
+  socket.on('reserve_upload', (payload, callback) => {
+    const ack = typeof callback === 'function' ? callback : () => {};
+    const rows = payload && Array.isArray(payload.rows) ? payload.rows : [];
+    const norm = normalizeReservationRows(rows);
+    if (!norm.list.length) return ack({ ok: false, reason: 'empty' });
+    const R = db.reservations;
+    // 다시 올려도 이미 표시한 사람은 그대로 둔다.
+    const keep = {};
+    norm.list.forEach(e => { if (R.marks[e.id]) keep[e.id] = R.marks[e.id]; });
+    R.list = norm.list;
+    R.listId = norm.listId;
+    R.marks = keep;
+    R.cleared = R.cleared.filter(x => x !== norm.listId);
+    saveBackup();
+    io.to('reserve').emit('reserve_state', reservePayload());
+    broadcastAll();
+    ack({
+      ok: true, count: norm.list.length, rows: rows.length,
+      slots: Array.from(new Set(norm.list.map(e => e.slotKey))).length,
+      kept: Object.keys(keep).length
+    });
+  });
+
+  socket.on('reserve_clear', (payload, callback) => {
+    const R = db.reservations;
+    if (R.listId) R.cleared = R.cleared.concat([R.listId]).slice(-20);
+    R.list = [];
+    R.listId = '';
+    R.marks = {};
+    saveBackup();
+    io.to('reserve').emit('reserve_state', reservePayload());
+    broadcastAll();
+    if (typeof callback === 'function') callback({ ok: true });
   });
 
   socket.on('call_customer', (payload) => {
@@ -673,6 +1000,10 @@ io.on('connection', (socket) => {
       if (isHeldAtJl(b, target)) {
         return socket.emit('call_refused', { bank: b, message: `${target.ticketNumber}번 손님은 지금 법무법인 제이엘 상담 중입니다. 제이엘 상담이 끝나면 호출할 수 있습니다.` });
       }
+    } else if (p.kind === 'walkin') {
+      // 제이엘 상담사가 상황에 따라 현장 접수 손님을 먼저 부른다.
+      target = (db.queues[b] || []).find(c => c.status === 'waiting' && c.walkin) || null;
+      if (!target) return socket.emit('call_refused', { bank: b, message: '기다리는 현장 접수 고객이 없습니다.' });
     } else {
       target = pickNext(b);
       if (!target) {
@@ -990,10 +1321,12 @@ io.on('connection', (socket) => {
       const h = parseInt(patch.closeHour, 10);
       if (!isNaN(h) && h >= 0 && h <= 23) next.closeHour = h;
     }
+    if (patch && typeof patch.reserveGate === 'boolean') next.reserveGate = patch.reserveGate;
     // 종료 시각이 시작보다 빠르면 설정을 받아들이지 않는다.
     if (next.closeHour < next.openHour) return;
     db.settings = next;
     broadcastEverywhere();
+    io.to('reserve').emit('reserve_state', reservePayload());
   });
 
   // 마감 전에도 언제든 중간 보고서 조회

@@ -122,10 +122,33 @@
     .setting-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
     .setting-value { font-size: 34px; font-weight: 900; color: var(--success); min-width: 92px; text-align: center; }
 
-    /* 대리 발권 */
-    .proxy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-    .proxy-btn { min-height: 76px; border: none; border-radius: 18px; font-size: 19px; font-weight: 900; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    /* 대리 발권 - 현장에서 가장 자주 쓰므로 맨 위에 크게 */
+    .proxy-card { border: 3px solid #8b0029; }
+    .proxy-card h2 { font-size: 24px; }
+    .proxy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+    .proxy-btn { min-height: 86px; border: none; border-radius: 18px; font-size: 21px; font-weight: 900; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.25; padding: 8px; }
+    .proxy-btn small { font-size: 14px; font-weight: 800; opacity: 0.9; }
     .proxy-btn:active { transform: scale(0.98); }
+    .proxy-btn:disabled { opacity: 0.5; }
+    .proxy-fab { position: fixed; right: 18px; bottom: 18px; z-index: 900; background: #8b0029; color: #fff; border: 3px solid #fff; border-radius: 999px; padding: 18px 26px; font-size: 20px; font-weight: 900; box-shadow: 0 10px 30px rgba(0,0,0,0.45); cursor: pointer; }
+    .proxy-result { position: fixed; inset: 0; z-index: 1000; background: rgba(2,6,23,0.82); display: none; align-items: center; justify-content: center; padding: 16px; }
+    .proxy-result.show { display: flex; }
+    .pr-box { background: #fff; color: #191f28; border-radius: 30px; width: 100%; max-width: 460px; padding: 28px 24px; text-align: center; border-top: 14px solid #8b0029; }
+    .pr-bank { font-size: 24px; font-weight: 900; }
+    .pr-kind { display: inline-block; margin-top: 8px; font-size: 15px; font-weight: 900; padding: 6px 12px; border-radius: 10px; background: #f1f3f5; color: #495057; }
+    .pr-num { font-size: 120px; font-weight: 900; line-height: 1; margin: 14px 0 4px; letter-spacing: -4px; }
+    .pr-desc { font-size: 17px; font-weight: 800; color: #4e5968; line-height: 1.5; margin-top: 10px; }
+    .pr-close { margin-top: 20px; width: 100%; min-height: 64px; border: none; border-radius: 18px; background: #191f28; color: #fff; font-size: 20px; font-weight: 900; cursor: pointer; }
+
+    /* 예약자 명단 */
+    .rv-status { font-size: 16px; font-weight: 900; color: var(--success); margin-bottom: 12px; }
+    .rv-preview { background: #0b1120; border: 1px solid var(--border); border-radius: 16px; padding: 14px; font-size: 14px; color: #cbd5e1; margin-top: 12px; display: none; line-height: 1.6; }
+    .rv-preview table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+    .rv-preview td, .rv-preview th { border-bottom: 1px solid var(--border); padding: 6px; text-align: left; }
+    .rv-file { display: block; width: 100%; background: #0b1120; border: 2px dashed var(--border); color: #fff; border-radius: 16px; padding: 18px; font-size: 16px; font-weight: 800; cursor: pointer; }
+    .gate-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; background: #0b1120; border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; margin-top: 14px; }
+    .gate-row .g-text { font-size: 15px; font-weight: 800; color: #cbd5e1; line-height: 1.5; }
+    .gate-row b { color: #fff; }
 
     /* 보고서 */
     .report-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
@@ -195,6 +218,40 @@
       </div>
     </div>
 
+    <!-- 대리 발권 (휴대폰이 없거나 QR 을 못 찍으시는 분) -->
+    <div class="card proxy-card" id="proxyCard">
+      <h2>🎫 대리 발권</h2>
+      <div style="font-size: 15px; color: #cbd5e1; margin-bottom: 14px; line-height: 1.6;">
+        휴대폰이 없거나 QR 을 못 찍으시는 분께 대신 번호표를 뽑아드립니다. 누르면 번호가 크게 뜹니다.<br>
+        <b style="color:#fca5a5;">제이엘</b>: 예약 시간에 오신 예약자는 '예약자', 그 외는 '현장접수'(예약 고객이 우선 호출) ·
+        <b style="color:#fca5a5;">은행</b>: 제이엘 상담을 마친 분께만 발권하세요.
+      </div>
+      <div class="proxy-grid" id="proxyGrid"></div>
+      <div id="proxyLog" style="font-size: 15px; font-weight: 800; color: #22c55e; margin-top: 12px; min-height: 20px;"></div>
+    </div>
+
+    <!-- 예약자 명단 (시간예약자 우선) -->
+    <div class="card" id="reserveCard">
+      <h2>📋 예약자 명단 · 예약자 확인</h2>
+      <div class="rv-status" id="rvStatus">명단 확인 중…</div>
+      <label class="rv-file">📂 예약자 엑셀 파일 고르기 (.xls / .xlsx / .csv)
+        <input type="file" id="rvFile" accept=".xls,.xlsx,.csv" style="display:none;" onchange="onReserveFile(this)">
+      </label>
+      <div class="rv-preview" id="rvPreview"></div>
+      <div class="btn-grid" style="margin-top: 12px;">
+        <button class="btn-act" style="background: var(--success); color: #000;" id="rvUploadBtn" onclick="uploadReserve()" disabled>명단 올리기</button>
+        <button class="btn-act" style="background: var(--primary); color: #000;" onclick="window.open('/reserve.html', '_blank')">예약자 확인 화면 열기</button>
+        <button class="btn-act btn-dark" onclick="clearReserve()">명단 지우기</button>
+      </div>
+      <div class="gate-row">
+        <div class="g-text" id="gateText"></div>
+        <button class="btn-act btn-dark" id="gateBtn" style="min-width: 220px;" onclick="toggleGate()">-</button>
+      </div>
+      <div style="font-size: 13px; color: #94a3b8; margin-top: 10px; line-height: 1.6;">
+        연락처는 가운데 4자리를 가린 채로만 서버에 올라갑니다. 이 PC 에서 '예약자 확인 화면 → 엑셀로 받기' 를 누르면 원본 연락처가 들어간 도착 현황을 받을 수 있습니다.
+      </div>
+    </div>
+
     <!-- 2. 당일 상담 운영시간 -->
     <div class="card">
       <h2>당일 상담 운영시간</h2>
@@ -251,16 +308,6 @@
       <div class="bank-ctrl-grid" id="bankCtrlGrid"></div>
     </div>
 
-    <!-- 대리 발권 (어르신·휴대폰 없는 분) -->
-    <div class="card">
-      <h2>🎫 대리 발권</h2>
-      <div style="font-size: 14px; color: #94a3b8; margin-bottom: 14px;">
-        휴대폰이 없거나 QR 을 못 찍으시는 분을 위해 대신 번호표를 뽑아드립니다.
-      </div>
-      <div class="proxy-grid" id="proxyGrid"></div>
-      <div id="proxyLog" style="font-size: 15px; font-weight: 800; color: #22c55e; margin-top: 12px; min-height: 20px;"></div>
-    </div>
-
     <!-- 4. 은행 추가 및 발권 링크 -->
     <div class="card">
       <h2>신규 은행 추가 & QR 링크</h2>
@@ -292,6 +339,18 @@
         <button class="btn-act btn-dark" onclick="downloadReportCsv()">엑셀(CSV) 저장</button>
       </div>
       <div id="reportArea" style="display: none; margin-top: 16px;"></div>
+    </div>
+
+    <button class="proxy-fab" onclick="document.getElementById('proxyCard').scrollIntoView({ behavior: 'smooth', block: 'start' })">🎫 대리발권</button>
+    <div class="proxy-result" id="proxyResult" onclick="if (event.target === this) closeProxyResult()">
+      <div class="pr-box" id="prBox">
+        <div class="pr-bank" id="prBank">-</div>
+        <span class="pr-kind" id="prKind">대리발권</span>
+        <div class="pr-num" id="prNum">-</div>
+        <div style="font-size: 26px; font-weight: 900;">번</div>
+        <div class="pr-desc">손님께 번호를 알려주세요.<br>전광판과 안내 방송으로 호출됩니다.</div>
+        <button class="pr-close" onclick="closeProxyResult()">닫기</button>
+      </div>
     </div>
 
     <div class="jl-footer" onclick="showJlEasterEgg()" title="심심할 때 눌러보세요">
@@ -503,9 +562,17 @@
       return m ? `${numToKorean(m[0])}번 창구` : String(deskName || '창구');
     }
 
-    // 표준 호출 안내 멘트
-    function callMessage(bankName, ticketNumber, deskName) {
+    // 표준 호출 안내 멘트. 제이엘 시간예약 운영 중에는 예약 고객 / 현장 접수 고객을 구분해 부른다.
+    function callKind(customer) {
+      if (!customer) return '';
+      return customer.walkin ? '현장 접수 고객' : (customer.reserved ? '예약 고객' : '');
+    }
+    function callMessage(bankName, ticketNumber, deskName, kind) {
+      if (kind) return `${bankName}, ${kind} ${numToKorean(ticketNumber)}번, ${deskToKorean(deskName)}로 오십시오.`;
       return `${bankName}, ${numToKorean(ticketNumber)}번 고객님, ${deskToKorean(deskName)}로 오십시오.`;
+    }
+    function esc(v) {
+      return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
     }
 
     // 음성 끊김 방지 큐: 이전 멘트가 끝난 뒤에 다음 멘트를 읽는다 (cancel 사용 안 함)
@@ -578,10 +645,10 @@
     }
 
     // 전체 호출 방송 브로드캐스트
-    function broadcastCall(bankName, ticketNum, deskName, times) {
-      lastCallData = { bankName, ticketNum, deskName };
+    function broadcastCall(bankName, ticketNum, deskName, times, kind) {
+      lastCallData = { bankName, ticketNum, deskName, kind };
       if (!audioUnlocked) return;
-      const msg = callMessage(bankName, ticketNum, deskName);
+      const msg = callMessage(bankName, ticketNum, deskName, kind);
       const n = Math.min(3, Math.max(1, times || repeatCount || 1));
       for (let i = 0; i < n; i++) {
         enqueueSpeech(msg, i === 0); // 첫 회만 차임벨
@@ -593,7 +660,7 @@
       if (!lastCallData) return alert('아직 호출 내역이 없습니다.');
       initAudioContext();
       audioUnlocked = true;
-      enqueueSpeech(callMessage(lastCallData.bankName, lastCallData.ticketNum, lastCallData.deskName), true);
+      enqueueSpeech(callMessage(lastCallData.bankName, lastCallData.ticketNum, lastCallData.deskName, lastCallData.kind), true);
     }
 
     socket.on('connect', () => {
@@ -912,30 +979,258 @@
       });
     }
 
+    // 제이엘은 '예약자'(우선 호출)와 '현장접수'(예약 고객이 우선) 두 가지로 발권한다.
+    let proxySig = '';
     function renderProxy(bankInfo) {
+      const sig = JSON.stringify(Object.keys(bankInfo).map(function (b) { return [b, bankInfo[b].name, bankInfo[b].color]; }));
+      if (sig === proxySig) return;      // 상태가 바뀔 때마다 버튼을 다시 만들지 않는다(누르는 중 사라짐 방지)
+      proxySig = sig;
       const grid = document.getElementById('proxyGrid');
       grid.innerHTML = '';
       Object.keys(bankInfo).forEach(function (b) {
         const info = bankInfo[b];
-        const btn = document.createElement('button');
-        btn.className = 'proxy-btn';
-        btn.style.background = info.color;
-        btn.style.color = info.btnText || '#fff';
-        btn.innerText = info.name;
-        btn.onclick = function () {
-          socket.emit('issue_ticket', { bank: b, name: '대리발권', proxy: true }, function (res) {
-            if (res && res.success) {
-              document.getElementById('proxyLog').innerText =
-                '[발권 완료] ' + res.ticket.bankName + ' ' + res.ticket.ticketNumber + '번 · ' +
-                new Date().toLocaleTimeString('ko-KR');
-            } else {
-              document.getElementById('proxyLog').innerText =
-                '[발권 안 됨] ' + ((res && res.message) || '잠시 후 다시 눌러 주세요.');
-            }
-          });
-        };
-        grid.appendChild(btn);
+        const kinds = b === 'jl'
+          ? [{ walkin: false, sub: '예약자 (예약 시간에 오신 분)' }, { walkin: true, sub: '현장접수 (예약 없음)' }]
+          : [{ walkin: false, sub: '제이엘 상담 마친 분' }];
+        kinds.forEach(function (k) {
+          const btn = document.createElement('button');
+          btn.className = 'proxy-btn';
+          btn.style.background = info.color;
+          btn.style.color = info.btnText || '#fff';
+          btn.innerHTML = '<span>' + info.name + '</span><small>' + k.sub + '</small>';
+          btn.onclick = function () { proxyIssue(b, k.walkin); };
+          grid.appendChild(btn);
+        });
       });
+    }
+
+    // 연타로 번호표가 2장 나가지 않게 1.5초 동안 막는다.
+    let proxyBusyUntil = 0;
+    function proxyIssue(b, walkin) {
+      const now = Date.now();
+      if (now < proxyBusyUntil) return;
+      proxyBusyUntil = now + 1500;
+      const log = document.getElementById('proxyLog');
+      log.style.color = '#94a3b8';
+      log.innerText = '발권 중…';
+      socket.timeout(8000).emit('issue_ticket', { bank: b, name: walkin ? '현장접수' : '대리발권', proxy: true, walkin: walkin }, function (err, res) {
+        if (!err && res && res.success) {
+          log.style.color = '#22c55e';
+          log.innerText = '[발권 완료] ' + res.ticket.bankName + ' ' + res.ticket.ticketNumber + '번' +
+            (res.ticket.walkin ? ' (현장접수)' : '') + ' · ' + new Date().toLocaleTimeString('ko-KR');
+          showProxyResult(res.ticket);
+        } else {
+          log.style.color = '#fca5a5';
+          log.innerText = '[발권 안 됨] ' + ((res && res.message) || '연결을 확인하고 다시 눌러 주세요.');
+        }
+      });
+    }
+    function showProxyResult(t) {
+      const info = (lastState && lastState.bankInfo && lastState.bankInfo[t.bank]) || {};
+      document.getElementById('prBox').style.borderTopColor = info.color || '#8b0029';
+      document.getElementById('prBank').innerText = t.bankName;
+      document.getElementById('prKind').innerText = t.walkin ? '현장접수 · 예약 고객이 우선 호출' : '대리발권';
+      document.getElementById('prNum').innerText = t.ticketNumber;
+      document.getElementById('prNum').style.color = info.color === '#ffbc00' ? '#8a6500' : (info.color || '#191f28');
+      document.getElementById('proxyResult').classList.add('show');
+    }
+    function closeProxyResult() { document.getElementById('proxyResult').classList.remove('show'); }
+
+    /* ===== 예약자 명단 =====
+       엑셀을 이 PC 에서 읽고, 연락처 가운데 4자리를 가린 뒤 서버로 보낸다.
+       원본 연락처는 이 PC 에만 남겨 '엑셀로 받기' 때 채워 넣는다. */
+    const RV_SNAP_KEY = 'jl_reserve_snapshot_v1';
+    const RV_ORIGINAL_KEY = 'jl_reserve_original_v1';
+    let rvState = { listId: '', list: [], marks: {}, gate: false, gateSetting: true };
+    let rvRows = null;          // 올릴 준비가 된 행
+    let rvOriginal = null;      // 원본 연락처 (이 PC 저장용)
+
+    function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+    function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+    function rvUnitNo(v) { return String(v == null ? '' : v).trim().replace(/\.0+$/, '').replace(/\D/g, '').replace(/^0+/, '').slice(0, 8); }
+    function rvSlotRaw(v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, 60); }
+    function rvMask(v) {
+      const d = String(v == null ? '' : v).replace(/\D/g, '');
+      if (d.length < 4) return { phone: '', last4: '' };
+      const last4 = d.slice(-4);
+      return { phone: (/^01\d/.test(d) ? d.slice(0, 3) : '***') + '-****-' + last4, last4: last4 };
+    }
+
+    function rvSaveSnapshot() {
+      if (!rvState.listId) { try { localStorage.removeItem(RV_SNAP_KEY); } catch (e) {} return; }
+      lsSet(RV_SNAP_KEY, JSON.stringify({ listId: rvState.listId, list: rvState.list, marks: rvState.marks, savedAt: Date.now() }));
+    }
+    function rvLoadSnapshot() {
+      try {
+        const s = JSON.parse(lsGet(RV_SNAP_KEY) || 'null');
+        if (s && typeof s.listId === 'string' && Array.isArray(s.list) && s.marks) return s;
+      } catch (e) {}
+      return null;
+    }
+    function rvApply(res) {
+      rvState = {
+        listId: res.listId || '', list: res.list || [], marks: res.marks || {},
+        gate: !!res.gate, gateSetting: res.gateSetting !== false
+      };
+      rvSaveSnapshot();
+      renderReserveStatus();
+    }
+    function rvHello() {
+      socket.timeout(8000).emit('reserve_hello', rvLoadSnapshot(), function (err, res) {
+        if (!err && res) rvApply(res);
+      });
+    }
+    socket.on('connect', rvHello);
+    socket.on('reserve_state', rvApply);
+    socket.on('reserve_mark', function (d) {
+      if (!d || d.listId !== rvState.listId) return;
+      rvState.marks[d.id] = d.mark;
+      rvSaveSnapshot();
+      renderReserveStatus();
+    });
+
+    function renderReserveStatus() {
+      const st = document.getElementById('rvStatus');
+      const total = rvState.list.length;
+      const done = rvState.list.filter(function (e) { const m = rvState.marks[e.id]; return m && m.on; }).length;
+      const auto = rvState.list.filter(function (e) { const m = rvState.marks[e.id]; return m && m.on && m.via === 'qr'; }).length;
+      if (!total) {
+        st.style.color = '#fbbf24';
+        st.innerText = '올라간 예약자 명단이 없습니다. 아래에서 엑셀을 골라 올려 주세요. (명단이 없으면 누구나 QR 로 발권)';
+      } else {
+        st.style.color = '#22c55e';
+        st.innerText = '예약자 ' + total + '명 · 도착 확인 ' + done + '명 (QR 자동 ' + auto + ' · 직원 ' + (done - auto) + ')';
+      }
+      const gt = document.getElementById('gateText');
+      const gb = document.getElementById('gateBtn');
+      if (!rvState.gateSetting) {
+        gt.innerHTML = '<b>QR 예약 확인 발권: 꺼짐</b><br>누구나 QR 로 제이엘 번호표를 받습니다(예약 확인은 예약자 화면에서 직원이 표시).';
+        gb.innerText = '예약 확인 켜기';
+        gb.style.background = '#22c55e'; gb.style.color = '#000';
+      } else {
+        gt.innerHTML = '<b>QR 예약 확인 발권: ' + (total ? '켜짐' : '켜짐 (명단 없음 → 지금은 누구나 발권)') + '</b><br>' +
+          '예약 시간에 동·호수를 넣은 손님은 바로 발권 + 자동 확인, 그 외 손님은 폰에서 \'현장 접수\' 버튼으로 받습니다.';
+        gb.innerText = '예약 확인 끄기 (비상시)';
+        gb.style.background = '#334155'; gb.style.color = '#fff';
+      }
+    }
+    function toggleGate() {
+      const next = !rvState.gateSetting;
+      if (!next && !confirm('예약 확인을 끄면 누구나 QR 로 제이엘 번호표를 받습니다.\n(현장 접수 구분 없이 받은 순서대로 호출)\n끌까요?')) return;
+      socket.emit('admin_set_settings', { reserveGate: next });
+    }
+
+    function loadSheetJs() {
+      return new Promise(function (ok, fail) {
+        if (window.XLSX) return ok(window.XLSX);
+        const sc = document.createElement('script');
+        sc.src = '/vendor/xlsx.full.min.js';
+        sc.onload = function () { window.XLSX ? ok(window.XLSX) : fail(new Error('xlsx')); };
+        sc.onerror = function () { fail(new Error('xlsx')); };
+        document.head.appendChild(sc);
+      });
+    }
+
+    // 머리줄에서 동·호수·연락처·신청 시간 열을 찾는다.
+    function rvFindColumns(table) {
+      for (let r = 0; r < Math.min(table.length, 15); r++) {
+        const head = (table[r] || []).map(function (c) { return String(c == null ? '' : c).replace(/[\s*()（）]/g, ''); });
+        const col = { dong: -1, ho: -1, phone: -1, slot: -1, seq: -1 };
+        head.forEach(function (h, i) {
+          if (!h) return;
+          if (col.phone < 0 && /연락처|전화|휴대폰|핸드폰|휴대전화/.test(h)) { col.phone = i; return; }
+          if (col.ho < 0 && (h === '호' || /호수|호실/.test(h))) { col.ho = i; return; }
+          if (col.dong < 0 && (h === '동' || /^동/.test(h) || /동$/.test(h)) && h.indexOf('호') < 0) { col.dong = i; return; }
+          if (col.slot < 0 && /신청일|일시|시간|참석|예약/.test(h)) { col.slot = i; return; }
+          if (col.seq < 0 && /순번|^no$|^번호$/i.test(h)) { col.seq = i; return; }
+        });
+        if (col.dong >= 0 && col.ho >= 0) return { headRow: r, col: col };
+      }
+      return null;
+    }
+
+    function onReserveFile(input) {
+      const f = input.files && input.files[0];
+      const pv = document.getElementById('rvPreview');
+      rvRows = null; rvOriginal = null;
+      document.getElementById('rvUploadBtn').disabled = true;
+      if (!f) return;
+      pv.style.display = 'block';
+      pv.innerText = '파일을 읽고 있습니다…';
+      loadSheetJs().then(function (XLSX) {
+        return f.arrayBuffer().then(function (buf) {
+          const wb = XLSX.read(buf, { type: 'array' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          return XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+        });
+      }).then(function (table) {
+        const found = rvFindColumns(table);
+        if (!found) { pv.innerHTML = '<b style="color:#fca5a5;">동·호수 열을 찾지 못했습니다.</b><br>첫 줄에 "동", "호수", "연락처", "신청일(시간)" 제목이 있는지 확인해 주세요.'; return; }
+        const c = found.col;
+        const rows = [];
+        const original = {};
+        const keys = {};
+        const slots = {};
+        for (let r = found.headRow + 1; r < table.length; r++) {
+          const row = table[r] || [];
+          const dong = rvUnitNo(row[c.dong]);
+          const ho = rvUnitNo(row[c.ho]);
+          if (!dong || !ho) continue;
+          const rawPhone = c.phone >= 0 ? String(row[c.phone] == null ? '' : row[c.phone]).trim() : '';
+          const m = rvMask(rawPhone);
+          const slot = c.slot >= 0 ? rvSlotRaw(row[c.slot]) : '';
+          rows.push({ seq: c.seq >= 0 ? row[c.seq] : '', dong: dong, ho: ho, phone: m.phone, slot: slot });
+          if (m.last4) original[[dong, ho, m.last4, slot].join('|')] = rawPhone;
+          keys[[dong, ho, m.last4, slot].join('|')] = 1;
+          slots[slot] = (slots[slot] || 0) + 1;
+        }
+        if (!rows.length) { pv.innerHTML = '<b style="color:#fca5a5;">읽을 수 있는 예약자가 없습니다.</b>'; return; }
+        rvRows = rows; rvOriginal = original;
+        const uniq = Object.keys(keys).length;
+        let html = '<b style="color:#fff;">' + esc(f.name) + '</b><br>' +
+          '엑셀 ' + rows.length + '줄 → 예약자 <b style="color:#22c55e;">' + uniq + '명</b>' +
+          (rows.length > uniq ? ' (같은 세대·같은 시간 중복 신청 ' + (rows.length - uniq) + '줄은 하나로 합침)' : '') +
+          ' · 시간대 ' + Object.keys(slots).length + '개<br>' +
+          Object.keys(slots).sort().map(function (k) { return esc(k || '시간 미기재') + ' ' + slots[k] + '줄'; }).join(' · ') +
+          '<table><tr><th>동</th><th>호수</th><th>연락처(가림)</th><th>신청 시간</th></tr>' +
+          rows.slice(0, 5).map(function (r) { return '<tr><td>' + esc(r.dong) + '</td><td>' + esc(r.ho) + '</td><td>' + esc(r.phone) + '</td><td>' + esc(r.slot) + '</td></tr>'; }).join('') +
+          '</table>' + (rows.length > 5 ? '…외 ' + (rows.length - 5) + '줄' : '');
+        pv.innerHTML = html;
+        document.getElementById('rvUploadBtn').disabled = false;
+      }).catch(function () {
+        pv.innerHTML = '<b style="color:#fca5a5;">파일을 읽지 못했습니다.</b> 엑셀(.xls/.xlsx) 또는 CSV 파일인지 확인해 주세요.';
+      });
+    }
+
+    function uploadReserve() {
+      if (!rvRows) return;
+      const btn = document.getElementById('rvUploadBtn');
+      btn.disabled = true;
+      const replacing = rvState.list.length > 0;
+      if (replacing && !confirm('지금 올라간 명단(' + rvState.list.length + '명)을 새 명단으로 바꿉니다.\n이미 확인 표시한 분은 그대로 유지됩니다.\n올릴까요?')) { btn.disabled = false; return; }
+      socket.timeout(15000).emit('reserve_upload', { rows: rvRows }, function (err, res) {
+        if (err || !res || !res.ok) {
+          alert('명단을 올리지 못했습니다. 연결을 확인하고 다시 눌러 주세요.');
+          btn.disabled = false;
+          return;
+        }
+        try {
+          const prev = JSON.parse(lsGet(RV_ORIGINAL_KEY) || '{}') || {};
+          Object.keys(rvOriginal || {}).forEach(function (k) { prev[k] = rvOriginal[k]; });
+          lsSet(RV_ORIGINAL_KEY, JSON.stringify(prev));
+        } catch (e) {}
+        document.getElementById('rvPreview').innerHTML = '<b style="color:#22c55e;">명단을 올렸습니다.</b> 예약자 ' + res.count + '명 · 시간대 ' + res.slots + '개' +
+          (res.kept ? ' · 기존 확인 표시 ' + res.kept + '명 유지' : '');
+        rvRows = null;
+        document.getElementById('rvFile').value = '';
+      });
+    }
+
+    function clearReserve() {
+      if (!rvState.list.length) { alert('지울 명단이 없습니다.'); return; }
+      if (!confirm('예약자 명단과 확인 표시를 모두 지웁니다. 계속할까요?')) return;
+      if (!confirm('정말 지울까요? 모든 직원 화면에서 사라집니다.')) return;
+      socket.emit('reserve_clear', {}, function () {});
     }
 
     function renderLinks(bankInfo) {
@@ -984,7 +1279,7 @@
       if (key === lastAnnounceKey && now - lastAnnounceAt < 3000) return;
       lastAnnounceKey = key;
       lastAnnounceAt = now;
-      broadcastCall(data.bankName, data.customer.ticketNumber, data.deskName, data.repeatCount);
+      broadcastCall(data.bankName, data.customer.ticketNumber, data.deskName, data.repeatCount, callKind(data.customer));
     });
 
     function waitingTotal() {

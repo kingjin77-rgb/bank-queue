@@ -31,7 +31,13 @@
 
     .btn { border: none; border-radius: 20px; font-weight: 900; cursor: pointer; display: flex; align-items: center; justify-content: center; text-align: center; }
     .btn:active { transform: scale(0.97); }
-    .btn-proxy { min-height: 76px; padding: 0 30px; font-size: 21px; background: var(--blue); color: #fff; box-shadow: 0 8px 24px rgba(49,130,246,0.28); }
+    .btn-proxy { min-height: 84px; padding: 0 34px; font-size: 24px; background: #8b0029; color: #fff; border: 3px solid #fff; box-shadow: 0 10px 28px rgba(139,0,41,0.45); }
+    @media (max-width: 640px) {
+      .btn-proxy { position: fixed; left: 14px; right: 14px; bottom: calc(env(safe-area-inset-bottom) + 14px); z-index: 40; }
+      body { padding-bottom: calc(env(safe-area-inset-bottom) + 120px); }
+    }
+    .proxy-btn small { display: block; font-size: 14px; font-weight: 800; opacity: 0.9; }
+    .pr-num { font-size: 110px; font-weight: 900; line-height: 1; margin: 12px 0 2px; letter-spacing: -4px; text-align: center; }
 
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; }
     .bank-card { background: var(--card); border: 1px solid var(--border); border-radius: 28px; padding: 22px; }
@@ -83,17 +89,30 @@
       <span class="tag">🏛️ 법무법인 제이엘 · 현장 진행본부</span>
       <h1>현장 창구 제어 센터</h1>
     </div>
-    <button class="btn btn-proxy" onclick="openProxyModal()">🎫 원터치 대리 발권</button>
+    <span style="display:flex; gap:10px; flex-wrap:wrap;">
+      <a class="btn" href="/reserve.html" style="min-height:84px; padding:0 22px; font-size:18px; background:#fff; color:#8b0029; text-decoration:none;">📋 예약자 확인</a>
+      <button class="btn btn-proxy" onclick="openProxyModal()">🎫 대리발권</button>
+    </span>
   </header>
 
   <main class="grid" id="operatorGrid"></main>
 
   <div class="modal" id="proxyModal">
     <div class="sheet">
-      <h3>어르신 대리 발권</h3>
-      <p>발권할 기관을 누르면 즉시 번호표가 발행됩니다.</p>
-      <div class="proxy-list" id="proxyBankList"></div>
-      <button class="btn btn-close" onclick="closeProxyModal()">닫기</button>
+      <div id="pxPick">
+        <h3>대리발권</h3>
+        <p>누르면 바로 번호표가 나옵니다. 제이엘은 예약 시간에 오신 예약자면 '예약자', 아니면 '현장접수'. 은행은 제이엘 상담을 마친 분께만 발권하세요.</p>
+        <div class="proxy-list" id="proxyBankList"></div>
+        <button class="btn btn-close" onclick="closeProxyModal()">닫기</button>
+      </div>
+      <div id="pxDone" style="display:none; text-align:center;">
+        <h3 id="pxBank">-</h3>
+        <p id="pxKind"></p>
+        <div class="pr-num" id="pxNum">-</div>
+        <div style="font-size: 24px; font-weight: 900;">번</div>
+        <p style="margin-top:10px;">손님께 번호를 알려주세요. 전광판과 안내 방송으로 호출됩니다.</p>
+        <button class="btn btn-close" onclick="closeProxyModal()">확인</button>
+      </div>
     </div>
   </div>
 
@@ -157,7 +176,7 @@
       if (data.serverTime) serverOffsetMs = new Date(data.serverTime).getTime() - Date.now();
       if (data.settings) standardMinutes = data.settings.standardMinutes;
       render();
-      if (document.getElementById('proxyModal').classList.contains('show')) renderProxyList();
+      // 대리발권 창은 열 때 한 번만 그린다(누르는 중에 버튼이 다시 그려지지 않게)
     });
 
     // 경과시간만 1초마다 갱신
@@ -253,29 +272,48 @@
       socket.emit('complete_consultation', { bank: bank, deskNumber: deskNumber, autoCall: false });
     }
 
+    let pxBusyUntil = 0;
     function renderProxyList() {
       const list = document.getElementById('proxyBankList');
       list.innerHTML = '';
       bankList().forEach(function (bank) {
-        const btn = document.createElement('button');
-        btn.className = 'btn proxy-btn';
-        btn.style.background = bank.color;
-        btn.style.color = bank.btnText || '#fff';
-        btn.innerText = bank.name + ' 대리 발권';
-        btn.onclick = function () {
-          socket.emit('issue_ticket', { bank: bank.id, name: '대리발권', proxy: true }, function (res) {
-            if (res && res.success) {
-              toast('[발권 완료] ' + res.ticket.bankName + ' ' + res.ticket.ticketNumber + '번');
-              closeProxyModal();
-            } else {
-              toast('[발권 안 됨] ' + ((res && res.message) || '잠시 후 다시 눌러 주세요.'));
-            }
-          });
-        };
-        list.appendChild(btn);
+        const kinds = bank.id === 'jl'
+          ? [{ walkin: false, sub: '예약자 (예약 시간에 오신 분)' }, { walkin: true, sub: '현장접수 (예약 없음)' }]
+          : [{ walkin: false, sub: '제이엘 상담 마친 분' }];
+        kinds.forEach(function (k) {
+          const btn = document.createElement('button');
+          btn.className = 'btn proxy-btn';
+          btn.style.background = bank.color;
+          btn.style.color = bank.btnText || '#fff';
+          btn.style.flexDirection = 'column';
+          btn.innerHTML = '<span>' + bank.name + '</span><small>' + k.sub + '</small>';
+          btn.onclick = function () { proxyIssue(bank, k.walkin); };
+          list.appendChild(btn);
+        });
+      });
+    }
+    // 연타로 번호표가 2장 나가지 않게 1.5초 동안 막는다.
+    function proxyIssue(bank, walkin) {
+      const now = Date.now();
+      if (now < pxBusyUntil) return;
+      pxBusyUntil = now + 1500;
+      socket.timeout(8000).emit('issue_ticket', { bank: bank.id, name: walkin ? '현장접수' : '대리발권', proxy: true, walkin: walkin }, function (err, res) {
+        if (err || !res || !res.success) {
+          toast('[발권 안 됨] ' + ((res && res.message) || '연결을 확인하고 다시 눌러 주세요.'));
+          return;
+        }
+        const t = res.ticket;
+        document.getElementById('pxBank').innerText = t.bankName;
+        document.getElementById('pxKind').innerText = t.walkin ? '현장접수 · 예약 고객이 우선 호출됩니다' : '대리발권';
+        document.getElementById('pxNum').innerText = t.ticketNumber;
+        document.getElementById('pxNum').style.color = bank.color === '#ffbc00' ? '#ffd43b' : bank.color;
+        document.getElementById('pxPick').style.display = 'none';
+        document.getElementById('pxDone').style.display = 'block';
       });
     }
     function openProxyModal() {
+      document.getElementById('pxPick').style.display = 'block';
+      document.getElementById('pxDone').style.display = 'none';
       renderProxyList();
       document.getElementById('proxyModal').classList.add('show');
     }

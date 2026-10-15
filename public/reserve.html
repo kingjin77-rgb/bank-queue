@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#8b0029">
+  <title>예약자 확인</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    :root {
+      --font-stack: "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+      --brand: #8b0029;
+      --brand-sub: #fbe9ee;
+      --bg: #f2f4f6;
+      --card: #ffffff;
+      --text: #191f28;
+      --text-sub: #6b7684;
+      --border: #e5e8eb;
+      --ok: #0ca678;
+      --ok-sub: #e6fcf5;
+      --qr: #1c7ed6;
+      --warn: #e8590c;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-stack); -webkit-tap-highlight-color: transparent; }
+    body { background: var(--bg); color: var(--text); font-weight: 700; letter-spacing: -0.4px; min-height: 100vh; }
+
+    .top { position: sticky; top: 0; z-index: 10; background: var(--brand); color: #fff; padding: 14px 16px 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+    .top-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .top h1 { font-size: 21px; font-weight: 900; letter-spacing: -0.8px; }
+    .conn { font-size: 12px; font-weight: 900; padding: 5px 10px; border-radius: 10px; background: rgba(255,255,255,0.18); white-space: nowrap; }
+    .conn::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ffd43b; margin-right: 6px; vertical-align: 1px; }
+    .conn.on::before { background: #69db7c; }
+    .stats { display: flex; gap: 8px; margin-top: 10px; font-size: 14px; font-weight: 800; }
+    .stats b { font-size: 20px; font-weight: 900; }
+    .stat { background: rgba(255,255,255,0.14); border-radius: 12px; padding: 6px 10px; }
+    .search { margin-top: 10px; display: flex; gap: 8px; }
+    .search input { flex: 1; min-width: 0; border: none; border-radius: 14px; padding: 13px 14px; font-size: 18px; font-weight: 800; outline: none; }
+    .search button { border: none; border-radius: 14px; padding: 0 14px; font-size: 15px; font-weight: 900; background: rgba(255,255,255,0.2); color: #fff; }
+
+    .bar { padding: 10px 12px 4px; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+    .bar::-webkit-scrollbar { display: none; }
+    .chip { flex: none; border: 2px solid var(--border); background: #fff; border-radius: 14px; padding: 8px 12px; font-size: 14px; font-weight: 900; color: var(--text); text-align: left; line-height: 1.25; }
+    .chip small { display: block; font-size: 12px; font-weight: 800; color: var(--text-sub); }
+    .chip.now { border-color: #ffa94d; }
+    .chip.sel { background: var(--brand); border-color: var(--brand); color: #fff; }
+    .chip.sel small { color: #ffd7e0; }
+    .opts { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 14px 2px; font-size: 14px; font-weight: 800; color: var(--text-sub); }
+    .opts label { display: flex; align-items: center; gap: 6px; }
+    .opts input { width: 20px; height: 20px; accent-color: var(--brand); }
+    .opts button { border: 1.5px solid var(--border); background: #fff; border-radius: 12px; padding: 7px 12px; font-size: 13px; font-weight: 900; color: var(--text); }
+    .gate { margin: 8px 12px 0; border-radius: 14px; padding: 10px 12px; font-size: 13px; font-weight: 800; background: #fff; color: var(--text-sub); }
+    .gate b { color: var(--text); }
+
+    main { padding: 8px 12px calc(env(safe-area-inset-bottom) + 30px); }
+    .slot-head { font-size: 15px; font-weight: 900; color: var(--text-sub); padding: 14px 4px 8px; display: flex; justify-content: space-between; }
+    .row { background: var(--card); border-radius: 18px; padding: 12px 12px 12px 16px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; border: 2px solid transparent; }
+    .row.done { background: var(--ok-sub); border-color: #96f2d7; }
+    .row .info { flex: 1; min-width: 0; }
+    .unit { font-size: 22px; font-weight: 900; letter-spacing: -0.8px; }
+    .sub { font-size: 13px; font-weight: 800; color: var(--text-sub); margin-top: 2px; }
+    .tags { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px; }
+    .tag { font-size: 11px; font-weight: 900; padding: 3px 7px; border-radius: 8px; background: #f1f3f5; color: #495057; }
+    .tag.warn { background: #fff4e6; color: var(--warn); }
+    .who { font-size: 13px; font-weight: 900; color: var(--ok); margin-top: 4px; }
+    .who.qr { color: var(--qr); }
+    .mark { flex: none; width: 92px; min-height: 58px; border: none; border-radius: 16px; font-size: 17px; font-weight: 900; background: var(--brand); color: #fff; }
+    .mark:active { transform: scale(0.96); }
+    .row.done .mark { background: #fff; color: var(--ok); border: 2px solid var(--ok); font-size: 15px; }
+    .mark:disabled { opacity: 0.45; }
+    .empty { text-align: center; color: var(--text-sub); font-size: 15px; font-weight: 800; padding: 40px 10px; line-height: 1.6; }
+
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: flex-end; justify-content: center; z-index: 50; }
+    .modal.show { display: flex; }
+    .sheet { background: #fff; width: 100%; max-width: 480px; border-radius: 24px 24px 0 0; padding: 24px 20px calc(env(safe-area-inset-bottom) + 20px); }
+    .sheet h3 { font-size: 21px; font-weight: 900; }
+    .sheet p { font-size: 15px; color: var(--text-sub); font-weight: 700; margin-top: 6px; line-height: 1.5; }
+    .sheet input { width: 100%; margin-top: 14px; border: 2px solid var(--border); border-radius: 14px; padding: 14px; font-size: 18px; font-weight: 800; outline: none; }
+    .sheet input:focus { border-color: var(--brand); }
+    .sheet .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+    .sheet button { min-height: 56px; border: none; border-radius: 16px; font-size: 17px; font-weight: 900; }
+    .b-cancel { background: #f2f4f6; color: var(--text); }
+    .b-ok { background: var(--brand); color: #fff; }
+    .proxy-open { border: none; border-radius: 12px; padding: 8px 12px; font-size: 15px; font-weight: 900; background: #fff; color: var(--brand); white-space: nowrap; }
+    .px-list { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; max-height: 60vh; overflow-y: auto; }
+    .px-btn { min-height: 64px; border: none; border-radius: 16px; font-size: 19px; font-weight: 900; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.25; }
+    .px-btn small { font-size: 13px; font-weight: 800; opacity: 0.9; }
+    .px-btn:disabled { opacity: 0.5; }
+    .px-result { text-align: center; }
+    .px-num { font-size: 104px; font-weight: 900; line-height: 1; margin: 10px 0 2px; letter-spacing: -4px; }
+    #toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 24px); transform: translateX(-50%); background: #191f28; color: #fff; padding: 12px 18px; border-radius: 14px; font-size: 15px; font-weight: 800; display: none; z-index: 60; max-width: 90vw; text-align: center; }
+  </style>
+  <link rel="stylesheet" href="/type.css">
+  <link rel="manifest" href="/manifest.webmanifest?role=reserve">
+</head>
+<body>
+  <div class="top">
+    <div class="top-row">
+      <h1>예약자 확인</h1>
+      <span style="display:flex; gap:8px; align-items:center;">
+        <button class="proxy-open" onclick="openProxy()">🎫 대리발권</button>
+        <span class="conn" id="conn">연결 중</span>
+      </span>
+    </div>
+    <div class="stats">
+      <span class="stat">확인 <b id="stDone">0</b> / <span id="stAll">0</span>명</span>
+      <span class="stat" id="stView"></span>
+    </div>
+    <div class="search">
+      <input id="q" type="text" inputmode="numeric" placeholder="동·호수 또는 전화 뒷자리" autocomplete="off">
+      <button onclick="clearSearch()">지우기</button>
+    </div>
+  </div>
+
+  <div class="bar" id="slotBar"></div>
+  <div class="opts">
+    <label><input type="checkbox" id="onlyTodo"> 미확인만 보기</label>
+    <span>
+      <button onclick="changeName()" id="nameBtn">표시자: -</button>
+      <button onclick="exportCsv()">엑셀로 받기</button>
+    </span>
+  </div>
+  <div class="gate" id="gateInfo"></div>
+
+  <main id="list"><div class="empty">명단을 불러오고 있습니다.</div></main>
+
+  <div class="modal" id="nameModal">
+    <div class="sheet">
+      <h3>표시하는 분 이름</h3>
+      <p>확인을 누르면 모든 직원 화면에 이름과 시간이 함께 표시됩니다.</p>
+      <input id="nameInput" type="text" maxlength="20" placeholder="예: 김제이">
+      <div class="btns">
+        <button class="b-cancel" onclick="closeModal('nameModal')">취소</button>
+        <button class="b-ok" onclick="saveName()">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="undoModal">
+    <div class="sheet">
+      <h3 id="undoTitle">확인을 취소할까요?</h3>
+      <p id="undoDesc"></p>
+      <div class="btns">
+        <button class="b-cancel" onclick="closeModal('undoModal')">아니요</button>
+        <button class="b-ok" onclick="confirmUndo()">확인 취소</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 대리발권: 휴대폰이 없거나 QR 을 못 찍으시는 분 -->
+  <div class="modal" id="proxyModal">
+    <div class="sheet">
+      <div id="pxPick">
+        <h3>🎫 대리발권</h3>
+        <p>누르면 바로 번호표가 나옵니다. 제이엘은 예약 시간에 오신 예약자면 '예약자', 아니면 '현장접수'. 은행은 제이엘 상담을 마친 분께만 발권하세요.</p>
+        <div class="px-list" id="pxList"></div>
+        <div class="btns" style="grid-template-columns: 1fr;"><button class="b-cancel" onclick="closeModal('proxyModal')">닫기</button></div>
+      </div>
+      <div id="pxDone" class="px-result" style="display:none;">
+        <h3 id="pxBank">-</h3>
+        <p id="pxKind"></p>
+        <div class="px-num" id="pxNum">-</div>
+        <div style="font-size: 22px; font-weight: 900;">번</div>
+        <p>손님께 번호를 알려주세요. 전광판과 안내 방송으로 호출됩니다.</p>
+        <div class="btns" style="grid-template-columns: 1fr;"><button class="b-ok" onclick="closeModal('proxyModal')">확인</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script>
+    // 저장소가 막힌 인앱 브라우저에서도 화면이 죽지 않게 한다.
+    const store = {
+      mem: {},
+      get: function (k) { try { return localStorage.getItem(k); } catch (e) { return this.mem[k] || null; } },
+      set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) { this.mem[k] = v; } },
+      remove: function (k) { try { localStorage.removeItem(k); } catch (e) { delete this.mem[k]; } }
+    };
+    const SNAP_KEY = 'jl_reserve_snapshot_v1';
+    const ORIGINAL_KEY = 'jl_reserve_original_v1';   // 명단을 올린 관리자 PC 에만 있는 원본 연락처
+    const TZ = 'Asia/Seoul';
+
+    let state = { listId: '', list: [], marks: {}, cleared: [], gate: false, gateSetting: true, earlyMin: 10, slotMin: 60 };
+    let selSlot = null;          // 선택한 시간대 (null = 전체)
+    let pending = {};            // 서버 응답을 기다리는 항목
+    let undoId = null;
+    let afterName = null;
+
+    function loadSnapshot() {
+      try {
+        const s = JSON.parse(store.get(SNAP_KEY) || 'null');
+        if (s && typeof s.listId === 'string' && Array.isArray(s.list) && s.marks) return s;
+      } catch (e) {}
+      return null;
+    }
+    function saveSnapshot() {
+      if (!state.listId) { store.remove(SNAP_KEY); return; }
+      store.set(SNAP_KEY, JSON.stringify({ listId: state.listId, list: state.list, marks: state.marks, savedAt: Date.now() }));
+    }
+
+    const snap = loadSnapshot();
+    if (snap) { state.listId = snap.listId; state.list = snap.list; state.marks = snap.marks; }
+
+    function myName() { return store.get('jl_reserve_name') || ''; }
+    function showNameBtn() { document.getElementById('nameBtn').innerText = '표시자: ' + (myName() || '미입력'); }
+
+    function toast(msg) {
+      const t = document.getElementById('toast');
+      t.innerText = msg;
+      t.style.display = 'block';
+      clearTimeout(toast._t);
+      toast._t = setTimeout(function () { t.style.display = 'none'; }, 2400);
+    }
+
+    function hhmm(ms) {
+      try { return new Date(ms).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: TZ }); }
+      catch (e) { const d = new Date(ms); return d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0'); }
+    }
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function isOn(id) { const m = state.marks[id]; return !!(m && m.on); }
+    function shortSlot(label) { return String(label || '').replace(/^\d+월 /, ''); }
+
+    /* ===== 실시간 연결 ===== */
+    const socket = io({ transports: ['websocket', 'polling'] });
+    function setConn(on) {
+      const c = document.getElementById('conn');
+      c.className = 'conn' + (on ? ' on' : '');
+      c.innerText = on ? '실시간 공유 중' : '연결 중…';
+      render();
+    }
+    function hello() {
+      socket.timeout(8000).emit('reserve_hello', loadSnapshot(), function (err, res) {
+        if (err || !res) { setTimeout(function () { if (socket.connected) hello(); }, 3000); return; }
+        applyState(res);
+      });
+    }
+    socket.on('connect', function () { setConn(true); hello(); });
+    socket.on('disconnect', function () { setConn(false); });
+    socket.on('reserve_state', function (res) { applyState(res); });
+    socket.on('reserve_mark', function (d) {
+      if (!d || d.listId !== state.listId || !d.mark) return;
+      state.marks[d.id] = d.mark;
+      delete pending[d.id];
+      saveSnapshot();
+      render();
+    });
+    // 혹시 놓친 변경이 있어도 1분마다 서버 기준으로 다시 맞춘다.
+    setInterval(function () { if (socket.connected) hello(); }, 60000);
+
+    let lastStateSig = '';
+    function applyState(res) {
+      // 바뀐 게 없으면 다시 그리지 않는다(누르는 순간 목록이 다시 그려져 눌림이 사라지는 것 방지).
+      const sig = JSON.stringify([res.listId, res.marks, res.gate, res.gateSetting, (res.list || []).length]);
+      if (sig === lastStateSig && Object.keys(pending).length === 0) return;
+      lastStateSig = sig;
+      const changedList = res.listId !== state.listId;
+      state = {
+        listId: res.listId || '', list: res.list || [], marks: res.marks || {}, cleared: res.cleared || [],
+        gate: !!res.gate, gateSetting: res.gateSetting !== false, earlyMin: res.earlyMin || 10, slotMin: res.slotMin || 60
+      };
+      pending = {};
+      saveSnapshot();
+      if (changedList || selSlot === null && !applyState.once) { selSlot = defaultSlot(); applyState.once = true; }
+      if (selSlot && !state.list.some(function (e) { return e.slotKey === selSlot; })) selSlot = null;
+      render();
+    }
+
+    /* ===== 시간대 ===== */
+    function slotsOf() {
+      const map = {};
+      const order = [];
+      state.list.forEach(function (e) {
+        if (!map[e.slotKey]) { map[e.slotKey] = { key: e.slotKey, label: e.slotLabel, startMs: e.startMs, winStart: e.winStart, winEnd: e.winEnd, all: 0, done: 0 }; order.push(e.slotKey); }
+        map[e.slotKey].all += 1;
+        if (isOn(e.id)) map[e.slotKey].done += 1;
+      });
+      return order.map(function (k) { return map[k]; });
+    }
+    function nowSlotKey() {
+      const now = Date.now();
+      // 시간이 겹치면(앞 타임 끝, 다음 타임 10분 전) 늦게 시작하는 타임을 보여준다.
+      const hits = slotsOf().filter(function (s) { return s.winStart != null && now >= s.winStart && now < s.winEnd; });
+      const hit = hits[hits.length - 1];
+      return hit ? hit.key : null;
+    }
+    // 처음 열면 지금 진행 중인 시간대, 없으면 오늘의 다음 시간대, 없으면 전체
+    function defaultSlot() {
+      const cur = nowSlotKey();
+      if (cur) return cur;
+      const now = Date.now();
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: TZ });
+      const next = slotsOf().find(function (s) {
+        return s.startMs != null && s.startMs > now && new Date(s.startMs).toLocaleDateString('en-CA', { timeZone: TZ }) === today;
+      });
+      return next ? next.key : null;
+    }
+
+    /* ===== 그리기 ===== */
+    function matches(e, q) {
+      const parts = q.split(/\D+/).filter(Boolean);
+      if (!parts.length) return true;
+      if (parts.length >= 2) return e.dong === parts[0] && e.ho === parts[1];
+      const t = parts[0];
+      return e.dong === t || e.ho === t || e.last4 === t || (e.dong + e.ho) === t;
+    }
+
+    function render() {
+      const slots = slotsOf();
+      const nowKey = nowSlotKey();
+      const total = state.list.length;
+      const done = state.list.filter(function (e) { return isOn(e.id); }).length;
+      document.getElementById('stDone').innerText = done;
+      document.getElementById('stAll').innerText = total;
+
+      const bar = document.getElementById('slotBar');
+      let html = '<button class="chip' + (selSlot === null ? ' sel' : '') + '" data-slot="">전체<small>' + done + '/' + total + '</small></button>';
+      slots.forEach(function (s) {
+        html += '<button class="chip' + (selSlot === s.key ? ' sel' : '') + (nowKey === s.key ? ' now' : '') + '" data-slot="' + esc(s.key) + '">' +
+          esc(shortSlot(s.label)) + (nowKey === s.key ? ' · 지금' : '') + '<small>확인 ' + s.done + '/' + s.all + '</small></button>';
+      });
+      bar.innerHTML = html;
+
+      const g = document.getElementById('gateInfo');
+      if (!total) g.style.display = 'none';
+      else {
+        g.style.display = 'block';
+        g.innerHTML = state.gate
+          ? '<b>QR 예약 확인 발권 켜짐</b> · 예약 시간에 QR 로 동·호수를 입력한 손님은 자동으로 확인됩니다. 예약이 없거나 시간이 다른 손님은 손님 폰에서 \'현장 접수\' 버튼으로 받습니다. 다음 호출은 예약 고객이 먼저이고, 상담사가 \'현장\' 번호를 눌러 언제든 부를 수 있습니다.'
+          : '<b>QR 예약 확인 발권 꺼짐</b> · 지금은 누구나 QR 로 번호표를 받습니다(관리자 화면에서 변경).';
+      }
+
+      const q = document.getElementById('q').value.trim();
+      const onlyTodo = document.getElementById('onlyTodo').checked;
+      let rows = state.list.filter(function (e) {
+        if (q) return matches(e, q);              // 검색은 모든 시간대에서 찾는다
+        if (selSlot && e.slotKey !== selSlot) return false;
+        if (onlyTodo && isOn(e.id)) return false;
+        return true;
+      });
+      const view = rows.filter(function (e) { return isOn(e.id); }).length;
+      document.getElementById('stView').innerText = q ? '검색 ' + rows.length + '건' :
+        (selSlot ? shortSlot((slots.find(function (s) { return s.key === selSlot; }) || {}).label) + ' ' + view + '/' + rows.length : '');
+
+      const box = document.getElementById('list');
+      if (!total) {
+        box.innerHTML = '<div class="empty">아직 예약자 명단이 없습니다.<br>관리자 화면에서 명단 엑셀을 올려 주세요.</div>';
+        return;
+      }
+      if (!rows.length) {
+        box.innerHTML = '<div class="empty">' + (q ? '찾는 예약자가 없습니다.<br>동·호수 또는 전화 뒷 4자리로 찾아 주세요.' : '표시할 예약자가 없습니다.') + '</div>';
+        return;
+      }
+      const online = socket.connected;
+      let out = '';
+      let lastSlot = null;
+      rows.forEach(function (e) {
+        if (e.slotKey !== lastSlot) {
+          lastSlot = e.slotKey;
+          const s = slots.find(function (x) { return x.key === e.slotKey; }) || { done: 0, all: 0, label: e.slotLabel };
+          out += '<div class="slot-head"><span>' + esc(s.label) + '</span><span>확인 ' + s.done + '/' + s.all + '</span></div>';
+        }
+        const m = state.marks[e.id];
+        const on = !!(m && m.on);
+        const tags = [];
+        if (e.dup > 1) tags.push('<span class="tag">중복신청 ×' + e.dup + '</span>');
+        if (e.others > 0) tags.push('<span class="tag warn">다른 시간 신청 ' + e.others + '건</span>');
+        let who = '';
+        if (on) {
+          who = m.via === 'qr'
+            ? '<div class="who qr">✔ ' + hhmm(m.at) + ' QR 자동 확인' + (m.ticket ? ' · 제이엘 ' + m.ticket + '번' : '') + '</div>'
+            : '<div class="who">✔ ' + hhmm(m.at) + ' ' + esc(m.by || '직원') + ' 확인</div>';
+        }
+        out += '<div class="row' + (on ? ' done' : '') + '">' +
+          '<div class="info"><div class="unit">' + esc(e.dong) + '동 ' + esc(e.ho) + '호</div>' +
+          '<div class="sub">' + esc(e.phone || '연락처 없음') + ' · ' + esc(shortSlot(e.slotLabel)) + '</div>' +
+          (tags.length ? '<div class="tags">' + tags.join('') + '</div>' : '') + who + '</div>' +
+          '<button class="mark" data-id="' + esc(e.id) + '"' + (!online || pending[e.id] ? ' disabled' : '') + '>' +
+          (pending[e.id] ? '…' : (on ? '✔ 확인됨' : '확인')) + '</button></div>';
+      });
+      box.innerHTML = out;
+    }
+
+    /* ===== 표시 ===== */
+    function send(id, on) {
+      if (!socket.connected) { toast('연결 중입니다. 잠시 후 다시 눌러 주세요.'); return; }
+      pending[id] = true;
+      render();
+      socket.timeout(6000).emit('reserve_mark', { listId: state.listId, id: id, on: on, by: myName() }, function (err, res) {
+        delete pending[id];
+        if (err || !res) { toast('저장되지 않았습니다. 다시 눌러 주세요.'); render(); return; }
+        if (!res.ok) {
+          toast(res.reason === 'list_changed' ? '명단이 새로 올라왔습니다. 다시 확인해 주세요.' : '저장되지 않았습니다.');
+          hello();
+          return;
+        }
+        state.marks[id] = res.mark;
+        saveSnapshot();
+        render();
+      });
+    }
+
+    document.getElementById('list').addEventListener('click', function (ev) {
+      const btn = ev.target.closest('button.mark');
+      if (!btn || btn.disabled) return;
+      const id = btn.getAttribute('data-id');
+      const e = state.list.find(function (x) { return x.id === id; });
+      if (!e) return;
+      if (isOn(id)) {
+        undoId = id;
+        const m = state.marks[id];
+        document.getElementById('undoTitle').innerText = e.dong + '동 ' + e.ho + '호 확인을 취소할까요?';
+        document.getElementById('undoDesc').innerText = m.via === 'qr'
+          ? 'QR 로 번호표(제이엘 ' + (m.ticket || '-') + '번)를 받은 손님입니다. 확인만 취소되고 번호표는 그대로입니다.'
+          : hhmm(m.at) + ' ' + (m.by || '직원') + ' 님이 확인했습니다.';
+        document.getElementById('undoModal').classList.add('show');
+        return;
+      }
+      if (!myName()) { afterName = function () { send(id, true); }; openName(); return; }
+      send(id, true);
+    });
+    function confirmUndo() {
+      closeModal('undoModal');
+      if (undoId) send(undoId, false);
+      undoId = null;
+    }
+
+    document.getElementById('slotBar').addEventListener('click', function (ev) {
+      const c = ev.target.closest('.chip');
+      if (!c) return;
+      selSlot = c.getAttribute('data-slot') || null;
+      document.getElementById('q').value = '';
+      render();
+      window.scrollTo(0, 0);
+    });
+    document.getElementById('q').addEventListener('input', render);
+    document.getElementById('onlyTodo').addEventListener('change', render);
+    function clearSearch() { document.getElementById('q').value = ''; render(); }
+
+    function openName() {
+      document.getElementById('nameInput').value = myName();
+      document.getElementById('nameModal').classList.add('show');
+      setTimeout(function () { document.getElementById('nameInput').focus(); }, 50);
+    }
+    function changeName() { afterName = null; openName(); }
+    function saveName() {
+      const v = document.getElementById('nameInput').value.trim().slice(0, 20);
+      if (!v) { document.getElementById('nameInput').focus(); return; }
+      store.set('jl_reserve_name', v);
+      showNameBtn();
+      closeModal('nameModal');
+      if (afterName) { const f = afterName; afterName = null; f(); }
+    }
+    function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+    /* ===== 엑셀(CSV) 내려받기 =====
+       명단을 올린 관리자 PC 에서 받으면 원본 연락처가, 다른 폰에서는 가린 연락처가 들어간다. */
+    function exportCsv() {
+      if (!state.list.length) { toast('명단이 없습니다.'); return; }
+      let original = {};
+      try { original = JSON.parse(store.get(ORIGINAL_KEY) || '{}') || {}; } catch (e) { original = {}; }
+      const head = ['예약시간', '동', '호수', '연락처', '도착확인', '확인시각', '확인방법', '확인자', '제이엘번호표', '중복신청', '다른시간신청', '원본순번'];
+      const lines = [head];
+      state.list.forEach(function (e) {
+        const m = state.marks[e.id];
+        const on = !!(m && m.on);
+        const full = original[[e.dong, e.ho, e.last4, e.slot].join('|')];
+        lines.push([
+          e.slotLabel, e.dong, e.ho, full || e.phone, on ? 'O' : '',
+          on ? hhmm(m.at) : '', on ? (m.via === 'qr' ? 'QR 자동' : '직원 확인') : '', on ? (m.by || '') : '',
+          on && m.ticket ? m.ticket : '', e.dup > 1 ? e.dup : '', e.others > 0 ? e.others : '', e.seq != null ? e.seq : ''
+        ]);
+      });
+      const csv = '﻿' + lines.map(function (r) {
+        return r.map(function (v) {
+          const s = String(v == null ? '' : v);
+          return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+        }).join(',');
+      }).join('\r\n');
+      const day = new Date().toLocaleDateString('en-CA', { timeZone: TZ });
+      const time = hhmm(Date.now()).replace(':', '');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      a.download = '예약자_도착현황_' + day + '_' + time + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      toast('엑셀 파일을 내려받았습니다.');
+    }
+
+    /* ===== 대리발권 ===== */
+    let bankInfo = null;
+    socket.on('all_state_update', function (d) { if (d && d.bankInfo) bankInfo = d.bankInfo; });
+    socket.on('connect', function () { socket.emit('get_all_state'); });
+    let pxBusyUntil = 0;
+    function openProxy() {
+      document.getElementById('pxPick').style.display = 'block';
+      document.getElementById('pxDone').style.display = 'none';
+      const list = document.getElementById('pxList');
+      list.innerHTML = '';
+      const info = bankInfo || {};
+      if (!Object.keys(info).length) list.innerHTML = '<p>기관 정보를 불러오는 중입니다. 잠시 후 다시 열어 주세요.</p>';
+      Object.keys(info).forEach(function (b) {
+        const kinds = b === 'jl'
+          ? [{ walkin: false, sub: '예약자 (예약 시간에 오신 분)' }, { walkin: true, sub: '현장접수 (예약 없음)' }]
+          : [{ walkin: false, sub: '제이엘 상담 마친 분' }];
+        kinds.forEach(function (k) {
+          const btn = document.createElement('button');
+          btn.className = 'px-btn';
+          btn.style.background = info[b].color;
+          btn.style.color = info[b].btnText || '#fff';
+          btn.innerHTML = '<span>' + esc(info[b].name) + '</span><small>' + k.sub + '</small>';
+          btn.onclick = function () { proxyIssue(b, k.walkin); };
+          list.appendChild(btn);
+        });
+      });
+      document.getElementById('proxyModal').classList.add('show');
+    }
+    // 연타로 번호표가 2장 나가지 않게 1.5초 동안 막는다.
+    function proxyIssue(b, walkin) {
+      const now = Date.now();
+      if (now < pxBusyUntil) return;
+      pxBusyUntil = now + 1500;
+      if (!socket.connected) { toast('연결 중입니다. 잠시 후 다시 눌러 주세요.'); return; }
+      socket.timeout(8000).emit('issue_ticket', { bank: b, name: walkin ? '현장접수' : '대리발권', proxy: true, walkin: walkin }, function (err, res) {
+        if (err || !res || !res.success) { toast((res && res.message) || '발권되지 않았습니다. 다시 눌러 주세요.'); return; }
+        const t = res.ticket;
+        const color = (bankInfo && bankInfo[t.bank] && bankInfo[t.bank].color) || '#8b0029';
+        document.getElementById('pxBank').innerText = t.bankName;
+        document.getElementById('pxKind').innerText = t.walkin ? '현장접수 · 예약 고객이 우선 호출됩니다' : '대리발권';
+        document.getElementById('pxNum').innerText = t.ticketNumber;
+        document.getElementById('pxNum').style.color = color === '#ffbc00' ? '#8a6500' : color;
+        document.getElementById('pxPick').style.display = 'none';
+        document.getElementById('pxDone').style.display = 'block';
+      });
+    }
+
+    showNameBtn();
+    render();
+  </script>
+  <script src="/pwa.js" data-role="reserve"></script>
+</body>
+</html>
