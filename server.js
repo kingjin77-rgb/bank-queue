@@ -106,7 +106,7 @@ app.get('/manifest.webmanifest', (req, res) => {
 // 지금이 그 세대의 예약 시간대일 때만 번호표가 나오고, 예약자 화면에 '확인'이 자동으로 찍힌다.
 // 예약이 없거나 시간대가 다르면 현장 직원에게 안내하고, 직원이 대리발권으로 접수한다.
 // 연락처는 가운데를 가린 채로만 보관한다(서버·공유 화면·폰 저장본 어디에도 전체 번호 없음).
-const RESERVE_EARLY_MIN = 10;     // 예약 시각보다 이만큼 먼저 와도 인정
+const RESERVE_EARLY_MIN = 0;      // 각 타임은 정시부터 다음 타임 전까지 인정 (예: 1시 예약 → 13:00~13:59)
 const RESERVE_SLOT_MIN = 60;      // 예약 시간대 길이 (1시간 단위 예약)
 const RESERVE_EDGE_MIN = 30;      // 하루의 첫 타임은 30분 먼저, 마지막 타임은 끝나고 30분까지 인정
 const RESERVE_MAX_ROWS = 3000;
@@ -177,7 +177,7 @@ function normalizeReservationRows(rows) {
     a.slotKey.localeCompare(b.slotKey) || (+a.dong - +b.dong) || (+a.ho - +b.ho));
   const perUnit = {};
   list.forEach(e => { const k = e.dong + '-' + e.ho; perUnit[k] = (perUnit[k] || 0) + 1; });
-  // 예약 인정 시간: 각 타임 시작 10분 전 ~ 끝. 그날 첫 타임은 30분 전부터, 마지막 타임은 끝나고 30분까지.
+  // 예약 인정 시간: 각 타임 정시 ~ 다음 타임 전. 그날 첫 타임은 30분 전부터, 마지막 타임은 끝나고 30분까지.
   const days = {};
   list.forEach(e => {
     if (e.startMs == null) return;
