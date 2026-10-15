@@ -1,0 +1,61 @@
+📢 [전주 분양전환 상담] 현장 번호표 시스템 안내
+
+■ 일정
+- 10/17(토) 13~20시 · 10/18(일) 10~13시
+- 순서: 법무법인 제이엘 상담 → 은행 상담
+
+■ 손님 흐름 (시간예약자 우선)
+1) 손님이 QR을 찍고 동·호수를 넣으면, 예약 시간대 손님은 바로 번호표가 나옵니다.
+   (예약자 화면에 '확인'이 자동으로 찍힙니다)
+2) 예약이 없거나 시간이 다르면 손님 폰에 '현장 접수' 버튼이 나옵니다. 누르면 번호표가 나옵니다.
+3) 제이엘 상담이 끝나면 손님 폰에서 은행을 고르고 은행 번호표를 받습니다.
+※ 휴대폰이 없는 분은 아래 [2] 현장안내앱에서 '대리발권'을 눌러 주세요.
+
+━━━━━━━━━━━━━━
+■ 내 역할 링크만 여세요
+
+[1] 상담사 (자기 창구 링크만 · 열면 그 창구로 바로 시작)
+▶ 법무법인 제이엘
+ 1번 https://bank-queue.onrender.com/teller.html?b=jl&desk=1
+ 2번 https://bank-queue.onrender.com/teller.html?b=jl&desk=2
+ 3번 https://bank-queue.onrender.com/teller.html?b=jl&desk=3
+ 4번 https://bank-queue.onrender.com/teller.html?b=jl&desk=4
+ 5번 https://bank-queue.onrender.com/teller.html?b=jl&desk=5
+▶ NH농협은행
+ 1번 https://bank-queue.onrender.com/teller.html?b=nh&desk=1
+ 2번 https://bank-queue.onrender.com/teller.html?b=nh&desk=2
+▶ 신한은행
+ 1번 https://bank-queue.onrender.com/teller.html?b=shinhan&desk=1
+ 2번 https://bank-queue.onrender.com/teller.html?b=shinhan&desk=2
+ 3번 https://bank-queue.onrender.com/teller.html?b=shinhan&desk=3
+▶ 국민은행
+ 1번 https://bank-queue.onrender.com/teller.html?b=kb&desk=1
+ 2번 https://bank-queue.onrender.com/teller.html?b=kb&desk=2
+▶ 푸본현대생명
+ 1번 https://bank-queue.onrender.com/teller.html?b=fubon&desk=1
+
+※ 제이엘 상담사: 대기 목록이 '예약 고객 / 현장 접수 고객'으로 나뉩니다.
+  '다음 예약 고객 호출'이 기본이고, 상황에 따라 '현장 접수 고객 호출'이나 번호를 눌러 부르세요.
+
+[2] 현장안내 직원 (예약자 확인 + 대리발권 · 여러 명 동시 사용)
+https://bank-queue.onrender.com/reserve.html
+- 한 명이 '확인'을 누르면 모두의 화면에 바로 뜹니다.
+- 처음 누를 때 이름을 한 번 입력합니다.
+- 오른쪽 위 '🎫 대리발권' 버튼으로 번호표를 대신 뽑아 줍니다.
+
+[3] 현장알림 · 스피커 PC (1대만, 하루 종일 켜두기)
+https://bank-queue.onrender.com/admin.html
+- 열고 '스피커 방송 켜기'를 누르세요.
+
+[4] 전광판 TV
+https://bank-queue.onrender.com/display.html
+- 스피커 PC와 같은 공간이면 소리는 한쪽만 켜세요(두 번 들림 방지).
+
+[5] 진행요원 (전체 창구 현황)
+https://bank-queue.onrender.com/operator.html
+
+━━━━━━━━━━━━━━
+■ 꼭 지켜 주세요
+- 상담사 링크는 자기 창구 것만 여세요. 다른 창구를 열면 호출이 꼬입니다.
+- 화면이 멈춘 것 같으면 새로고침하면 됩니다. 대기 손님은 지워지지 않습니다.
+- 문제가 생기면 바로 관리자에게 말씀해 주세요.
