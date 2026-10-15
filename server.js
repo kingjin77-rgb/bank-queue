@@ -982,7 +982,11 @@ io.on('connection', (socket) => {
 
     // 폰에 번호가 있었는데 서버에서 사라진 경우(번호 초기화·일마감 등)는 새 번호를 자동으로 주지 않는다.
     // 화면이 열려 있던 손님 폰들이 한꺼번에 새 번호를 뽑아 대기열이 유령 번호로 차는 것을 막는다.
-    if (p.checkOnly) return ack({ success: false, status: 'gone' });
+    if (p.checkOnly) {
+      // 시간예약 운영 중 제이엘 화면은 '다시 받기' 대신 바로 동·호수 입력 화면을 보여준다(입력해야 발권되므로 유령 번호 없음).
+      if (b === JL && reserveGateOn()) return ack({ success: false, status: 'reserve_required' });
+      return ack({ success: false, status: 'gone' });
+    }
 
     // 시간예약자 우선: 예약자 명단이 올라와 있으면 제이엘 번호표는 지금 예약 시간대의 예약자만 받는다.
     // 예약이 없거나 시간대가 다르면 현장 직원 안내(대리발권으로 현장 접수).
