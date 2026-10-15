@@ -230,6 +230,24 @@
       <div id="proxyLog" style="font-size: 15px; font-weight: 800; color: #22c55e; margin-top: 12px; min-height: 20px;"></div>
     </div>
 
+    <!-- 번호표 강제종료 -->
+    <div class="card" id="forceCard">
+      <h2>⛔ 번호표 강제종료</h2>
+      <div style="font-size: 14px; color: #cbd5e1; margin-bottom: 12px; line-height: 1.6;">
+        QR 로 번호표를 받고 오지 않는 손님의 번호를 끝냅니다. 제이엘 번호를 '상담 끝남'으로 처리하면 그 손님 폰에 은행 선택 화면이 떠서 은행 상담을 받을 수 있습니다.
+      </div>
+      <div class="input-row">
+        <select id="fcBank" class="input-field" style="max-width: 220px;"></select>
+        <input type="text" id="fcNum" class="input-field" inputmode="numeric" placeholder="번호 (예: 12)" style="max-width: 180px;">
+        <button class="btn-add" onclick="forceLookup()">번호 조회</button>
+      </div>
+      <div id="fcInfo" style="font-size: 16px; font-weight: 800; margin-top: 12px; min-height: 22px;"></div>
+      <div class="btn-grid" id="fcActs" style="display:none; margin-top: 10px;">
+        <button class="btn-act" style="background: var(--success); color: #000;" id="fcDone" onclick="forceEnd('done')">상담 끝남으로 처리</button>
+        <button class="btn-act btn-dark" onclick="forceEnd('cancel')">번호 취소 (안 오심)</button>
+      </div>
+    </div>
+
     <!-- 예약자 명단 (시간예약자 우선) -->
     <div class="card" id="reserveCard">
       <h2>📋 예약자 명단 · 예약자 확인</h2>
@@ -810,6 +828,7 @@
       renderDeskStatus(data);
       renderCtrl(data);
       renderProxy(data.bankInfo);
+      renderForceBanks(data.bankInfo);
       renderLinks(data.bankInfo);
     });
 
@@ -1147,7 +1166,7 @@
     function rvFindColumns(table) {
       for (let r = 0; r < Math.min(table.length, 15); r++) {
         const head = (table[r] || []).map(function (c) { return String(c == null ? '' : c).replace(/[\s*()（）]/g, ''); });
-        const col = { dong: -1, ho: -1, phone: -1, slot: -1, seq: -1 };
+        const col = { dong: -1, ho: -1, phone: -1, slot: -1, seq: -1, note: -1 };
         head.forEach(function (h, i) {
           if (!h) return;
           if (col.phone < 0 && /연락처|전화|휴대폰|핸드폰|휴대전화/.test(h)) { col.phone = i; return; }
@@ -1155,6 +1174,7 @@
           if (col.dong < 0 && (h === '동' || /^동/.test(h) || /동$/.test(h)) && h.indexOf('호') < 0) { col.dong = i; return; }
           if (col.slot < 0 && /신청일|일시|시간|참석|예약/.test(h)) { col.slot = i; return; }
           if (col.seq < 0 && /순번|^no$|^번호$/i.test(h)) { col.seq = i; return; }
+          if (col.note < 0 && /이름|성명|비고|메모|소속/.test(h)) { col.note = i; return; }
         });
         if (col.dong >= 0 && col.ho >= 0) return { headRow: r, col: col };
       }
@@ -1191,7 +1211,8 @@
           const rawPhone = c.phone >= 0 ? String(row[c.phone] == null ? '' : row[c.phone]).trim() : '';
           const m = rvMask(rawPhone);
           const slot = c.slot >= 0 ? rvSlotRaw(row[c.slot]) : '';
-          rows.push({ seq: c.seq >= 0 ? row[c.seq] : '', dong: dong, ho: ho, phone: m.phone, slot: slot });
+          const note = c.note >= 0 ? String(row[c.note] == null ? '' : row[c.note]).trim().slice(0, 20) : '';
+          rows.push({ seq: c.seq >= 0 ? row[c.seq] : '', dong: dong, ho: ho, phone: m.phone, slot: slot, note: note });
           if (m.last4) original[[dong, ho, m.last4, slot].join('|')] = rawPhone;
           keys[[dong, ho, m.last4, slot].join('|')] = 1;
           slots[slot] = (slots[slot] || 0) + 1;
@@ -1243,6 +1264,51 @@
       if (!confirm('예약자 명단과 확인 표시를 모두 지웁니다. 계속할까요?')) return;
       if (!confirm('정말 지울까요? 모든 직원 화면에서 사라집니다.')) return;
       socket.emit('reserve_clear', {}, function () {});
+    }
+
+    /* ===== 번호표 강제종료 ===== */
+    let fcSig = '';
+    function renderForceBanks(bankInfo) {
+      const sig = Object.keys(bankInfo).join(',');
+      if (sig === fcSig) return;
+      fcSig = sig;
+      const sel = document.getElementById('fcBank');
+      sel.innerHTML = Object.keys(bankInfo).map(function (b) { return '<option value="' + b + '">' + esc(bankInfo[b].name) + '</option>'; }).join('');
+    }
+    let fcFound = null;
+    function forceLookup() {
+      const b = document.getElementById('fcBank').value;
+      const n = document.getElementById('fcNum').value.replace(/\D/g, '');
+      const out = document.getElementById('fcInfo');
+      document.getElementById('fcActs').style.display = 'none';
+      fcFound = null;
+      if (!n) { out.innerText = '번호를 넣어 주세요.'; return; }
+      socket.timeout(6000).emit('staff_ticket_lookup', { bank: b, ticketNumber: n }, function (err, res) {
+        if (err || !res) { out.innerText = '조회되지 않았습니다. 다시 눌러 주세요.'; return; }
+        if (!res.ok) { out.innerText = '지금 대기·상담 중인 ' + n + '번이 없습니다(이미 끝났거나 취소된 번호).'; return; }
+        const t = res.ticket;
+        fcFound = t;
+        const st = t.status === 'consulting' ? t.deskName + '에서 상담 중' : (t.status === 'called' ? '호출됨' : '대기 중');
+        out.innerText = t.bankName + ' ' + t.ticketNumber + '번 · ' + st + (t.walkin ? ' · 현장 접수' : (t.reserved ? ' · 예약' : ''));
+        document.getElementById('fcDone').innerText = t.bank === 'jl' ? '제이엘 상담 끝남 처리 (은행 상담 가능)' : '상담 끝남으로 처리';
+        document.getElementById('fcActs').style.display = 'grid';
+      });
+    }
+    function forceEnd(mode) {
+      if (!fcFound) return;
+      const t = fcFound;
+      const msg = mode === 'done'
+        ? t.bankName + ' ' + t.ticketNumber + '번을 상담 끝남으로 처리할까요?' + (t.bank === 'jl' ? '\n손님 폰에 은행 선택 화면이 뜹니다.' : '')
+        : t.bankName + ' ' + t.ticketNumber + '번을 취소할까요?';
+      if (!confirm(msg)) return;
+      socket.timeout(6000).emit('staff_force_end', { bank: t.bank, ticketNumber: t.ticketNumber, mode: mode }, function (err, res) {
+        const out = document.getElementById('fcInfo');
+        document.getElementById('fcActs').style.display = 'none';
+        fcFound = null;
+        if (err || !res || !res.ok) { out.innerText = '처리되지 않았습니다. 번호를 다시 조회해 주세요.'; return; }
+        out.innerText = '✔ ' + t.bankName + ' ' + t.ticketNumber + '번 ' + (mode === 'done' ? '상담 끝남으로 처리했습니다.' : '취소했습니다.');
+        document.getElementById('fcNum').value = '';
+      });
     }
 
     function renderLinks(bankInfo) {
