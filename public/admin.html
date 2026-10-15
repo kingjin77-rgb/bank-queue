@@ -584,11 +584,11 @@
     // 표준 호출 안내 멘트. 제이엘 시간예약 운영 중에는 예약 고객 / 현장 접수 고객을 구분해 부른다.
     function callKind(customer) {
       if (!customer) return '';
-      return customer.walkin ? '현장 접수 고객' : (customer.reserved ? '예약 고객' : '');
+      return customer.walkin ? '현장 접수' : (customer.reserved ? '예약' : '');
     }
     function callMessage(bankName, ticketNumber, deskName, kind) {
-      if (kind) return `${bankName}, ${kind} ${numToKorean(ticketNumber)}번, ${deskToKorean(deskName)}로 오십시오.`;
-      return `${bankName}, ${numToKorean(ticketNumber)}번 고객님, ${deskToKorean(deskName)}로 오십시오.`;
+      // 예: '법무법인 제이엘, 예약 일번 고객님, 일번 창구로 오십시오.' / '신한은행, 일번 고객님, 삼번 창구로 오십시오.'
+      return `${bankName}, ${kind ? kind + ' ' : ''}${numToKorean(ticketNumber)}번 고객님, ${deskToKorean(deskName)}로 오십시오.`;
     }
     function esc(v) {
       return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
