@@ -84,6 +84,12 @@
     .q-chip { background: var(--brand-sub); color: var(--brand); border-radius: 16px; padding: 14px 20px; font-size: 22px; font-weight: 900; white-space: nowrap; }
     .q-chip.first { background: var(--brand); color: var(--brand-text); }
     .q-empty { color: var(--text-sub); font-weight: 800; padding: 14px 0 4px; }
+    .q-group { margin-top: 10px; }
+    .q-group-label { font-size: 14px; font-weight: 900; color: var(--text-sub); }
+    .q-group .queue-list { padding-top: 8px; }
+    .q-chip.walkin { background: #fff4e6; color: #c2410c; }
+    .q-chip.walkin.first { background: #e8590c; color: #fff; }
+    .btn-call-walkin { width: 100%; min-height: 76px; font-size: 24px; background: #fff4e6; color: #c2410c; border: 3px solid #fdba74; margin-top: 12px; }
 
     /* ===== 창구 선택 / 이동 모달 ===== */
     .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.82); z-index: 950; display: none; align-items: center; justify-content: center; padding: 18px; }
@@ -142,7 +148,8 @@
       <div class="metric"><div class="m-label">예상 대기</div><div class="m-value" id="estWait">-</div></div>
     </div>
 
-    <button class="btn btn-call" onclick="callNext()">다음 고객 호출</button>
+    <button class="btn btn-call" id="callBtn" onclick="callNext()">다음 고객 호출</button>
+    <button class="btn btn-call-walkin" id="walkinCallBtn" style="display:none;" onclick="callWalkin()">현장 접수 고객 호출</button>
 
     <div class="btn-row">
       <button class="btn btn-mid btn-recall" onclick="recall()">🔔 재호출</button>
@@ -428,10 +435,22 @@
       document.getElementById('estWait').innerText = waiting.length > 0
         ? Math.ceil(waiting.length / activeDesks) * standardMinutes + '분' : '없음';
 
+      // 제이엘 시간예약 운영: 예약 고객과 현장 접수 고객을 나눠 보여주고 상담사가 골라 부른다.
+      const walkins = waiting.filter(function (c) { return c.walkin; });
+      const splitMode = bank === 'jl' && waiting.some(function (c) { return c.walkin || c.reserved; });
+      const reservedWaiting = waiting.length - walkins.length;
+      document.getElementById('callBtn').innerText = splitMode && reservedWaiting > 0 ? '다음 예약 고객 호출' : '다음 고객 호출';
+      const wBtn = document.getElementById('walkinCallBtn');
+      wBtn.style.display = splitMode && walkins.length > 0 ? 'flex' : 'none';
+      wBtn.innerText = '현장 접수 고객 호출 (' + walkins.length + '명 대기)';
+
       // 대기열 목록
       const qBox = document.getElementById('queueList');
       qBox.innerHTML = '';
-      if (waiting.length === 0) {
+      if (splitMode && waiting.length > 0) {
+        renderGroup(qBox, '예약 고객 ' + reservedWaiting + '명', waiting.filter(function (c) { return !c.walkin; }), '');
+        renderGroup(qBox, '현장 접수 고객 ' + walkins.length + '명 · 상황에 따라 호출', walkins, 'walkin');
+      } else if (waiting.length === 0) {
         qBox.innerHTML = '<div class="q-empty">대기 중인 고객이 없습니다.</div>';
       } else {
         const held = data.heldIds || [];
@@ -446,7 +465,7 @@
           } else {
             chip.className = 'q-chip' + (firstMarked ? '' : ' first');
             firstMarked = true;
-            chip.innerText = c.ticketNumber + '번';
+            chip.innerText = c.ticketNumber + '번' + (c.walkin ? ' · 현장' : '');
             chip.onclick = function () { callSpecific(c.id, c.ticketNumber); };
           }
           qBox.appendChild(chip);
@@ -492,16 +511,36 @@
       updateTimer();
     }
 
+    // 예약/현장 그룹 하나 그리기 (제이엘)
+    function renderGroup(box, label, list, cls) {
+      const g = document.createElement('div');
+      g.className = 'q-group';
+      g.innerHTML = '<div class="q-group-label">' + label + '</div>';
+      const row = document.createElement('div');
+      row.className = 'queue-list';
+      if (!list.length) row.innerHTML = '<div class="q-empty" style="padding-top:2px;">없음</div>';
+      list.forEach(function (c, i) {
+        const chip = document.createElement('div');
+        chip.className = 'q-chip' + (cls ? ' ' + cls : '') + (i === 0 ? ' first' : '');
+        chip.innerText = c.ticketNumber + '번';
+        chip.onclick = function () { callSpecific(c.id, c.ticketNumber); };
+        row.appendChild(chip);
+      });
+      g.appendChild(row);
+      box.appendChild(g);
+    }
+
     // 새 고객 접수 알림 - 내 은행만
     socket.on('ticket_issued', function (data) {
       if (data.bank !== bank) return;
-      showArrival(data.ticket.ticketNumber, data.waitingCount);
+      const kind = data.ticket.walkin ? '현장 접수 고객 ' : (data.ticket.reserved ? '예약 고객 ' : '');
+      showArrival(data.ticket.ticketNumber, data.waitingCount, kind);
       playChime();
     });
 
-    function showArrival(ticketNumber, waitingCount) {
+    function showArrival(ticketNumber, waitingCount, kind) {
       const t = document.getElementById('arrivalToast');
-      t.innerText = '🎫 ' + ticketNumber + '번 고객 접수 · 대기 ' + waitingCount + '명';
+      t.innerText = '🎫 ' + (kind || '') + ticketNumber + '번 ' + (kind ? '' : '고객 ') + '접수 · 대기 ' + waitingCount + '명';
       t.style.display = 'block';
       clearTimeout(showArrival._t);
       showArrival._t = setTimeout(function () { t.style.display = 'none'; }, 4000);
@@ -558,6 +597,15 @@
       throttleCall(function () {
         unlockAudio(false);
         socket.emit('call_customer', { bank: bank, deskNumber: myDesk });
+      });
+    }
+
+    // 제이엘: 현장 접수 손님 중 가장 먼저 온 분을 부른다.
+    function callWalkin() {
+      if (!requireDesk()) return;
+      throttleCall(function () {
+        unlockAudio(false);
+        socket.emit('call_customer', { bank: bank, deskNumber: myDesk, kind: 'walkin' });
       });
     }
 

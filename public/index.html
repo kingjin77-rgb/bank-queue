@@ -103,6 +103,25 @@
     .jl-desc { font-size: 14px; color: #94a3b8; line-height: 1.6; }
 
     .foot { text-align: center; font-size: 12px; color: var(--text-sub); font-weight: 700; padding: 18px 0 calc(env(safe-area-inset-bottom) + 10px); }
+
+    /* ===== 시간예약자 확인 ===== */
+    #reserveSection { display: none; }
+    .rv-badge { display: inline-block; background: #fbe9ee; color: #8b0029; font-size: 13px; font-weight: 900; padding: 7px 14px; border-radius: 12px; }
+    .rv-title { font-size: 25px; font-weight: 900; margin-top: 12px; line-height: 1.3; }
+    .rv-desc { font-size: 15px; color: var(--text-sub); font-weight: 700; margin-top: 8px; line-height: 1.55; }
+    .rv-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 22px; }
+    .rv-field { background: var(--bg); border-radius: 18px; padding: 12px 14px; text-align: left; border: 2px solid transparent; }
+    .rv-field:focus-within { border-color: var(--brand); background: #fff; }
+    .rv-field label { display: block; font-size: 13px; font-weight: 800; color: var(--text-sub); }
+    .rv-field .rv-row { display: flex; align-items: baseline; gap: 6px; }
+    .rv-field input { width: 100%; min-width: 0; border: none; background: transparent; font-size: 32px; font-weight: 900; color: var(--text); outline: none; padding: 4px 0; letter-spacing: -1px; }
+    .rv-field span { font-size: 20px; font-weight: 900; color: var(--text-sub); }
+    .rv-err { color: #e03131; font-size: 15px; font-weight: 800; min-height: 22px; margin-top: 12px; }
+    .rv-staff { background: #fff4e6; color: #c2410c; border: 2px solid #fdba74; border-radius: 20px; padding: 18px 16px; font-size: 20px; font-weight: 900; margin-top: 18px; line-height: 1.4; }
+    .rv-staff small { display: block; font-size: 14px; font-weight: 800; color: #9a3412; margin-top: 6px; }
+    .rv-walkin-btn { background: #fff; color: var(--text); border: 2px solid var(--border); }
+    .t-reserve.walkin { color: #c2410c; background: #fff4e6; }
+    .t-reserve { display: none; margin-top: 10px; font-size: 14px; font-weight: 900; color: #0ca678; background: #e6fcf5; border-radius: 12px; padding: 6px 12px; }
   </style>
   <link rel="stylesheet" href="/type.css">
 </head>
@@ -121,6 +140,7 @@
         <div class="t-label">내 대기번호</div>
         <div class="t-number" id="myNumDisplay">-</div>
         <div class="t-unit">번</div>
+        <div class="t-reserve" id="reserveBadge"></div>
 
         <div class="t-divider"></div>
 
@@ -144,6 +164,38 @@
       <div class="t-hint" style="text-align:center;">
         화면을 꺼두셔도 호출 시 알림음과 진동이 울립니다.<br>
         소리가 안 나면 휴대폰 무음(진동) 모드를 해제해주세요.
+      </div>
+    </section>
+
+    <!-- 시간예약자 확인 (제이엘 번호표 받기 전) -->
+    <section id="reserveSection">
+      <div class="done-card" id="rvAsk">
+        <span class="rv-badge">시간예약자 우선 상담</span>
+        <div class="rv-title">예약하신 동·호수를<br>입력해 주세요</div>
+        <div class="rv-desc">예약 시간에 오신 분께 바로 번호표를 드립니다.</div>
+        <div class="rv-inputs">
+          <div class="rv-field">
+            <label for="rvDong">동</label>
+            <div class="rv-row"><input id="rvDong" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="305"><span>동</span></div>
+          </div>
+          <div class="rv-field">
+            <label for="rvHo">호수</label>
+            <div class="rv-row"><input id="rvHo" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="602"><span>호</span></div>
+          </div>
+        </div>
+        <div class="rv-err" id="rvErr"></div>
+        <button class="btn-big btn-brand" id="rvSubmit" onclick="submitReserve()">예약 확인하고 번호표 받기</button>
+        <button class="btn-big rv-walkin-btn" onclick="takeWalkin()">예약 안 했어요 · 현장 접수</button>
+        <div class="t-hint" style="text-align:center;">현장 접수는 예약 고객이 우선 호출되며,<br>상황에 따라 순서가 바뀔 수 있습니다.</div>
+      </div>
+
+      <div class="done-card" id="rvDenied" style="display:none;">
+        <span class="rv-badge">시간예약자 우선 상담</span>
+        <div class="rv-title" id="rvDeniedTitle">시간예약자 우선입니다</div>
+        <div class="rv-desc" id="rvDeniedDesc"></div>
+        <div class="rv-staff">현장 접수 번호표를 받으실 수 있습니다<small>예약 고객이 우선 호출되며, 상황에 따라 순서가 바뀔 수 있습니다.<br>궁금하신 점은 현장 직원에게 문의해 주세요.</small></div>
+        <button class="btn-big btn-brand" style="margin-top:16px;" id="rvWalkinBtn" onclick="takeWalkin()">현장 접수 번호표 받기</button>
+        <button class="btn-big rv-walkin-btn" onclick="askReserveAgain()">동·호수 다시 입력</button>
       </div>
     </section>
 
@@ -431,7 +483,7 @@
     /* ================= 화면 ================= */
 
     function show(section) {
-      ['ticketSection', 'blockedSection', 'completeSection'].forEach(function (id) {
+      ['ticketSection', 'blockedSection', 'completeSection', 'reserveSection'].forEach(function (id) {
         document.getElementById(id).style.display = (id === section) ? 'block' : 'none';
       });
     }
@@ -538,6 +590,100 @@
       });
     }
 
+    /* ================= 시간예약자 확인 ================= */
+    // 오늘 이 폰에서 예약이 확인된 동·호수 (부재 후 다시 받기·새로고침 때 다시 묻지 않으려고)
+    function readReserveUnit() {
+      try {
+        const u = JSON.parse(store.get('jl_reserve_unit') || 'null');
+        if (u && u.dong && u.ho && u.day === todayKey()) return { dong: u.dong, ho: u.ho, slotLabel: u.slotLabel || '' };
+      } catch (e) {}
+      return null;
+    }
+    function saveReserveUnit(r) {
+      store.set('jl_reserve_unit', JSON.stringify({ dong: r.dong, ho: r.ho, slotLabel: r.slotLabel || '', day: todayKey() }));
+    }
+    function showReserveBadge() {
+      const el = document.getElementById('reserveBadge');
+      el.className = 't-reserve';
+      if (currentBank === JL && myTicket && myTicket.walkin) {
+        el.className = 't-reserve walkin';
+        el.innerText = '현장 접수 · 예약 고객이 우선 호출됩니다';
+        el.style.display = 'inline-block';
+        return;
+      }
+      const u = currentBank === JL ? readReserveUnit() : null;
+      if (!u) { el.style.display = 'none'; return; }
+      el.innerText = '✔ ' + u.dong + '동 ' + u.ho + '호 예약 확인' + (u.slotLabel ? ' · ' + u.slotLabel.replace(/^\d+월 /, '') : '');
+      el.style.display = 'inline-block';
+    }
+    // 예약이 없는 손님: 버튼 한 번으로 현장 접수 번호표 (예약 고객 다음 순서)
+    function takeWalkin() {
+      if (!socket.connected) { toastReserve('연결 중입니다. 잠시 후 다시 눌러 주세요.'); return; }
+      store.remove('jl_reserve_unit');
+      document.querySelectorAll('.rv-walkin-btn, #rvWalkinBtn').forEach(function (b) { b.disabled = true; });
+      setTimeout(function () { document.querySelectorAll('.rv-walkin-btn, #rvWalkinBtn').forEach(function (b) { b.disabled = false; }); }, 3000);
+      resolve({ walkin: true });
+    }
+    function toastReserve(msg) {
+      const ask = document.getElementById('rvAsk').style.display !== 'none';
+      if (ask) document.getElementById('rvErr').innerText = msg;
+      else alert(msg);
+    }
+    function showReserveAsk(err) {
+      show('reserveSection');
+      closeOverlay();
+      document.getElementById('rvAsk').style.display = 'block';
+      document.getElementById('rvDenied').style.display = 'none';
+      document.getElementById('rvErr').innerText = err || '';
+      document.getElementById('rvSubmit').disabled = false;
+    }
+    function askReserveAgain() {
+      store.remove('jl_reserve_unit');
+      document.getElementById('rvDong').value = '';
+      document.getElementById('rvHo').value = '';
+      showReserveAsk('');
+      document.getElementById('rvDong').focus();
+    }
+    function submitReserve() {
+      const dong = document.getElementById('rvDong').value.replace(/\D/g, '');
+      const ho = document.getElementById('rvHo').value.replace(/\D/g, '');
+      if (!dong || !ho) { document.getElementById('rvErr').innerText = '동과 호수를 숫자로 입력해 주세요.'; return; }
+      if (!socket.connected) { document.getElementById('rvErr').innerText = '연결 중입니다. 잠시 후 다시 눌러 주세요.'; return; }
+      document.getElementById('rvErr').innerText = '';
+      document.getElementById('rvSubmit').disabled = true;
+      resolve({ reserve: { dong: dong, ho: ho } });
+    }
+    function showReserveDenied(res, unit) {
+      store.remove('jl_reserve_unit');
+      if (res.reason === 'input' || res.reason === 'slow') {
+        showReserveAsk(res.reason === 'slow' ? '잠시 후 다시 입력해 주세요.' : '동과 호수를 숫자로 입력해 주세요.');
+        return;
+      }
+      show('reserveSection');
+      document.getElementById('rvAsk').style.display = 'none';
+      document.getElementById('rvDenied').style.display = 'block';
+      const who = unit ? unit.dong + '동 ' + unit.ho + '호' : '입력하신 세대';
+      const title = document.getElementById('rvDeniedTitle');
+      const desc = document.getElementById('rvDeniedDesc');
+      if (res.reason === 'time') {
+        title.innerText = '예약 시간이 아닙니다';
+        desc.innerHTML = who + ' 예약 시간은<br><b>' + (res.slots || []).join(', ') + '</b>입니다.<br>' +
+          '시간대별 예약 인원이 정해져 있어<br>예약 시간에 오신 분이 우선입니다.';
+      } else if (res.reason === 'used') {
+        title.innerText = '이미 번호표를 받은 예약입니다';
+        desc.innerHTML = who + ' 예약으로<br>이미 번호표가 발급되었습니다.';
+      } else {
+        title.innerText = '시간예약자 우선입니다';
+        desc.innerHTML = who + '의 예약 내역이 없습니다.<br>시간대별 예약하신 분이 먼저 상담받습니다.';
+      }
+    }
+    ['rvDong', 'rvHo'].forEach(function (id) {
+      document.getElementById(id).addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        if (id === 'rvDong') document.getElementById('rvHo').focus(); else submitReserve();
+      });
+    });
+
     /* ================= 발권 판정 =================
        번호표를 줄지, 막을지, 제이엘로 보낼지는 전부 서버가 정한다. 이 화면은 그 결과만 보여준다.
        (손님 폰이 스스로 판단하면 화면이 꺼져 있던 경우·탭 두 개·되돌리기 등에서 어긋난다) */
@@ -565,6 +711,14 @@
         // 폰에 번호가 있었다면 사라진 이유만 묻고, 새 번호는 손님이 버튼을 눌러야 받는다.
         checkOnly: !!stored && !opts.fresh
       };
+      // 시간예약자 확인: 방금 입력한 동·호수, 없으면 오늘 이 폰으로 확인된 동·호수
+      if (currentBank === JL) {
+        if (opts.walkin) req.walkin = true;
+        else {
+          const unit = opts.reserve || readReserveUnit();
+          if (unit) req.reserve = unit;
+        }
+      }
 
       socket.timeout(8000).emit('issue_ticket', req, function (err, res) {
         resolving = false;
@@ -595,7 +749,9 @@
             announcedIssue = !!flags.issued;
             announcedSoon = !!flags.soon;
           }
+          if (res.reserve) saveReserveUnit(res.reserve);
           showTicket();
+          showReserveBadge();
           if (res.held) setHint('법무법인 제이엘 상담이 끝나면 호출해 드립니다.');
           // 화면이 꺼져 있는 동안 호출됐다면 호출 화면을 다시 띄워 준다(소리 없이).
           if (myTicket.status === 'called' && myTicket.deskName) {
@@ -635,6 +791,12 @@
           break;
         case 'gone':
           showReissue('번호표가 초기화되었습니다. 아래 버튼을 눌러 다시 받아 주세요.');
+          break;
+        case 'reserve_required':
+          showReserveAsk('');
+          break;
+        case 'reserve_denied':
+          showReserveDenied(res, opts.reserve || readReserveUnit());
           break;
         case 'wait':
           show('ticketSection');

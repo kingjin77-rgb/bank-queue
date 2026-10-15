@@ -274,6 +274,9 @@
       document.getElementById('heroBody').innerHTML =
         '<div class="hero-main">' +
         '<span class="hero-bank" style="color:' + info.color + ';">' + data.bankName + '</span>' +
+        (data.customer.walkin || data.customer.reserved
+          ? '<span class="hero-kind" style="font-size:0.42em;font-weight:900;padding:6px 12px;border-radius:12px;background:' + (data.customer.walkin ? '#fff4e6;color:#c2410c' : '#e6fcf5;color:#0ca678') + ';">' + (data.customer.walkin ? '현장' : '예약') + '</span>'
+          : '') +
         '<span class="hero-num">' + data.customer.ticketNumber + '번</span>' +
         '<span class="hero-arrow">➡</span>' +
         '<span class="hero-desk">' + data.deskName + '</span>' +
@@ -299,7 +302,11 @@
       lastAnnounceKey = key;
       lastAnnounceAt = now;
       try { alarmAudio.currentTime = 0; alarmAudio.play().catch(function () {}); } catch (e) {}
-      const msg = data.bankName + ', ' + numToKorean(data.customer.ticketNumber) + '번 고객님, ' + deskToKorean(data.deskName) + '로 오십시오.';
+      // 제이엘 시간예약 운영 중에는 예약 고객 / 현장 접수 고객을 구분해 부른다.
+      const kind = data.customer.walkin ? '현장 접수 고객' : (data.customer.reserved ? '예약 고객' : '');
+      const msg = kind
+        ? data.bankName + ', ' + kind + ' ' + numToKorean(data.customer.ticketNumber) + '번, ' + deskToKorean(data.deskName) + '로 오십시오.'
+        : data.bankName + ', ' + numToKorean(data.customer.ticketNumber) + '번 고객님, ' + deskToKorean(data.deskName) + '로 오십시오.';
       const times = Math.min(3, Math.max(1, data.repeatCount || 1));
       setTimeout(function () { for (let i = 0; i < times; i++) enqueueSpeech(msg); }, 900);
     });
