@@ -410,6 +410,7 @@ function normalizeDb() {
   db.completedLogs = db.completedLogs.filter(l => l && INITIAL_BANKS[l.bank]);
   db.passedLogs = db.passedLogs.filter(l => l && INITIAL_BANKS[l.bank]);
   db.settings = { ...INITIAL_SETTINGS, ...(db.settings || {}) };
+  db.resetAt = Number.isFinite(Number(db.resetAt)) ? Number(db.resetAt) : 0;
   normalizeReservations();
 }
 
@@ -766,6 +767,7 @@ function jlProof(deviceId, attest) {
   const m = /^jl-\d+-(\d{12,14})$/.exec(ticketId);
   if (!m) return null;
   if (seoulDate(parseInt(m[1], 10)) !== today) return null;       // 어제 받은 번호는 인정하지 않는다
+  if (parseInt(m[1], 10) < (db.resetAt || 0)) return null;       // 전체 리셋 전에 받은 번호(테스트)
   if (isLiveId(JL, ticketId)) return null;                         // 완료를 되돌려 다시 상담 중
   if ((db.passedLogs || []).some(l => l.ticketId === ticketId)) return null;  // 부재 처리된 번호
   return a;
@@ -1059,6 +1061,22 @@ io.on('connection', (socket) => {
       slots: Array.from(new Set(norm.list.map(e => e.slotKey))).length,
       kept: Object.keys(keep).length
     });
+  });
+
+  // 예약자 확인 표시만 모두 지운다(명단은 그대로). 테스트로 찍은 표시 정리용.
+  // 지움도 '취소' 기록(지금 시각)으로 남겨, 예전 폰 저장본이 다시 붙어도 표시가 되살아나지 않게 한다.
+  socket.on('reserve_reset_marks', (payload, callback) => {
+    const R = db.reservations;
+    const at = Date.now();
+    let n = 0;
+    Object.keys(R.marks).forEach((id) => {
+      const m = R.marks[id];
+      if (m && m.on) n += 1;
+      R.marks[id] = { on: false, at: Math.max(at, (m && m.at ? m.at + 1 : 0)), by: '초기화', via: 'staff', ticket: null };
+    });
+    saveBackup();
+    io.to('reserve').emit('reserve_state', reservePayload());
+    if (typeof callback === 'function') callback({ ok: true, cleared: n });
   });
 
   socket.on('reserve_clear', (payload, callback) => {
@@ -1508,6 +1526,10 @@ io.on('connection', (socket) => {
       (db.desks[b] || []).forEach(d => { d.status = 'idle'; d.currentCustomer = null; });
     });
     db.passedLogs = (db.passedLogs || []).filter(l => !targetBanks.includes(l.bank));
+    // 리셋 전 기록은 모두 테스트로 본다: 누적 실적(완료 기록)도 함께 지운다.
+    db.completedLogs = (db.completedLogs || []).filter(l => !targetBanks.includes(l.bank));
+    // 전체 리셋이면 리셋 전에 받은 '제이엘 완료' 폰 증명도 더 이상 인정하지 않는다.
+    if (p.bank === 'all') db.resetAt = Date.now();
     // 은행별로 나눠 방송하면 '일부만 비워진 상태'가 밖으로 나가고, 관리자 콘솔이 그걸
     // 백업으로 저장해 리셋한 대기가 되살아난다. 다 비운 뒤 한 번에 방송한다.
     broadcastEverywhere();
