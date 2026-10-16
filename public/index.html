@@ -425,8 +425,21 @@
     }
 
     // 알림 켜기: 브라우저 오디오 잠금 해제 + 백그라운드 오디오 세션 유지 + 알림 권한
-    function enableAlerts() {
-      alertsOn = true;
+    // 오늘 이 폰에서 알림을 켰는지. 페이지가 새로 열려도(화면 꺼짐 뒤 새로고침, QR 다시 찍기) 다시 켜 둔다.
+    function alertsWereOn() { return store.get('jl_alerts_on') === todayKey(); }
+
+    function setMediaTitle() {
+      if (!('mediaSession' in navigator)) return;
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: bankName + ' 상담 대기 알림',
+          artist: '법무법인 제이엘 현장 상담'
+        });
+      } catch (e) {}
+    }
+
+    // 소리 잠금 해제만(확인 멘트 없이). 새 페이지에서는 손님의 첫 터치 때 부른다.
+    function unlockAudio() {
       keepAliveAudio.volume = 0.01;
       keepAliveAudio.play().catch(function () {});
       alarmAudio.volume = 1.0;
@@ -434,25 +447,31 @@
         alarmAudio.pause();
         alarmAudio.currentTime = 0;
       }).catch(function () {});
+      if ('wakeLock' in navigator) {
+        navigator.wakeLock.request('screen').catch(function () {});
+      }
+      setMediaTitle();
+    }
+
+    let audioUnlocked = false;
+
+    function showAlertsButton(ready) {
+      const btn = document.getElementById('soundBtn');
+      btn.classList.add('on');
+      btn.innerText = ready ? '🔔 호출 알림이 켜졌습니다' : '🔔 호출 알림 켜짐 · 화면을 한 번 눌러 주세요';
+    }
+
+    function enableAlerts() {
+      alertsOn = true;
+      store.set('jl_alerts_on', todayKey());
+      audioUnlocked = true;
+      unlockAudio();
 
       if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission().catch(function () {});
       }
-      if ('wakeLock' in navigator) {
-        navigator.wakeLock.request('screen').catch(function () {});
-      }
-      if ('mediaSession' in navigator) {
-        try {
-          navigator.mediaSession.metadata = new MediaMetadata({
-            title: bankName + ' 상담 대기 알림',
-            artist: '법무법인 제이엘 현장 상담'
-          });
-        } catch (e) {}
-      }
 
-      const btn = document.getElementById('soundBtn');
-      btn.classList.add('on');
-      btn.innerText = '🔔 호출 알림이 켜졌습니다';
+      showAlertsButton(true);
 
       // 화면이 꺼졌다 켜지며 페이지가 다시 불려도 이 확인 멘트를 또 말하지 않는다.
       const already = myTicket ? !!loadAnnounceFlags(myTicket.id).confirmed : false;
@@ -546,7 +565,42 @@
 
     function goToHeldTicket() {
       if (!heldOther) return;
-      location.href = '/index.html?bank=' + encodeURIComponent(heldOther.bank);
+      switchBank(heldOther.bank);
+    }
+
+    // 다른 기관으로 넘어갈 때 페이지를 새로 열지 않는다.
+    // 새 페이지는 브라우저가 소리를 다시 막아서, 손님이 켠 호출 알림이 꺼지기 때문이다.
+    function switchBank(b) {
+      b = String(b || '').toLowerCase().trim();
+      if (!b) return;
+      if (!LOCAL_BANK_THEMES[b] && !(lastBankInfo && lastBankInfo[b])) {
+        location.href = '/index.html?b=' + encodeURIComponent(b);
+        return;
+      }
+      clearTimeout(retryTimer);
+      currentBank = b;
+      const info = (lastBankInfo && lastBankInfo[b]) || LOCAL_BANK_THEMES[b];
+      bankName = info.name;
+      applyTheme(info);
+      document.getElementById('brandSub').innerText = '모바일 번호표';
+      document.getElementById('jlFirstNotice').style.display = 'none';
+      try { history.replaceState(null, '', '/index.html?b=' + encodeURIComponent(b)); } catch (e) {}
+      myTicket = null;
+      heldOther = null;
+      lastPosition = null;
+      announcedIssue = false;
+      announcedSoon = false;
+      closeOverlay();
+      document.getElementById('myNumDisplay').innerText = '-';
+      document.getElementById('myWaitDisplay').innerText = '-';
+      document.getElementById('myEtaDisplay').innerText = '-';
+      document.getElementById('reserveBadge').style.display = 'none';
+      setHint('번호표를 발급하고 있습니다.');
+      show('ticketSection');
+      document.getElementById('reissueBtn').style.display = 'none';
+      setMediaTitle();
+      window.scrollTo(0, 0);
+      resolve();
     }
 
     // 상담 완료 화면. 제이엘을 마친 손님에게는 은행만 고르게 한다.
@@ -592,7 +646,7 @@
         btn.onclick = function () {
           // 지금 기관을 다시 고르면 같은 주소라 새로고침만 되므로, 바로 새 번호를 요청한다.
           if (b === currentBank) { resolve({ fresh: true }); return; }
-          window.location.href = '/index.html?b=' + b;
+          switchBank(b);
         };
         grid.appendChild(btn);
       });
@@ -730,6 +784,13 @@
 
       socket.timeout(8000).emit('issue_ticket', req, function (err, res) {
         resolving = false;
+        if (req.bank !== currentBank) {
+          // 응답을 기다리는 사이 손님이 다른 기관으로 넘어갔다. 옛 기관 판정은 버리고 지금 기관으로 다시 묻는다.
+          const next = resolveAgain || {};
+          resolveAgain = null;
+          resolve(next);
+          return;
+        }
         if (err || !res) {
           retryTimer = setTimeout(function () { resolve(opts); }, 3000);
         } else {
@@ -823,7 +884,7 @@
 
     // 발권 안내 멘트 (알림을 켠 뒤에 한 번만)
     function announceTicketIfReady() {
-      if (!alertsOn || announcedIssue || !myTicket) return;
+      if (!alertsOn || !audioUnlocked || announcedIssue || !myTicket) return;
       announcedIssue = true;
       saveAnnounceFlags(myTicket.id, { issued: true });
       let msg = '번호표 ' + numToKorean(myTicket.ticketNumber) + '번이 발급되었습니다.';
@@ -964,13 +1025,27 @@
     // 비상 복구는 손님 번호를 지우지 않는다. 내 번호 상태만 다시 확인한다.
     socket.on('emergency_repaired', function () { resolve(); });
 
+    // 오늘 이미 알림을 켠 폰이면 새로 열린 페이지에서도 켜진 상태로 시작한다.
+    // 브라우저 정책상 소리는 손님이 화면을 한 번 눌러야 다시 풀린다(버튼을 찾을 필요는 없다).
+    if (alertsWereOn()) {
+      alertsOn = true;
+      showAlertsButton(false);
+    }
+
     // 첫 터치에도 오디오 잠금을 풀어둔다 (버튼을 못 누른 경우 대비)
-    ['click', 'touchstart'].forEach(function (ev) {
-      window.addEventListener(ev, function () {
+    function firstTouch() {
+      ['click', 'touchstart'].forEach(function (ev) { window.removeEventListener(ev, firstTouch); });
+      if (alertsOn && !audioUnlocked) {
+        audioUnlocked = true;
+        unlockAudio();
+        showAlertsButton(true);
+        announceTicketIfReady();
+      } else {
         keepAliveAudio.volume = 0.01;
         keepAliveAudio.play().catch(function () {});
-      }, { once: true });
-    });
+      }
+    }
+    ['click', 'touchstart'].forEach(function (ev) { window.addEventListener(ev, firstTouch); });
   </script>
   <script src="/pwa.js" data-role="customer"></script>
 </body>
