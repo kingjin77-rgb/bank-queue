@@ -306,7 +306,7 @@
         document.getElementById('pxBank').innerText = t.bankName;
         document.getElementById('pxKind').innerText = t.walkin ? '현장접수 · 예약 고객이 우선 호출됩니다' : '대리발권';
         document.getElementById('pxNum').innerText = t.ticketNumber;
-        document.getElementById('pxNum').style.color = bank.color === '#ffbc00' ? '#ffd43b' : bank.color;
+        document.getElementById('pxNum').style.color = t.walkin ? '#ff8c42' : (bank.color === '#ffbc00' ? '#ffd43b' : bank.color);
         document.getElementById('pxPick').style.display = 'none';
         document.getElementById('pxDone').style.display = 'block';
       });

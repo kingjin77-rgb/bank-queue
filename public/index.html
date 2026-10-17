@@ -124,7 +124,10 @@
     .rv-walkin-box .btn-big { margin-top: 12px; }
     .rv-walkin-note { font-size: 13px; font-weight: 800; color: var(--text-sub); margin-top: 10px; line-height: 1.5; }
     .rv-walkin-btn { background: #fff; color: var(--text); border: 2px solid var(--border); }
-    .t-reserve.walkin { color: #c2410c; background: #fff4e6; }
+    .t-reserve.walkin { color: #fff; background: #e8590c; font-size: 16px; }
+    .ticket-card.walkin { box-shadow: inset 0 0 0 4px #e8590c; }
+    .ticket-card.walkin .t-number, .ticket-card.walkin .t-unit { color: #e8590c; }
+    .ticket-card.walkin .t-label { color: #c2410c; }
     .t-reserve { display: none; margin-top: 10px; font-size: 14px; font-weight: 900; color: #0ca678; background: #e6fcf5; border-radius: 12px; padding: 6px 12px; }
   </style>
   <link rel="stylesheet" href="/type.css">
@@ -140,8 +143,8 @@
     <!-- 대기 중 -->
     <section id="ticketSection">
       <div class="first-notice" id="jlFirstNotice" style="display:none;"></div>
-      <div class="ticket-card">
-        <div class="t-label">내 대기번호</div>
+      <div class="ticket-card" id="ticketCard">
+        <div class="t-label" id="ticketLabel">내 대기번호</div>
         <div class="t-number" id="myNumDisplay">-</div>
         <div class="t-unit">번</div>
         <div class="t-reserve" id="reserveBadge"></div>
@@ -150,7 +153,7 @@
 
         <div class="t-rows">
           <div class="t-cell">
-            <div class="c-label">내 앞 대기</div>
+            <div class="c-label" id="waitLabel">내 앞 대기</div>
             <div class="c-value" id="myWaitDisplay">-</div>
           </div>
           <div class="t-cell">
@@ -547,6 +550,7 @@
       document.getElementById('myNumDisplay').innerText = '-';
       document.getElementById('myWaitDisplay').innerText = '-';
       document.getElementById('myEtaDisplay').innerText = '-';
+      showReserveBadge();
       setHint(message);
       document.getElementById('reissueBtn').style.display = 'flex';
     }
@@ -596,7 +600,7 @@
       document.getElementById('myNumDisplay').innerText = '-';
       document.getElementById('myWaitDisplay').innerText = '-';
       document.getElementById('myEtaDisplay').innerText = '-';
-      document.getElementById('reserveBadge').style.display = 'none';
+      showReserveBadge();
       setHint('번호표를 발급하고 있습니다.');
       show('ticketSection');
       document.getElementById('reissueBtn').style.display = 'none';
@@ -666,10 +670,21 @@
     function saveReserveUnit(r) {
       store.set('jl_reserve_unit', JSON.stringify({ dong: r.dong, ho: r.ho, slotLabel: r.slotLabel || '', day: todayKey() }));
     }
+    // 제이엘 번호표 종류 표시: 현장 접수(1001번~)는 주황색, 예약은 기본색. 대기 인원도 종류별로 센다.
+    function ticketKind() {
+      if (currentBank !== JL || !myTicket) return '';
+      return myTicket.walkin ? 'walkin' : (myTicket.reserved ? 'reserved' : '');
+    }
     function showReserveBadge() {
       const el = document.getElementById('reserveBadge');
+      const kind = ticketKind();
       el.className = 't-reserve';
-      if (currentBank === JL && myTicket && myTicket.walkin) {
+      document.getElementById('ticketCard').className = 'ticket-card' + (kind === 'walkin' ? ' walkin' : '');
+      document.getElementById('ticketLabel').innerText =
+        kind === 'walkin' ? '현장 접수 번호' : (kind === 'reserved' ? '예약 고객 번호' : '내 대기번호');
+      document.getElementById('waitLabel').innerText =
+        kind === 'walkin' ? '앞 현장 접수 대기' : (kind === 'reserved' ? '앞 예약 고객 대기' : '내 앞 대기');
+      if (kind === 'walkin') {
         el.className = 't-reserve walkin';
         el.innerText = '현장 접수 · 예약 고객이 우선 호출됩니다';
         el.style.display = 'inline-block';
@@ -889,11 +904,17 @@
       if (!alertsOn || !audioUnlocked || announcedIssue || !myTicket) return;
       announcedIssue = true;
       saveAnnounceFlags(myTicket.id, { issued: true });
-      let msg = '번호표 ' + numToKorean(myTicket.ticketNumber) + '번이 발급되었습니다.';
+      const walkin = ticketKind() === 'walkin';
+      let msg = (walkin ? '현장 접수 번호표 ' : '번호표 ') + numToKorean(myTicket.ticketNumber) + '번이 발급되었습니다.';
       if (lastPosition != null) {
-        msg += lastPosition === 0
-          ? ' 앞에 대기하시는 분이 없습니다. 곧 호출해 드리겠습니다.'
-          : ' 고객님 앞에 ' + numToKorean(lastPosition) + '분이 대기하고 계십니다.';
+        if (walkin) {
+          msg += (lastPosition === 0 ? ' 앞에 현장 접수 대기는 없습니다.' : ' 현장 접수 앞에 ' + numToKorean(lastPosition) + '분이 대기하고 계십니다.') +
+            ' 예약 고객이 우선 호출됩니다.';
+        } else {
+          msg += lastPosition === 0
+            ? ' 앞에 대기하시는 분이 없습니다. 곧 호출해 드리겠습니다.'
+            : ' 고객님 앞에 ' + numToKorean(lastPosition) + '분이 대기하고 계십니다.';
+        }
       }
       enqueueSpeech(msg);
     }
@@ -931,8 +952,12 @@
       const entry = data.queue.find(function (c) { return c.id === myTicket.id; });
       myTicket.status = isConsulting ? 'called' : (entry ? entry.status : myTicket.status);
 
-      const idx = data.queue.filter(function (c) { return c.status === 'waiting'; })
-        .findIndex(function (c) { return c.id === myTicket.id; });
+      const waitingAll = data.queue.filter(function (c) { return c.status === 'waiting'; });
+      const idx = waitingAll.findIndex(function (c) { return c.id === myTicket.id; });
+      // 제이엘: 예약 고객과 현장 접수는 대기 인원을 따로 센다(현장 접수는 예약 고객이 우선이라 시간 예측 불가).
+      const kind = ticketKind();
+      const sameKind = kind ? waitingAll.filter(function (c) { return kind === 'walkin' ? c.walkin : !c.walkin; }) : waitingAll;
+      const kIdx = sameKind.findIndex(function (c) { return c.id === myTicket.id; });
 
       if (isConsulting || myTicket.status === 'called') {
         setHint('호출되었습니다. 창구로 와주세요.');
@@ -942,21 +967,25 @@
 
       const stdMin = (data.settings && data.settings.standardMinutes) || 15;
       const deskCount = (data.desks || []).filter(function (d) { return !d.away; }).length || 1;
-      const eta = Math.ceil(idx / deskCount) * stdMin;
+      const eta = Math.ceil(kIdx / deskCount) * stdMin;
 
-      document.getElementById('myWaitDisplay').innerText = idx + '명';
-      document.getElementById('myEtaDisplay').innerText = idx === 0 ? '곧 호출' : '약 ' + eta + '분';
+      document.getElementById('myWaitDisplay').innerText = kIdx + '명';
+      document.getElementById('myEtaDisplay').innerText = kind === 'walkin'
+        ? (idx === 0 ? '곧 호출' : '예약 우선')
+        : (idx === 0 ? '곧 호출' : '약 ' + eta + '분');
 
       const held = (data.heldIds || []).indexOf(myTicket.id) >= 0;
       if (held) {
         setHint('법무법인 제이엘 상담이 끝나면 호출해 드립니다.');
       } else if (idx === 0) {
         setHint('다음 차례입니다. 창구 앞에서 대기해주세요.');
+      } else if (kind === 'walkin') {
+        setHint('예약 고객이 우선 호출되어 대기 시간은 미리 알려 드리기 어렵습니다. 순서가 되면 호출해 드립니다.');
       } else {
-        setHint('현재 ' + idx + '분이 대기 중입니다. 순서가 되면 알려드립니다.');
+        setHint('현재 ' + (kind === 'reserved' ? '예약 고객 ' : '') + kIdx + '분이 대기 중입니다. 순서가 되면 알려드립니다.');
       }
 
-      lastPosition = idx;
+      lastPosition = kIdx;
       announceTicketIfReady();
 
       // 내 차례가 임박하면 한 번만 안내
