@@ -484,6 +484,8 @@
 
     // 화면이 다시 보이면 오디오 세션을 되살린다.
     document.addEventListener('visibilitychange', function () {
+      // 화면이 꺼져 있던 사이 상담이 끝났을 수 있으니 번호표 상태를 다시 묻는다.
+      if (!document.hidden && (myTicket || heldOther) && socket.connected) resolve();
       if (!document.hidden && alertsOn) {
         keepAliveAudio.play().catch(function () {});
         if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(function () {});

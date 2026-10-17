@@ -1122,6 +1122,10 @@ io.on('connection', (socket) => {
       }
     }
 
+    // 상담 중에 [다음 고객 호출]을 누르면 지금 손님은 상담 완료로 처리한다.
+    // (그냥 덮어쓰면 앞 손님이 '호출됨'으로 영원히 남아 폰이 은행 선택으로 못 넘어가고 은행 호출도 막힌다.)
+    if (desk.currentCustomer && desk.currentCustomer.id !== target.id) completeCurrent(b, desk);
+
     seatCustomer(desk, target);
     const calledPayload = callPayload(b, desk, target);
     io.emit('customer_called', calledPayload);
@@ -1150,6 +1154,23 @@ io.on('connection', (socket) => {
     const desk = (db.desks[b] || []).find(d => d.desk === parseInt(p.deskNumber));
     if (!desk || !desk.currentCustomer) return;
 
+    completeCurrent(b, desk);
+    broadcastBank(b);
+
+    if (p.autoCall) {
+      const nextCust = pickNext(b);
+      if (nextCust) {
+        seatCustomer(desk, nextCust);
+        const autoPayload = callPayload(b, desk, nextCust);
+        io.emit('customer_called', autoPayload);
+        queueAnnouncement(autoPayload);
+        broadcastBank(b);
+      }
+    }
+  });
+
+  // 창구의 지금 손님을 상담 완료로 기록하고 창구를 비운다(방송은 부르는 쪽에서).
+  function completeCurrent(b, desk) {
     const completedCust = desk.currentCustomer;
     const completedAt = new Date().toISOString();
     db.completedLogs.push({
@@ -1172,20 +1193,8 @@ io.on('connection', (socket) => {
     db.queues[b] = (db.queues[b] || []).filter(c => c.id !== completedCust.id);
     desk.status = 'idle';
     desk.currentCustomer = null;
-
-    broadcastBank(b);
-
-    if (p.autoCall) {
-      const nextCust = pickNext(b);
-      if (nextCust) {
-        seatCustomer(desk, nextCust);
-        const autoPayload = callPayload(b, desk, nextCust);
-        io.emit('customer_called', autoPayload);
-        queueAnnouncement(autoPayload);
-        broadcastBank(b);
-      }
-    }
-  });
+    return completedCust;
+  }
 
   // 부재: 호출했는데 오지 않은 고객을 창구에서 내리고 대기열에서 제외
   socket.on('pass_customer', (payload) => {

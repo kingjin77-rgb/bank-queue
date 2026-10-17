@@ -439,10 +439,13 @@
       const walkins = waiting.filter(function (c) { return c.walkin; });
       const splitMode = bank === 'jl' && waiting.some(function (c) { return c.walkin || c.reserved; });
       const reservedWaiting = waiting.length - walkins.length;
-      document.getElementById('callBtn').innerText = splitMode && reservedWaiting > 0 ? '다음 예약 고객 호출' : '다음 고객 호출';
+      // 상담 중에 호출하면 지금 손님은 서버가 상담 완료로 처리한다. 버튼에 그대로 적어 둔다.
+      const mineNow = allDesks.find(function (d) { return d.desk === myDesk; });
+      const pre = mineNow && mineNow.currentCustomer ? '완료하고 ' : '';
+      document.getElementById('callBtn').innerText = pre + (splitMode && reservedWaiting > 0 ? '다음 예약 고객 호출' : '다음 고객 호출');
       const wBtn = document.getElementById('walkinCallBtn');
       wBtn.style.display = splitMode && walkins.length > 0 ? 'flex' : 'none';
-      wBtn.innerText = '현장 접수 고객 호출 (' + walkins.length + '명 대기)';
+      wBtn.innerText = pre + '현장 접수 고객 호출 (' + walkins.length + '명 대기)';
 
       // 대기열 목록
       const qBox = document.getElementById('queueList');
@@ -644,6 +647,10 @@
     // 지정 호출: 대기열에서 특정 손님을 바로 부른다
     function callSpecific(customerId, ticketNumber) {
       if (!requireDesk()) return;
+      if (currentCalledAt) {
+        const cur = document.getElementById('currentCustNum').innerText;
+        if (!confirm('지금 ' + cur + '번 고객 상담을 완료하고 ' + ticketNumber + '번 고객을 호출할까요?')) return;
+      }
       throttleCall(function () {
         unlockAudio(false);
         socket.emit('call_customer', { bank: bank, deskNumber: myDesk, customerId: customerId });
