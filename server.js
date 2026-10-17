@@ -54,6 +54,9 @@ const INITIAL_SETTINGS = {
   closeHour: 18,
   standardMinutes: 15,
   repeatCount: 1,         // 호출 방송 반복 횟수
+  reserveEarlyMin: 10,    // 예약 인정: 각 타임 정시 몇 분 전부터
+  reserveFirstEarlyMin: 30, // 그날 첫 타임은 몇 분 전부터
+  reserveLastLateMin: 30, // 마지막 타임은 끝나고 몇 분까지
   reserveGate: true       // 예약자 명단이 있으면 제이엘 번호표는 예약 시간대의 예약자만 QR 로 받는다
 };
 
@@ -106,9 +109,11 @@ app.get('/manifest.webmanifest', (req, res) => {
 // 지금이 그 세대의 예약 시간대일 때만 번호표가 나오고, 예약자 화면에 '확인'이 자동으로 찍힌다.
 // 예약이 없거나 시간대가 다르면 현장 직원에게 안내하고, 직원이 대리발권으로 접수한다.
 // 연락처는 가운데를 가린 채로만 보관한다(서버·공유 화면·폰 저장본 어디에도 전체 번호 없음).
-const RESERVE_EARLY_MIN = 0;      // 각 타임은 정시부터 다음 타임 전까지 인정 (예: 1시 예약 → 13:00~13:59)
+// 예약 인정 시간은 관리자 화면에서 바꾼다(db.settings). 기본: 각 타임 정시 10분 전 ~ 다음 타임 정시,
+// 그날 첫 타임은 30분 전부터, 마지막 타임은 끝나고 30분까지 (예: 1시 예약 → 12:50~14:00).
 const RESERVE_SLOT_MIN = 60;      // 예약 시간대 길이 (1시간 단위 예약)
-const RESERVE_EDGE_MIN = 30;      // 하루의 첫 타임은 30분 먼저, 마지막 타임은 끝나고 30분까지 인정
+const RESERVE_WIN_DEFAULTS = { reserveEarlyMin: 10, reserveFirstEarlyMin: 30, reserveLastLateMin: 30 };
+const RESERVE_WIN_MAX = 120;
 const RESERVE_MAX_ROWS = 3000;
 
 function emptyReservations() {
@@ -177,11 +182,34 @@ function normalizeReservationRows(rows) {
     a.slotKey.localeCompare(b.slotKey) || (+a.dong - +b.dong) || (+a.ho - +b.ho));
   const perUnit = {};
   list.forEach(e => { const k = e.dong + '-' + e.ho; perUnit[k] = (perUnit[k] || 0) + 1; });
-  // 예약 인정 시간: 각 타임 정시 ~ 다음 타임 전. 그날 첫 타임은 30분 전부터, 마지막 타임은 끝나고 30분까지.
+  applyReserveWindows(list);
+  list.forEach(e => { e.others = perUnit[e.dong + '-' + e.ho] - 1; });
+  const listId = list.length
+    ? crypto.createHash('sha1').update(list.map(e => e.id).sort().join(',')).digest('hex').slice(0, 16)
+    : '';
+  return { list, listId };
+}
+
+// 지금 설정으로 쓰는 예약 인정 시간(분)
+function reserveWinSettings() {
+  const st = (typeof db !== 'undefined' && db && db.settings) || {};
+  const out = {};
+  Object.keys(RESERVE_WIN_DEFAULTS).forEach(k => {
+    const n = parseInt(st[k], 10);
+    out[k] = Number.isFinite(n) && n >= 0 && n <= RESERVE_WIN_MAX ? n : RESERVE_WIN_DEFAULTS[k];
+  });
+  return out;
+}
+
+// 예약 인정 시간(winStart~winEnd)을 지금 설정으로 다시 계산한다. 설정을 바꾸면 바로 반영되도록
+// 명단에 고정해 두지 않고 확인할 때마다 계산한다(고정 명단·올린 명단·폰 저장본 모두 같은 규칙).
+//  각 타임: 정시 N분 전 ~ 다음 타임 정시 / 그날 첫 타임: 정시 M분 전부터 / 마지막 타임: 끝나고 K분까지
+function applyReserveWindows(list) {
+  const w = reserveWinSettings();
   const days = {};
   list.forEach(e => {
-    if (e.startMs == null) return;
-    const d = e.slotKey.slice(0, 10);
+    if (e.startMs == null || e.always) return;
+    const d = String(e.slotKey || '').slice(0, 10);
     days[d] = days[d] || { first: e.startMs, last: e.startMs };
     days[d].first = Math.min(days[d].first, e.startMs);
     days[d].last = Math.max(days[d].last, e.startMs);
@@ -189,15 +217,11 @@ function normalizeReservationRows(rows) {
   list.forEach(e => {
     if (e.always) { e.winStart = 0; e.winEnd = 8.64e15; return; }
     if (e.startMs == null) { e.winStart = null; e.winEnd = null; return; }
-    const d = days[e.slotKey.slice(0, 10)];
-    e.winStart = e.startMs - (e.startMs === d.first ? RESERVE_EDGE_MIN : RESERVE_EARLY_MIN) * 60000;
-    e.winEnd = e.startMs + (RESERVE_SLOT_MIN + (e.startMs === d.last ? RESERVE_EDGE_MIN : 0)) * 60000;
+    const d = days[String(e.slotKey || '').slice(0, 10)];
+    e.winStart = e.startMs - (e.startMs === d.first ? w.reserveFirstEarlyMin : w.reserveEarlyMin) * 60000;
+    e.winEnd = e.startMs + (RESERVE_SLOT_MIN + (e.startMs === d.last ? w.reserveLastLateMin : 0)) * 60000;
   });
-  list.forEach(e => { e.others = perUnit[e.dong + '-' + e.ho] - 1; });
-  const listId = list.length
-    ? crypto.createHash('sha1').update(list.map(e => e.id).sort().join(',')).digest('hex').slice(0, 16)
-    : '';
-  return { list, listId };
+  return list;
 }
 
 function cleanMark(raw) {
@@ -257,6 +281,8 @@ function publicMark(m) {
 
 function reservePayload() {
   const R = db.reservations;
+  applyReserveWindows(R.list);
+  const w = reserveWinSettings();
   const marks = {};
   Object.keys(R.marks).forEach(id => { marks[id] = publicMark(R.marks[id]); });
   return {
@@ -269,7 +295,9 @@ function reservePayload() {
     seedLocked: reserveSeedLocked,
     gate: reserveGateOn(),
     gateSetting: db.settings.reserveGate !== false,
-    earlyMin: RESERVE_EARLY_MIN,
+    earlyMin: w.reserveEarlyMin,
+    firstEarlyMin: w.reserveFirstEarlyMin,
+    lastLateMin: w.reserveLastLateMin,
     slotMin: RESERVE_SLOT_MIN,
     serverTime: Date.now()
   };
@@ -352,6 +380,7 @@ function checkReservation(dongIn, hoIn, deviceId) {
   // 이 폰이 이미 이 세대 예약으로 번호를 받았으면(부재 후 다시 받기 등) 그대로 인정
   const bound = mine.find(e => { const m = R.marks[e.id]; return m && m.on && m.dev === deviceId; });
   if (bound) return { ok: true, entry: bound };
+  applyReserveWindows(R.list);
   const now = Date.now();
   const inSlot = mine.filter(e => e.winStart != null && now >= e.winStart && now < e.winEnd);
   if (!inSlot.length) return { ok: false, reason: 'time', slots: mine.map(e => e.slotLabel) };
@@ -385,6 +414,7 @@ let db = {
   queues: {},
   desks: {},
   ticketSequence: {},
+  walkinSeq: 0,          // 제이엘 현장 접수 번호(1000 + 이 값). 예약 번호와 섞이지 않게 따로 센다.
   completedLogs: [],
   passedLogs: [],
   settings: { ...INITIAL_SETTINGS },
@@ -411,6 +441,7 @@ function normalizeDb() {
   db.passedLogs = db.passedLogs.filter(l => l && INITIAL_BANKS[l.bank]);
   db.settings = { ...INITIAL_SETTINGS, ...(db.settings || {}) };
   db.resetAt = Number.isFinite(Number(db.resetAt)) ? Number(db.resetAt) : 0;
+  db.walkinSeq = safeCount(db.walkinSeq, 90000);
   normalizeReservations();
 }
 
@@ -617,6 +648,7 @@ function hasLiveData() {
   const banks = Object.keys(db.bankInfo);
   if (banks.some(b => (db.queues[b] || []).length > 0)) return true;
   if (banks.some(b => (db.ticketSequence[b] || 0) > 0)) return true;
+  if ((db.walkinSeq || 0) > 0) return true;
   if ((db.completedLogs || []).length > 0) return true;
   return banks.some(b => (db.desks[b] || []).some(d => d.currentCustomer));
 }
@@ -816,6 +848,7 @@ function allPayload() {
     queues: db.queues,
     desks: db.desks,
     ticketSequence: db.ticketSequence,   // 관리자 콘솔 백업이 발권 번호를 그대로 이어가는 데 쓴다
+    walkinSeq: db.walkinSeq,
     logs: publicLogs(db.completedLogs),
     passes: publicLogs(db.passedLogs),
     settings: db.settings,
@@ -842,11 +875,20 @@ function broadcastBank(bank) {
   broadcastAll();
 }
 
+const WALKIN_BASE = 1000;
+
 function createTicket(b, deviceId, name, phone, opts) {
   if (db.ticketSequence[b] == null) db.ticketSequence[b] = 0;
   if (!db.queues[b]) db.queues[b] = [];
-  db.ticketSequence[b] += 1;
-  const ticketNumber = db.ticketSequence[b];
+  // 현장 접수는 1001번부터 따로 센다(예약 1, 2, 3… 과 번호로 바로 구별).
+  let ticketNumber;
+  if (opts && opts.walkin) {
+    db.walkinSeq = (db.walkinSeq || 0) + 1;
+    ticketNumber = WALKIN_BASE + db.walkinSeq;
+  } else {
+    db.ticketSequence[b] += 1;
+    ticketNumber = db.ticketSequence[b];
+  }
   const ticket = {
     id: `${b}-${ticketNumber}-${Date.now()}`,
     ticketNumber,
@@ -1507,6 +1549,11 @@ io.on('connection', (socket) => {
       if (!isNaN(h) && h >= 0 && h <= 23) next.closeHour = h;
     }
     if (patch && typeof patch.reserveGate === 'boolean') next.reserveGate = patch.reserveGate;
+    Object.keys(RESERVE_WIN_DEFAULTS).forEach(k => {
+      if (!patch || patch[k] == null) return;
+      const n = parseInt(patch[k], 10);
+      if (Number.isFinite(n) && n >= 0 && n <= RESERVE_WIN_MAX) next[k] = n;
+    });
     // 종료 시각이 시작보다 빠르면 설정을 받아들이지 않는다.
     if (next.closeHour < next.openHour) return;
     db.settings = next;
@@ -1532,6 +1579,7 @@ io.on('connection', (socket) => {
     targetBanks.forEach(b => {
       db.queues[b] = [];
       db.ticketSequence[b] = 0;
+      if (b === JL) db.walkinSeq = 0;
       (db.desks[b] || []).forEach(d => { d.status = 'idle'; d.currentCustomer = null; });
     });
     db.passedLogs = (db.passedLogs || []).filter(l => !targetBanks.includes(l.bank));
@@ -1625,11 +1673,15 @@ io.on('connection', (socket) => {
       });
 
       // 번호가 겹치지 않도록, 저장된 발권 번호와 실제 남은 번호 중 큰 값에서 이어간다.
+      // 현장 접수 번호(1001~)는 따로 이어간다.
       const savedSeq = safeCount((snapshot.ticketSequence || {})[b], 100000);
-      const maxInQueue = db.queues[b].reduce((m, c) => Math.max(m, c.ticketNumber), 0);
-      const maxAtDesk = db.desks[b].reduce(
-        (m, d) => Math.max(m, d.currentCustomer ? d.currentCustomer.ticketNumber : 0), 0);
-      db.ticketSequence[b] = Math.max(savedSeq, maxInQueue, maxAtDesk);
+      const live = db.queues[b].concat(db.desks[b].map(d => d.currentCustomer).filter(Boolean));
+      const maxNormal = live.filter(c => !c.walkin).reduce((m, c) => Math.max(m, c.ticketNumber), 0);
+      db.ticketSequence[b] = Math.max(savedSeq, maxNormal);
+      if (b === JL) {
+        const maxWalk = live.filter(c => c.walkin).reduce((m, c) => Math.max(m, c.ticketNumber - WALKIN_BASE), 0);
+        db.walkinSeq = Math.max(safeCount(snapshot.walkinSeq, 90000), maxWalk, db.walkinSeq || 0);
+      }
     });
 
     db.completedLogs = restoreLogs(snapshot.completedLogs);
@@ -1644,6 +1696,11 @@ io.on('connection', (socket) => {
         standardMinutes: Math.min(safeCount(snapshot.settings.standardMinutes, 180), 180) || db.settings.standardMinutes,
         repeatCount: Math.min(safeCount(snapshot.settings.repeatCount, 3), 3) || db.settings.repeatCount
       };
+      // 재배포로 저장 파일이 사라져도 관리자가 정한 예약 인정 시간은 되살린다.
+      Object.keys(RESERVE_WIN_DEFAULTS).forEach(k => {
+        const n = parseInt(snapshot.settings[k], 10);
+        if (Number.isFinite(n) && n >= 0 && n <= RESERVE_WIN_MAX) db.settings[k] = n;
+      });
     }
 
     restorePending = false;
@@ -1662,6 +1719,7 @@ io.on('connection', (socket) => {
       db.ticketSequence[b] = 0;
       (db.desks[b] || []).forEach(d => { d.status = 'idle'; d.currentCustomer = null; d.away = false; });
     });
+    db.walkinSeq = 0;
     db.passedLogs = [];
     resetAnnounceQueue();
 

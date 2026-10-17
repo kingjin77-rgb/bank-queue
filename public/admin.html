@@ -149,6 +149,9 @@
     .gate-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; background: #0b1120; border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; margin-top: 14px; }
     .gate-row .g-text { font-size: 15px; font-weight: 800; color: #cbd5e1; line-height: 1.5; }
     .gate-row b { color: #fff; }
+    .win-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+    .win-grid label { display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 800; color: #cbd5e1; background: #111827; border-radius: 12px; padding: 10px 12px; }
+    .win-grid input { width: 64px; font-size: 18px; font-weight: 900; text-align: center; padding: 6px; border-radius: 8px; border: 1px solid var(--border); background: #0b1120; color: #fff; }
 
     /* 보고서 */
     .report-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
@@ -264,6 +267,16 @@
       <div class="gate-row">
         <div class="g-text" id="gateText"></div>
         <button class="btn-act btn-dark" id="gateBtn" style="min-width: 220px;" onclick="toggleGate()">-</button>
+      </div>
+      <div class="gate-row" style="display:block;">
+        <div class="g-text" style="margin-bottom:10px;"><b>⏰ 예약 인정 시간</b> (예약자로 바로 발권되는 시간 · 바꾸면 즉시 전체 반영)</div>
+        <div class="win-grid">
+          <label>각 타임 정시<input type="number" id="winEarly" min="0" max="120" inputmode="numeric">분 전부터</label>
+          <label>첫 타임은 정시<input type="number" id="winFirst" min="0" max="120" inputmode="numeric">분 전부터</label>
+          <label>마지막 타임은 끝나고<input type="number" id="winLast" min="0" max="120" inputmode="numeric">분까지</label>
+        </div>
+        <div class="g-text" id="winExample" style="font-size:14px; margin-top:8px; color:#94a3b8;"></div>
+        <button class="btn-act" style="background: var(--success); color: #000; margin-top:10px; width:100%;" onclick="saveWindows()">예약 인정 시간 저장</button>
       </div>
       <div style="font-size: 13px; color: #94a3b8; margin-top: 10px; line-height: 1.6;">
         <b style="color:#fff;">명단은 여기서 한 번만 올리면 모든 직원 화면에 바로 반영됩니다.</b> 다시 올리면 새 명단으로 <b style="color:#fff;">교체</b>되고(누적 아님), 이미 확인한 분은 그대로 유지됩니다.<br>
@@ -760,6 +773,7 @@
           queues: data.queues,
           desks: data.desks,
           ticketSequence: data.ticketSequence,
+          walkinSeq: data.walkinSeq || 0,
           completedLogs: data.logs,
           passedLogs: data.passes,
           settings: data.settings
@@ -823,6 +837,7 @@
           repeatCount = data.settings.repeatCount;
           document.getElementById('repeatSelect').value = String(repeatCount);
         }
+        renderWindows(data.settings);
       }
       renderMiniDisplay(data);
       renderDeskStatus(data);
@@ -1051,7 +1066,7 @@
       document.getElementById('prBank').innerText = t.bankName;
       document.getElementById('prKind').innerText = t.walkin ? '현장접수 · 예약 고객이 우선 호출' : '대리발권';
       document.getElementById('prNum').innerText = t.ticketNumber;
-      document.getElementById('prNum').style.color = info.color === '#ffbc00' ? '#8a6500' : (info.color || '#191f28');
+      document.getElementById('prNum').style.color = t.walkin ? '#e8590c' : (info.color === '#ffbc00' ? '#8a6500' : (info.color || '#191f28'));
       document.getElementById('proxyResult').classList.add('show');
     }
     function closeProxyResult() { document.getElementById('proxyResult').classList.remove('show'); }
@@ -1149,6 +1164,38 @@
         gb.style.background = '#334155'; gb.style.color = '#fff';
       }
     }
+    // 예약 인정 시간 (각 타임 N분 전 ~ 다음 타임 정시, 첫 타임 M분 전, 마지막 타임 끝나고 K분)
+    const WIN_FIELDS = [['winEarly', 'reserveEarlyMin', 10], ['winFirst', 'reserveFirstEarlyMin', 30], ['winLast', 'reserveLastLateMin', 30]];
+    function renderWindows(st) {
+      WIN_FIELDS.forEach(function (f) {
+        const el = document.getElementById(f[0]);
+        if (document.activeElement === el) return;   // 입력 중인 칸은 건드리지 않는다
+        el.value = st[f[1]] != null ? st[f[1]] : f[2];
+      });
+      renderWinExample();
+    }
+    function hm(totalMin) {
+      const t = ((totalMin % 1440) + 1440) % 1440;
+      return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+    }
+    function renderWinExample() {
+      const v = WIN_FIELDS.map(function (f) { const n = parseInt(document.getElementById(f[0]).value, 10); return isNaN(n) ? f[2] : n; });
+      document.getElementById('winExample').innerText =
+        '예) 2시 예약 → ' + hm(14 * 60 - v[0]) + ' ~ 15:00 · 첫 타임 1시 → ' + hm(13 * 60 - v[1]) + ' ~ 14:00 · 마지막 타임 7시 → ' + hm(19 * 60 - v[0]) + ' ~ ' + hm(20 * 60 + v[2]);
+    }
+    WIN_FIELDS.forEach(function (f) { document.getElementById(f[0]).addEventListener('input', renderWinExample); });
+    function saveWindows() {
+      const patch = {};
+      for (let i = 0; i < WIN_FIELDS.length; i++) {
+        const n = parseInt(document.getElementById(WIN_FIELDS[i][0]).value, 10);
+        if (isNaN(n) || n < 0 || n > 120) { alert('0~120 사이 숫자로 넣어 주세요.'); return; }
+        patch[WIN_FIELDS[i][1]] = n;
+      }
+      socket.emit('admin_set_settings', patch);
+      document.activeElement && document.activeElement.blur && document.activeElement.blur();
+      alert('예약 인정 시간을 저장했습니다.\n' + document.getElementById('winExample').innerText);
+    }
+
     function toggleGate() {
       const next = !rvState.gateSetting;
       if (!next && !confirm('예약 확인을 끄면 누구나 QR 로 제이엘 번호표를 받습니다.\n(현장 접수 구분 없이 받은 순서대로 호출)\n끌까요?')) return;

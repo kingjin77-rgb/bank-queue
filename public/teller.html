@@ -505,10 +505,12 @@
       if (busy) {
         numEl.innerText = d.currentCustomer.ticketNumber;
         numEl.className = 'board-num';
+        numEl.style.color = d.currentCustomer.walkin ? '#e8590c' : '';
         currentCalledAt = d.currentCustomer.calledAt;
       } else {
         numEl.innerText = '대기';
         numEl.className = 'board-num idle';
+        numEl.style.color = '';
         currentCalledAt = null;
       }
       updateTimer();

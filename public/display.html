@@ -251,7 +251,7 @@
             '<div class="desk-title">' + d.name + '</div>' +
             '<div class="desk-meta' + (over ? ' over' : '') + '" data-called="' + (busy ? d.currentCustomer.calledAt : '') + '">' +
             (busy ? '상담 ' + fmtMs(sec) : '호출 대기') + '</div></div>' +
-            '<span class="ticket-display' + (busy ? '' : ' idle') + '">' +
+            '<span class="ticket-display' + (busy ? '' : ' idle') + '"' + (busy && d.currentCustomer.walkin ? ' style="color:#ff8c42;"' : '') + '>' +
             (busy ? d.currentCustomer.ticketNumber + '번' : '대기중') + '</span></div>';
         });
 
@@ -275,9 +275,9 @@
         '<div class="hero-main">' +
         '<span class="hero-bank" style="color:' + info.color + ';">' + data.bankName + '</span>' +
         (data.customer.walkin || data.customer.reserved
-          ? '<span class="hero-kind" style="font-size:0.42em;font-weight:900;padding:6px 12px;border-radius:12px;background:' + (data.customer.walkin ? '#fff4e6;color:#c2410c' : '#e6fcf5;color:#0ca678') + ';">' + (data.customer.walkin ? '현장' : '예약') + '</span>'
+          ? '<span class="hero-kind" style="font-size:0.42em;font-weight:900;padding:6px 12px;border-radius:12px;background:' + (data.customer.walkin ? '#e8590c;color:#fff' : '#e6fcf5;color:#0ca678') + ';">' + (data.customer.walkin ? '현장 접수' : '예약') + '</span>'
           : '') +
-        '<span class="hero-num">' + data.customer.ticketNumber + '번</span>' +
+        '<span class="hero-num"' + (data.customer.walkin ? ' style="color:#ff8c42;"' : '') + '>' + data.customer.ticketNumber + '번</span>' +
         '<span class="hero-arrow">➡</span>' +
         '<span class="hero-desk">' + data.deskName + '</span>' +
         '</div>';
