@@ -944,6 +944,7 @@ function convertToReserved(cust) {
 }
 
 const callThrottle = {};
+let lastNotice = { text: '', at: 0 };
 
 function callerBlocked(b, deskNumber) {
   const deskKey = `${b}_${deskNumber}`;
@@ -1339,6 +1340,18 @@ io.on('connection', (socket) => {
     if (!f) return ack({ ok: false, reason: 'not_found' });
     ack({ ok: true, ticket: ticketInfo(b, f) });
   });
+  // 현장 안내 방송: 정해진 멘트(또는 직접 입력)를 스피커 PC·전광판에서 읽는다. 같은 멘트 5초 안 연타는 무시.
+  socket.on('staff_notice', (payload, callback) => {
+    const ack = typeof callback === 'function' ? callback : () => {};
+    const text = String((payload && payload.text) || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (!text) return ack({ ok: false, reason: 'empty' });
+    const now = Date.now();
+    if (lastNotice.text === text && now - lastNotice.at < 5000) return ack({ ok: false, reason: 'repeat' });
+    lastNotice = { text, at: now };
+    io.emit('play_notice', { text, at: now });
+    ack({ ok: true });
+  });
+
   // 현장 접수 → 예약 고객 전환 (명단 동·호수가 틀려 현장 접수로 받은 예약자 등, 직원 확인 후)
   socket.on('staff_convert_reserved', (payload, callback) => {
     const ack = typeof callback === 'function' ? callback : () => {};

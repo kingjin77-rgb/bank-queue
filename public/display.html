@@ -293,6 +293,15 @@
     // 방송 횟수는 관리자 콘솔에서 정한 값(기본 1회)을 따르고,
     // 같은 손님·같은 창구 호출이 3초 안에 다시 오면 한 번만 방송한다.
     let lastAnnounceKey = '', lastAnnounceAt = 0;
+    // 현장 안내 방송: 전광판 소리를 켰을 때만 읽는다.
+    let lastNoticeAt = 0;
+    socket.on('play_notice', function (data) {
+      if (!data || !data.text || data.at === lastNoticeAt) return;
+      lastNoticeAt = data.at;
+      if (!audioReady) return;
+      enqueueSpeech(data.text);
+    });
+
     socket.on('play_announcement', function (data) {
       if (targetBank && targetBank.toLowerCase() !== data.bank) return;
       if (!audioReady) return;
