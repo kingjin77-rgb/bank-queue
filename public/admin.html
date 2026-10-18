@@ -222,6 +222,11 @@
     </div>
 
     <!-- 대리 발권 (휴대폰이 없거나 QR 을 못 찍으시는 분) -->
+    <div class="card" id="noticeCard">
+      <h2>📢 현장 안내 방송</h2>
+      <div id="noticeBox"></div>
+    </div>
+
     <div class="card proxy-card" id="proxyCard">
       <h2>🎫 대리 발권</h2>
       <div style="font-size: 15px; color: #cbd5e1; margin-bottom: 14px; line-height: 1.6;">
@@ -1421,6 +1426,15 @@
         `최근 호출: ${data.bankName} ${data.customer.ticketNumber}번 고객님 → ${data.deskName} (${new Date().toLocaleTimeString('ko-KR')})`;
     });
 
+    // 현장 안내 방송(현장안내 앱·관리자 앱의 안내 버튼): 스피커를 켠 화면에서만 읽는다.
+    let lastNoticeAt = 0;
+    socket.on('play_notice', (data) => {
+      if (!data || !data.text || data.at === lastNoticeAt) return;
+      lastNoticeAt = data.at;
+      if (!audioUnlocked) return;
+      enqueueSpeech(data.text, true);
+    });
+
     // 같은 손님·같은 창구 호출이 3초 안에 다시 오면 한 번만 방송한다(재접속·중복 신호 대비).
     let lastAnnounceKey = '', lastAnnounceAt = 0;
     socket.on('play_announcement', (data) => {
@@ -1625,6 +1639,8 @@
       document.getElementById('jlEasterEgg').classList.remove('show');
     }
   </script>
+  <script src="/notice.js"></script>
+  <script>mountNoticePanel(document.getElementById('noticeBox'), socket, { dark: true });</script>
   <script src="/pwa.js" data-role="admin"></script>
 </body>
 </html>

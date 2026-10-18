@@ -112,6 +112,10 @@
       <button class="proxy-open" onclick="openProxy()">🎫 대리발권</button>
       <button class="proxy-open" onclick="openForce()">⛔ 번호 강제종료</button>
     </div>
+    <details class="notice-wrap" id="noticeWrap" style="margin-top:8px;">
+      <summary style="cursor:pointer;font-size:16px;font-weight:900;padding:10px 12px;border-radius:12px;background:#fff4e6;color:#c2410c;">📢 안내 방송 (눌러서 열기)</summary>
+      <div id="noticeBox" style="margin-top:8px;"></div>
+    </details>
     <div class="stats">
       <span class="stat">확인 <b id="stDone">0</b> / <span id="stAll">0</span>명</span>
       <span class="stat" id="stView"></span>
@@ -658,6 +662,8 @@
     showNameBtn();
     render();
   </script>
+  <script src="/notice.js"></script>
+  <script>mountNoticePanel(document.getElementById('noticeBox'), socket, { dark: false });</script>
   <script src="/pwa.js" data-role="reserve"></script>
 </body>
 </html>
