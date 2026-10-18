@@ -7,12 +7,42 @@ const https = require('https');
 const httpMod = require('http');
 const crypto = require('crypto');
 
+// ===== 운영 스위치 =====
+// 행사가 끝나면 링크가 밖으로 퍼져도 아무것도 쓸 수 없게 전체를 닫아 둔다(프로그램 유포 방지).
+// 다시 여는 것은 대표님 지시로만: 이 값을 false 로 바꿔 배포한다.
+// (비상시 대표님이 Render 환경변수 SITE_OPEN=1 을 넣으면 코드 수정 없이 열린다)
+const SITE_CLOSED = true;   // 2026-10-18 전주 행사 종료 → 차단
+const SITE_IS_CLOSED = SITE_CLOSED && process.env.SITE_OPEN !== '1';
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: '*' },
-  transports: ['websocket', 'polling']
+  transports: ['websocket', 'polling'],
+  serveClient: !SITE_IS_CLOSED
 });
+
+const CLOSED_PAGE = '<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">' +
+  '<meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="robots" content="noindex, nofollow">' +
+  '<title>운영 종료</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;' +
+  'background:#f2f4f6;font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;color:#191f28;text-align:center;padding:24px;box-sizing:border-box;}' +
+  '.box{background:#fff;border-radius:24px;padding:40px 28px;max-width:420px;box-shadow:0 8px 28px rgba(0,0,0,.07);}' +
+  'h1{font-size:26px;margin:0 0 12px;}p{font-size:16px;color:#6b7684;line-height:1.6;margin:0;}</style></head>' +
+  '<body><div class="box"><h1>운영 종료</h1><p>현장 상담 시스템 운영이 종료되었습니다.</p></div></body></html>';
+
+if (SITE_IS_CLOSED) {
+  console.log('[운영 종료] 모든 화면과 실시간 연결을 막습니다. (다시 열기: server.js SITE_CLOSED=false)');
+  app.use((req, res, next) => {
+    if (req.path === '/healthz' || req.path === '/sw.js') return next();
+    res.set('Cache-Control', 'no-store');
+    res.set('X-Robots-Tag', 'noindex, nofollow');
+    const p = req.path.toLowerCase();
+    const isPage = p === '/' || p.endsWith('.html') || p === '/kiosk' || !/\.[a-z0-9]+$/.test(p);
+    if (isPage) return res.status(503).type('html').send(CLOSED_PAGE);
+    return res.status(404).type('text').send('운영 종료');
+  });
+  io.use((socket, next) => next(new Error('closed')));
+}
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -1816,7 +1846,7 @@ io.on('connection', (socket) => {
 
 // Render 무료 플랜 슬립 방지 (15분 무접속 시 서버가 잠들어 현장에서 첫 접속이 느려짐)
 const SELF_URL = process.env.SELF_URL || 'https://bank-queue.onrender.com';
-setInterval(() => {
+if (!SITE_IS_CLOSED) setInterval(() => {
   try {
     const client = SELF_URL.startsWith('https:') ? https : httpMod;
     const req = client.get(SELF_URL, (res) => res.resume());
