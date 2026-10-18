@@ -1,6 +1,6 @@
 // 현장 네트워크가 불안정해도 화면이 뜨도록 하는 서비스 워커.
 // HTML 은 항상 최신을 먼저 받아오고(배포 즉시 반영), 정적 파일만 캐시를 먼저 쓴다.
-const CACHE = 'bankqueue-v8';
+const CACHE = 'bankqueue-v9';
 const ASSETS = [
   '/chime.wav',
   '/silent.wav',
@@ -59,5 +59,18 @@ self.addEventListener('fetch', (e) => {
         return res;
       });
     })
+  );
+});
+
+// 상담사 '새 손님 알림'을 누르면 그 상담사 화면으로 돌아간다(열려 있으면 그 창, 없으면 새로).
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || '/teller.html';
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      const hit = list.find((c) => c.url === url) || list.find((c) => c.url.indexOf('/teller.html') >= 0);
+      if (hit) return hit.focus();
+      return self.clients.openWindow(url);
+    }).catch(() => {})
   );
 });
