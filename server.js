@@ -57,7 +57,11 @@ const INITIAL_SETTINGS = {
   reserveEarlyMin: 10,    // 예약 인정: 각 타임 정시 몇 분 전부터
   reserveFirstEarlyMin: 30, // 그날 첫 타임은 몇 분 전부터
   reserveLastLateMin: 30, // 마지막 타임은 끝나고 몇 분까지
-  reserveGate: true       // 예약자 명단이 있으면 제이엘 번호표는 예약 시간대의 예약자만 QR 로 받는다
+  reserveGate: true,      // 예약자 명단이 있으면 제이엘 번호표는 예약 시간대의 예약자만 QR 로 받는다
+  // 운영 방식: 'reserve' 사전예약 단지(동·호수 확인·현장 접수 1001~·예약 우선) / 'general' 일반 단지(선착순 1,2,3…)
+  // 관리자 화면 버튼으로 바꾼다. siteModeAt 은 마지막으로 바꾼 시각(0 = 아직 아무도 정하지 않음, 기본값 사용 중).
+  siteMode: process.env.SITE_MODE === 'reserve' ? 'reserve' : 'general',
+  siteModeAt: 0
 };
 
 function clone(v) { return JSON.parse(JSON.stringify(v)); }
@@ -274,7 +278,7 @@ function bumpReserveVersion() {
 }
 
 function reserveGateOn() {
-  return db.settings.reserveGate !== false && db.reservations.list.length > 0;
+  return db.settings.siteMode === 'reserve' && db.settings.reserveGate !== false && db.reservations.list.length > 0;
 }
 
 // 폰에 보내는 표시 정보에는 어느 폰이 받았는지(deviceId)를 넣지 않는다.
@@ -299,6 +303,7 @@ function reservePayload() {
     seedLocked: reserveSeedLocked,
     gate: reserveGateOn(),
     gateSetting: db.settings.reserveGate !== false,
+    siteMode: db.settings.siteMode,
     earlyMin: w.reserveEarlyMin,
     firstEarlyMin: w.reserveFirstEarlyMin,
     lastLateMin: w.reserveLastLateMin,
@@ -457,6 +462,8 @@ function normalizeDb() {
   db.completedLogs = db.completedLogs.filter(l => l && INITIAL_BANKS[l.bank]);
   db.passedLogs = db.passedLogs.filter(l => l && INITIAL_BANKS[l.bank]);
   db.settings = { ...INITIAL_SETTINGS, ...(db.settings || {}) };
+  if (db.settings.siteMode !== 'reserve' && db.settings.siteMode !== 'general') db.settings.siteMode = INITIAL_SETTINGS.siteMode;
+  db.settings.siteModeAt = Number(db.settings.siteModeAt) > 0 ? Number(db.settings.siteModeAt) : 0;
   db.resetAt = Number.isFinite(Number(db.resetAt)) ? Number(db.resetAt) : 0;
   db.walkinSeq = safeCount(db.walkinSeq, 90000);
   normalizeReservations();
@@ -477,7 +484,8 @@ loadBackup();
 // 저장소가 공개라 명단은 암호화해 data/reserve_seed.enc 에 두고, 비밀번호는 Render 환경변수
 // RESERVE_KEY 에만 둔다(연락처는 가운데를 가린 채로 암호화). 서버가 켜질 때마다 이 명단으로 시작하므로
 // 재배포·재시작해도 명단이 비지 않는다. 관리자가 나중에 새 명단을 올리면 그쪽이 더 최근이라 교체된다.
-const RESERVE_SEED_FILE = path.join(__dirname, 'data', 'reserve_seed.enc');
+// (다음 사전예약 단지 명단을 고정할 때도 같은 자리에 둔다. 시험용으로 RESERVE_SEED_FILE 환경변수로 다른 파일을 지정할 수 있다.)
+const RESERVE_SEED_FILE = process.env.RESERVE_SEED_FILE || path.join(__dirname, 'data', 'reserve_seed.enc');
 let reserveSeedLocked = false;   // 고정 명단 파일은 있는데 비밀번호가 없거나 틀림
 function readReserveSeed() {
   if (!fs.existsSync(RESERVE_SEED_FILE)) return null;
@@ -1611,6 +1619,10 @@ io.on('connection', (socket) => {
       if (!isNaN(h) && h >= 0 && h <= 23) next.closeHour = h;
     }
     if (patch && typeof patch.reserveGate === 'boolean') next.reserveGate = patch.reserveGate;
+    if (patch && (patch.siteMode === 'reserve' || patch.siteMode === 'general')) {
+      next.siteMode = patch.siteMode;
+      next.siteModeAt = Date.now();
+    }
     Object.keys(RESERVE_WIN_DEFAULTS).forEach(k => {
       if (!patch || patch[k] == null) return;
       const n = parseInt(patch[k], 10);
@@ -1758,6 +1770,11 @@ io.on('connection', (socket) => {
         standardMinutes: Math.min(safeCount(snapshot.settings.standardMinutes, 180), 180) || db.settings.standardMinutes,
         repeatCount: Math.min(safeCount(snapshot.settings.repeatCount, 3), 3) || db.settings.repeatCount
       };
+      // 운영 방식도 되살린다(관리자가 정한 적이 있을 때만).
+      if ((snapshot.settings.siteMode === 'reserve' || snapshot.settings.siteMode === 'general') && Number(snapshot.settings.siteModeAt) > 0) {
+        db.settings.siteMode = snapshot.settings.siteMode;
+        db.settings.siteModeAt = Number(snapshot.settings.siteModeAt);
+      }
       // 재배포로 저장 파일이 사라져도 관리자가 정한 예약 인정 시간은 되살린다.
       Object.keys(RESERVE_WIN_DEFAULTS).forEach(k => {
         const n = parseInt(snapshot.settings[k], 10);

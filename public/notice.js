@@ -4,9 +4,18 @@
  * 사용: mountNoticePanel(document.getElementById('noticeBox'), socket, { dark: true })
  */
 (function () {
-  var PRESETS = [
-    ['예약자 안내', '사전 예약하신 고객님께서는 QR코드를 찍고 예약하신 동·호수를 입력해 주십시오. 예약 확인 후 바로 번호표가 발급됩니다.'],
-    ['현장 접수 안내', '예약하지 않으신 고객님께서는 현장 접수 버튼을 눌러 번호표를 받아 주십시오. 예약 고객님이 먼저 호출되는 점 양해 부탁드립니다.'],
+  // 운영 방식(사전예약 / 일반)에 따라 앞 두 멘트가 바뀐다. 나머지는 공통.
+  var FIRST = {
+    reserve: [
+      ['예약자 안내', '사전 예약하신 고객님께서는 QR코드를 찍고 예약하신 동·호수를 입력해 주십시오. 예약 확인 후 바로 번호표가 발급됩니다.'],
+      ['현장 접수 안내', '예약하지 않으신 고객님께서는 현장 접수 버튼을 눌러 번호표를 받아 주십시오. 예약 고객님이 먼저 호출되는 점 양해 부탁드립니다.']
+    ],
+    general: [
+      ['번호표 안내', 'QR코드를 찍으시면 바로 번호표가 발급됩니다. 오신 순서대로 호출해 드립니다.'],
+      ['상담 순서 안내', '법무법인 제이엘 상담을 먼저 받으신 뒤 은행 상담이 진행됩니다.']
+    ]
+  };
+  var COMMON = [
     ['호출 알림 켜기', '번호표를 받으신 후 호출 알림 켜기를 꼭 눌러 주십시오. 순서가 되면 휴대폰과 방송으로 안내해 드립니다.'],
     ['은행 번호표', '법무법인 제이엘 상담을 마치신 고객님께서는 휴대폰에서 은행을 선택하시고 은행 번호표를 받아 주십시오.'],
     ['휴대폰 없는 분', '휴대폰이 없으시거나 번호표 받기가 어려우신 고객님께서는 안내 직원에게 말씀해 주십시오.']
@@ -40,7 +49,15 @@
         msg.innerText = '📢 방송했습니다 · ' + new Date().toLocaleTimeString('ko-KR');
       });
     }
-    PRESETS.forEach(function (p, i) {
+    var mode = '';
+    function renderButtons(m) {
+      m = m === 'reserve' ? 'reserve' : 'general';
+      if (m === mode) return;
+      mode = m;
+      grid.innerHTML = '';
+      FIRST[m].concat(COMMON).forEach(addButton);
+    }
+    function addButton(p, i) {
       var b = document.createElement('button');
       b.className = 'nt-btn';
       b.setAttribute('data-i', i);
@@ -48,7 +65,10 @@
       b.innerHTML = '<div style="font-size:16px;font-weight:900;">📢 ' + p[0] + '</div><div style="font-size:13px;color:' + c.sub + ';margin-top:3px;">' + p[1] + '</div>';
       b.onclick = function () { send(p[1]); };
       grid.appendChild(b);
-    });
+    }
+    renderButtons(opt.mode || 'general');
+    socket.on('all_state_update', function (d) { if (d && d.settings) renderButtons(d.settings.siteMode); });
+    socket.on('reserve_state', function (d) { if (d && d.siteMode) renderButtons(d.siteMode); });
     box.querySelector('.nt-send').onclick = function () {
       var inp = box.querySelector('.nt-input');
       send(inp.value);

@@ -171,7 +171,9 @@
 
     socket.on('connect', function () { socket.emit('get_all_state'); });
 
+    let opSiteMode = 'general';
     socket.on('all_state_update', function (data) {
+      if (data && data.settings) opSiteMode = data.settings.siteMode === 'reserve' ? 'reserve' : 'general';
       state = data;
       if (data.serverTime) serverOffsetMs = new Date(data.serverTime).getTime() - Date.now();
       if (data.settings) standardMinutes = data.settings.standardMinutes;
@@ -278,7 +280,9 @@
       list.innerHTML = '';
       bankList().forEach(function (bank) {
         const kinds = bank.id === 'jl'
-          ? [{ walkin: false, sub: '예약자 (예약 시간에 오신 분)' }, { walkin: true, sub: '현장접수 (예약 없음)' }]
+          ? (opSiteMode === 'reserve'
+            ? [{ walkin: false, sub: '예약자 (예약 시간에 오신 분)' }, { walkin: true, sub: '현장접수 (예약 없음)' }]
+            : [{ walkin: false, sub: '번호표 대신 받기' }])
           : [{ walkin: false, sub: '제이엘 상담 마친 분' }];
         kinds.forEach(function (k) {
           const btn = document.createElement('button');

@@ -51,6 +51,11 @@
     .opts input { width: 20px; height: 20px; accent-color: var(--brand); }
     .opts button { border: 1.5px solid var(--border); background: #fff; border-radius: 12px; padding: 7px 12px; font-size: 13px; font-weight: 900; color: var(--text); }
     .listinfo { margin-top: 6px; font-size: 12px; font-weight: 800; color: #ffd7e0; }
+    .mode-banner { display: none; margin-top: 8px; padding: 12px; border-radius: 12px; background: #e7f5ff; color: #1864ab; font-size: 16px; font-weight: 900; line-height: 1.4; }
+    .mode-banner small { display: block; font-size: 13px; font-weight: 700; margin-top: 4px; }
+    body.mode-general .mode-banner { display: block; }
+    body.mode-general .stats, body.mode-general #listInfo, body.mode-general .search,
+    body.mode-general #slotBar, body.mode-general .opts, body.mode-general #gateInfo, body.mode-general #list { display: none !important; }
     .gate { margin: 8px 12px 0; border-radius: 14px; padding: 10px 12px; font-size: 13px; font-weight: 800; background: #fff; color: var(--text-sub); }
     .gate b { color: var(--text); }
 
@@ -112,6 +117,7 @@
       <button class="proxy-open" onclick="openProxy()">🎫 대리발권</button>
       <button class="proxy-open" onclick="openForce()">⛔ 번호 강제종료</button>
     </div>
+    <div class="mode-banner" id="modeBanner">🎫 일반 단지(선착순) 운영 중 · 예약자 확인 없음<small>손님은 QR 을 찍으면 바로 번호표(1, 2, 3…). 위 대리발권·강제종료·아래 안내 방송은 그대로 씁니다.</small></div>
     <details class="notice-wrap" id="noticeWrap" style="margin-top:8px;">
       <summary style="cursor:pointer;font-size:16px;font-weight:900;padding:10px 12px;border-radius:12px;background:#fff4e6;color:#c2410c;">📢 안내 방송 (눌러서 열기)</summary>
       <div id="noticeBox" style="margin-top:8px;"></div>
@@ -296,13 +302,13 @@
     let lastStateSig = '';
     function applyState(res) {
       // 바뀐 게 없으면 다시 그리지 않는다(누르는 순간 목록이 다시 그려져 눌림이 사라지는 것 방지).
-      const sig = JSON.stringify([res.listId, res.version, res.marks, res.gate, res.gateSetting, (res.list || []).length]);
+      const sig = JSON.stringify([res.listId, res.version, res.marks, res.gate, res.gateSetting, res.siteMode, (res.list || []).length]);
       if (sig === lastStateSig && Object.keys(pending).length === 0) return;
       lastStateSig = sig;
       const changedList = res.listId !== state.listId;
       state = {
         listId: res.listId || '', list: res.list || [], marks: res.marks || {}, cleared: res.cleared || [],
-        version: res.version || 0, source: res.source || '', gate: !!res.gate, gateSetting: res.gateSetting !== false, earlyMin: res.earlyMin || 10, slotMin: res.slotMin || 60
+        version: res.version || 0, source: res.source || '', gate: !!res.gate, gateSetting: res.gateSetting !== false, siteMode: res.siteMode === 'reserve' ? 'reserve' : 'general', earlyMin: res.earlyMin || 10, slotMin: res.slotMin || 60
       };
       pending = {};
       saveSnapshot();
@@ -351,6 +357,7 @@
     }
 
     function render() {
+      document.body.classList.toggle('mode-general', state.siteMode !== 'reserve');
       const slots = slotsOf();
       const nowKey = nowSlotKey();
       const total = state.list.length;
@@ -551,7 +558,9 @@
       if (!Object.keys(info).length) list.innerHTML = '<p>기관 정보를 불러오는 중입니다. 잠시 후 다시 열어 주세요.</p>';
       Object.keys(info).forEach(function (b) {
         const kinds = b === 'jl'
-          ? [{ walkin: false, sub: '예약자 (예약 시간에 오신 분)' }, { walkin: true, sub: '현장접수 (예약 없음)' }]
+          ? (state.gate
+            ? [{ walkin: false, sub: '예약자 (예약 시간에 오신 분)' }, { walkin: true, sub: '현장접수 (예약 없음)' }]
+            : [{ walkin: false, sub: '번호표 대신 받기' }])
           : [{ walkin: false, sub: '제이엘 상담 마친 분' }];
         kinds.forEach(function (k) {
           const btn = document.createElement('button');
