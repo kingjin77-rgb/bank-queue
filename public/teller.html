@@ -270,9 +270,32 @@
 
     const socket = io({ transports: ['websocket', 'polling'] });
 
-    // 창구는 기억하지 않는다. 새로고침하면 담당 창구를 다시 고른다.
+    // 담당 창구는 이 폰에 오늘 하루 기억한다. 앱을 내렸다 켜거나 새로고침해도 다시 고르지 않는다.
+    // (바꿀 때는 [창구 이동]) 주소에 ?desk= 가 있으면 그 창구가 우선이다.
+    const DESK_KEY = 'teller_desk_' + bank;
+    function todayStr() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
+    function readSavedDesk() {
+      try {
+        const v = JSON.parse(localStorage.getItem(DESK_KEY) || 'null');
+        if (v && v.day === todayStr() && v.desk >= 1 && v.desk <= 50) return v.desk;
+      } catch (e) {}
+      return null;
+    }
+    function saveDesk(n) {
+      try {
+        if (n) localStorage.setItem(DESK_KEY, JSON.stringify({ desk: n, day: todayStr() }));
+        else localStorage.removeItem(DESK_KEY);
+      } catch (e) {}
+      // 주소에도 창구 번호를 넣어 둔다(브라우저가 페이지를 다시 불러도 그 창구로).
+      try {
+        const u = new URL(location.href);
+        if (n) u.searchParams.set('desk', n); else u.searchParams.delete('desk');
+        history.replaceState(null, '', u.pathname + u.search);
+      } catch (e) {}
+    }
     let myDesk = parseInt(urlParams.get('desk') || '', 10);
-    if (isNaN(myDesk)) myDesk = null;
+    if (isNaN(myDesk) || myDesk < 1) myDesk = readSavedDesk();
+    if (myDesk) saveDesk(myDesk);
 
     let allDesks = [];
     let standardMinutes = 15;
@@ -371,6 +394,7 @@
     function chooseDesk(deskNo) {
       unlockAudio(false);
       myDesk = deskNo;
+      saveDesk(deskNo);
       closeDeskSheet();
       syncDeskUi();
       socket.emit('get_state', { bank: bank });
@@ -422,6 +446,7 @@
       // 관리자가 창구를 없앴는데 그게 내 창구였다면 즉시 다시 고르게 한다.
       if (myDesk && !allDesks.some(function (d) { return d.desk === myDesk; })) {
         myDesk = null;
+        saveDesk(null);
         openDeskSheet('select');
       }
       if (!myDesk && bankValid) {
@@ -573,6 +598,7 @@
       if (data.bank !== bank) return;
       if (data.action === 'remove' && data.removedDesk === myDesk) {
         myDesk = null;
+        saveDesk(null);
         alert('이 창구가 관리자에 의해 닫혔습니다. 창구를 다시 선택해 주세요.');
         openDeskSheet('select');
       }
