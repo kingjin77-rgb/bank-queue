@@ -189,6 +189,7 @@
       <div id="fcInfo" class="fc-info"></div>
       <div id="fcActs" style="display:none;">
         <div class="btns" style="grid-template-columns: 1fr; gap: 8px;">
+          <button class="b-ok" id="fcConvert" style="display:none; background:#0ca678;" onclick="convertReserved()">예약 고객으로 전환 (예약 확인된 분)</button>
           <button class="b-ok" id="fcDone" onclick="forceEnd('done')">상담 끝남으로 처리</button>
           <button class="b-cancel" onclick="forceEnd('cancel')">번호 취소 (안 오심)</button>
         </div>
@@ -614,7 +615,27 @@
         const kind = t.walkin ? ' · 현장 접수' : (t.reserved ? ' · 예약' : '');
         out.innerHTML = '<b>' + esc(t.bankName) + ' ' + t.ticketNumber + '번</b> · ' + st + kind + ' · ' + hhmm(new Date(t.createdAt).getTime()) + ' 발권';
         document.getElementById('fcDone').innerText = t.bank === 'jl' ? '제이엘 상담 끝남으로 처리 (은행 상담 가능)' : '상담 끝남으로 처리';
+        document.getElementById('fcConvert').style.display = t.bank === 'jl' && t.walkin && t.status === 'waiting' ? '' : 'none';
         document.getElementById('fcActs').style.display = 'block';
+      });
+    }
+
+    // 현장 접수 → 예약 고객 전환 (명단 동·호수가 틀려 현장 접수로 받은 예약자를 직원이 확인한 뒤)
+    function convertReserved() {
+      if (!fcFound) return;
+      const t = fcFound;
+      if (!confirm('현장 접수 ' + t.ticketNumber + '번을 예약 고객 번호로 바꿀까요?\n예약 고객 순서로 앞당겨지고, 손님 폰 번호도 자동으로 바뀝니다.')) return;
+      socket.timeout(6000).emit('staff_convert_reserved', { ticketNumber: t.ticketNumber }, function (err, res) {
+        const out = document.getElementById('fcInfo');
+        document.getElementById('fcActs').style.display = 'none';
+        fcFound = null;
+        if (err || !res || !res.ok) {
+          out.innerText = res && res.reason === 'called' ? '이미 호출된 번호는 바꿀 수 없습니다.' : '바뀌지 않았습니다. 번호를 다시 조회해 주세요.';
+          return;
+        }
+        out.innerHTML = '✔ 현장 접수 ' + res.from + '번 → <b style="font-size:1.6em;color:#0ca678;">예약 ' + res.ticket.ticketNumber + '번</b>' +
+          '<br>손님께 새 번호를 알려 주세요. (손님 폰도 자동으로 바뀝니다) 명단에서 그 세대 [확인]도 눌러 주세요.';
+        document.getElementById('fcNum').value = '';
       });
     }
     function forceEnd(mode) {

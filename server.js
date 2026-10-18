@@ -383,11 +383,24 @@ function checkReservation(dongIn, hoIn, deviceId) {
   applyReserveWindows(R.list);
   const now = Date.now();
   const inSlot = mine.filter(e => e.winStart != null && now >= e.winStart && now < e.winEnd);
-  if (!inSlot.length) return { ok: false, reason: 'time', slots: mine.map(e => e.slotLabel) };
+  if (!inSlot.length) {
+    // 아직 열리지 않은 예약이면 접수 시작 시각(한국 시간 HH:MM)을 알려준다.
+    const next = mine.filter(e => e.winStart != null && e.winStart > now).sort((a, b) => a.winStart - b.winStart)[0];
+    return { ok: false, reason: 'time', slots: mine.map(e => e.slotLabel), opensAt: next ? seoulHm(next.winStart) : '' };
+  }
   // 다른 폰이 이미 이 예약으로 번호를 받았으면 같은 예약으로 또 받을 수 없다.
   const free = inSlot.find(e => { const m = R.marks[e.id]; return !(m && m.on && m.dev && m.dev !== deviceId); });
   if (!free) return { ok: false, reason: 'used', slots: inSlot.map(e => e.slotLabel) };
   return { ok: true, entry: free };
+}
+
+function seoulHm(ms) {
+  try {
+    const o = {};
+    new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date(ms)).forEach(x => { o[x.type] = x.value; });
+    return o.hour + ':' + o.minute;
+  } catch (e) { return ''; }
 }
 
 // 동·호수를 마구 넣어 보는 것을 막는다 (폰마다 1분에 8번까지)
@@ -919,6 +932,13 @@ function createTicket(b, deviceId, name, phone, opts) {
   return ticket;
 }
 
+// 기다리는 현장 접수 번호표를 같은 폰의 예약 번호표로 바꾼다(예약 순서로, 현장 접수 앞에 선다).
+// 손님 폰은 내 번호가 사라진 것을 보고 다시 물어 새 번호를 받는다.
+function convertToReserved(cust) {
+  db.queues[JL] = (db.queues[JL] || []).filter(c => c.id !== cust.id);
+  return createTicket(JL, cust.deviceId || '', cust.deviceId ? cust.name : '대리발권', cust.phone, { reserved: true });
+}
+
 const callThrottle = {};
 
 function callerBlocked(b, deskNumber) {
@@ -986,6 +1006,19 @@ io.on('connection', (socket) => {
     if (restoring()) return ack({ success: false, status: 'wait' });
 
     const own = liveTicketOf(deviceId, b);
+    // 현장 접수 번호를 가진 손님이 예약 시간이 되어 동·호수를 넣으면 예약 번호로 바꿔 준다.
+    if (own && b === JL && own.walkin && p.upgrade === true && p.reserve && typeof p.reserve === 'object' && reserveGateOn()) {
+      if (own.status !== 'waiting') return ack({ success: true, status: 'ticket', ticket: own, jlProof: jlProof(deviceId, p.jlAttest) });
+      if (reserveTooFast(deviceId)) return ack({ success: false, status: 'reserve_denied', reason: 'slow', keep: true });
+      const v = checkReservation(p.reserve.dong, p.reserve.ho, deviceId);
+      if (!v.ok) return ack({ success: false, status: 'reserve_denied', reason: v.reason, slots: v.slots || [], opensAt: v.opensAt || '', keep: true });
+      const t = convertToReserved(own);
+      setReserveMark(v.entry.id, { on: true, by: 'QR 자동', via: 'qr', ticket: t.ticketNumber, dev: deviceId });
+      return ack({
+        success: true, status: 'ticket', ticket: t, converted: own.ticketNumber,
+        reserve: { dong: v.entry.dong, ho: v.entry.ho, slotLabel: v.entry.slotLabel }
+      });
+    }
     if (own) {
       return ack({
         success: true, status: 'ticket', ticket: own,
@@ -1044,7 +1077,7 @@ io.on('connection', (socket) => {
       if (!r) return ack({ success: false, status: 'reserve_required' });
       if (reserveTooFast(deviceId)) return ack({ success: false, status: 'reserve_denied', reason: 'slow' });
       const v = checkReservation(r.dong, r.ho, deviceId);
-      if (!v.ok) return ack({ success: false, status: 'reserve_denied', reason: v.reason, slots: v.slots || [] });
+      if (!v.ok) return ack({ success: false, status: 'reserve_denied', reason: v.reason, slots: v.slots || [], opensAt: v.opensAt || '' });
       const t = createTicket(b, deviceId, p.name, p.phone, { reserved: true });
       setReserveMark(v.entry.id, { on: true, by: 'QR 자동', via: 'qr', ticket: t.ticketNumber, dev: deviceId });
       return ack({
@@ -1302,6 +1335,18 @@ io.on('connection', (socket) => {
     if (!f) return ack({ ok: false, reason: 'not_found' });
     ack({ ok: true, ticket: ticketInfo(b, f) });
   });
+  // 현장 접수 → 예약 고객 전환 (명단 동·호수가 틀려 현장 접수로 받은 예약자 등, 직원 확인 후)
+  socket.on('staff_convert_reserved', (payload, callback) => {
+    const ack = typeof callback === 'function' ? callback : () => {};
+    const p = payload || {};
+    const f = findLiveTicket(JL, p.ticketNumber);
+    if (!f) return ack({ ok: false, reason: 'not_found' });
+    if (!f.cust.walkin) return ack({ ok: false, reason: 'not_walkin' });
+    if (f.desk || f.cust.status !== 'waiting') return ack({ ok: false, reason: 'called' });
+    const t = convertToReserved(f.cust);
+    ack({ ok: true, from: f.cust.ticketNumber, ticket: { bank: JL, bankName: t.bankName, ticketNumber: t.ticketNumber, reserved: true } });
+  });
+
   socket.on('staff_force_end', (payload, callback) => {
     const ack = typeof callback === 'function' ? callback : () => {};
     const p = payload || {};
