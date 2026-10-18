@@ -125,9 +125,25 @@
     .rv-walkin-note { font-size: 13px; font-weight: 800; color: var(--text-sub); margin-top: 10px; line-height: 1.5; }
     .rv-walkin-btn { background: #fff; color: var(--text); border: 2px solid var(--border); }
     .t-reserve.walkin { color: #fff; background: #e8590c; font-size: 16px; }
-    .ticket-card.walkin { box-shadow: inset 0 0 0 4px #e8590c; }
-    .ticket-card.walkin .t-number, .ticket-card.walkin .t-unit { color: #e8590c; }
-    .ticket-card.walkin .t-label { color: #c2410c; }
+    /* 현장 접수 번호표: 카드 전체를 주황으로 채워 예약 번호표(흰 카드)와 한눈에 구별 */
+    .ticket-card.walkin { background: #f76707; border-top-color: #c2410c; box-shadow: 0 8px 28px rgba(247,103,7,0.35); }
+    .ticket-card.walkin .t-number { color: #fff; font-size: 120px; }
+    .ticket-card.walkin .t-unit, .ticket-card.walkin .t-label, .ticket-card.walkin .t-hint { color: #fff; }
+    .ticket-card.walkin .t-divider { background: rgba(255,255,255,0.4); }
+    .ticket-card.walkin .t-rows { grid-template-columns: 1fr; }
+    .ticket-card.walkin .t-cell { background: rgba(255,255,255,0.2); }
+    .ticket-card.walkin .t-cell .c-label, .ticket-card.walkin .t-cell .c-value { color: #fff; }
+    .ticket-card.walkin #etaCell { display: none; }
+    .ticket-card.walkin .t-reserve.walkin { background: #fff; color: #c2410c; }
+    .kind-banner { display: none; margin: -32px -20px 18px; padding: 14px 10px; border-radius: 18px 18px 0 0; font-size: 30px; font-weight: 900; letter-spacing: 2px; }
+    .ticket-card.walkin .kind-banner { display: block; background: #c2410c; color: #fff; }
+    .ticket-card.reserved .kind-banner { display: block; background: #0ca678; color: #fff; }
+    body.walkin-mode .brand-bar { background: #f76707; color: #fff; }
+    .upgrade-btn { display: none; width: 100%; margin-top: 16px; min-height: 54px; border-radius: 16px; border: 2px solid #fff; background: rgba(255,255,255,0.15); color: #fff; font-size: 16px; font-weight: 900; cursor: pointer; }
+    .ticket-card.walkin .upgrade-btn { display: block; }
+    .rv-walkin-link { width: 100%; margin-top: 18px; min-height: 48px; border-radius: 14px; border: 1px solid var(--border); background: #f2f4f6; color: var(--text-sub); font-size: 15px; font-weight: 800; cursor: pointer; }
+    .rv-confirm { display: none; margin-top: 14px; background: #fff4e6; border: 2px solid #f76707; border-radius: 18px; padding: 16px; text-align: center; font-size: 17px; line-height: 1.5; color: #7c2d12; }
+    .rv-back-btn { display: none; }
     .t-reserve { display: none; margin-top: 10px; font-size: 14px; font-weight: 900; color: #0ca678; background: #e6fcf5; border-radius: 12px; padding: 6px 12px; }
   </style>
   <link rel="stylesheet" href="/type.css">
@@ -144,6 +160,7 @@
     <section id="ticketSection">
       <div class="first-notice" id="jlFirstNotice" style="display:none;"></div>
       <div class="ticket-card" id="ticketCard">
+        <div class="kind-banner" id="kindBanner"></div>
         <div class="t-label" id="ticketLabel">내 대기번호</div>
         <div class="t-number" id="myNumDisplay">-</div>
         <div class="t-unit">번</div>
@@ -156,13 +173,14 @@
             <div class="c-label" id="waitLabel">내 앞 대기</div>
             <div class="c-value" id="myWaitDisplay">-</div>
           </div>
-          <div class="t-cell">
+          <div class="t-cell" id="etaCell">
             <div class="c-label">예상 대기시간</div>
             <div class="c-value" id="myEtaDisplay">-</div>
           </div>
         </div>
 
         <div class="t-hint" id="statusHint">번호표를 발급하고 있습니다.</div>
+        <button class="upgrade-btn" id="upgradeBtn" onclick="startUpgrade()">예약하셨나요? 예약 시간이 되면 여기서 동·호수 확인</button>
       </div>
 
       <button class="btn-big btn-sound" id="soundBtn" onclick="enableAlerts()">🔔 호출 알림 켜기 (꼭 눌러주세요)</button>
@@ -192,8 +210,14 @@
         </div>
         <div class="rv-err" id="rvErr"></div>
         <button class="btn-big btn-brand" id="rvSubmit" onclick="submitReserve()">예약 확인하고 번호표 받기</button>
-        <button class="btn-big rv-walkin-btn" onclick="takeWalkin()">예약 안 했어요 · 현장 접수</button>
-        <div class="t-hint" style="text-align:center;">현장 접수는 예약 고객이 우선 호출되며,<br>상황에 따라 순서가 바뀔 수 있습니다.</div>
+        <button class="rv-walkin-link" id="rvWalkinAsk" onclick="askWalkin()">예약 안 했어요 · 현장 접수</button>
+        <div class="rv-confirm" id="rvWalkinConfirm">
+          ⚠ <b>예약하셨나요?</b><br>예약하신 분은 위에 <b>동·호수</b>를 넣으셔야<br>예약 순서로 상담받습니다.
+          <button class="btn-big btn-brand" onclick="cancelWalkinAsk()">동·호수 넣기</button>
+          <button class="btn-big rv-walkin-btn" id="rvWalkinGo" onclick="takeWalkin()">예약 안 했어요, 현장 접수 받기</button>
+          <div class="t-hint" style="text-align:center;">현장 접수는 예약 고객이 우선 호출됩니다.</div>
+        </div>
+        <button class="btn-big rv-walkin-btn rv-back-btn" id="rvBackBtn" onclick="backToTicket()">현장 접수 번호표로 돌아가기</button>
       </div>
 
       <div class="done-card" id="rvDenied" style="display:none;">
@@ -518,6 +542,8 @@
       ['ticketSection', 'blockedSection', 'completeSection', 'reserveSection'].forEach(function (id) {
         document.getElementById(id).style.display = (id === section) ? 'block' : 'none';
       });
+      // 주황 헤더는 현장 접수 번호표를 보고 있을 때만
+      document.body.classList.toggle('walkin-mode', section === 'ticketSection' && ticketKind() === 'walkin');
     }
 
     function nameOf(bank) {
@@ -679,7 +705,9 @@
       const el = document.getElementById('reserveBadge');
       const kind = ticketKind();
       el.className = 't-reserve';
-      document.getElementById('ticketCard').className = 'ticket-card' + (kind === 'walkin' ? ' walkin' : '');
+      document.getElementById('ticketCard').className = 'ticket-card' + (kind ? ' ' + kind : '');
+      document.getElementById('kindBanner').innerText = kind === 'walkin' ? '현장 접수' : (kind === 'reserved' ? '예약 고객' : '');
+      document.body.classList.toggle('walkin-mode', kind === 'walkin');
       document.getElementById('ticketLabel').innerText =
         kind === 'walkin' ? '현장 접수 번호' : (kind === 'reserved' ? '예약 고객 번호' : '내 대기번호');
       document.getElementById('waitLabel').innerText =
@@ -708,9 +736,35 @@
       if (ask) document.getElementById('rvErr').innerText = msg;
       else alert(msg);
     }
+    // 현장 접수 번호를 가진 손님이 예약 시간이 되어 동·호수로 예약 확인하는 중인지
+    let upgradeMode = false;
+    function askWalkin() {
+      document.getElementById('rvWalkinAsk').style.display = 'none';
+      document.getElementById('rvWalkinConfirm').style.display = 'block';
+    }
+    function cancelWalkinAsk() {
+      document.getElementById('rvWalkinConfirm').style.display = 'none';
+      document.getElementById('rvWalkinAsk').style.display = 'block';
+      document.getElementById('rvDong').focus();
+    }
+    function startUpgrade() {
+      upgradeMode = true;
+      document.getElementById('rvDong').value = '';
+      document.getElementById('rvHo').value = '';
+      showReserveAsk('');
+      document.getElementById('rvDong').focus();
+    }
+    function backToTicket() {
+      upgradeMode = false;
+      resolve();
+    }
     function showReserveAsk(err) {
       show('reserveSection');
       closeOverlay();
+      document.body.classList.remove('walkin-mode');
+      document.getElementById('rvWalkinConfirm').style.display = 'none';
+      document.getElementById('rvWalkinAsk').style.display = upgradeMode ? 'none' : 'block';
+      document.getElementById('rvBackBtn').style.display = upgradeMode ? 'flex' : 'none';
       document.getElementById('rvAsk').style.display = 'block';
       document.getElementById('rvDenied').style.display = 'none';
       document.getElementById('rvErr').innerText = err || '';
@@ -730,7 +784,7 @@
       if (!socket.connected) { document.getElementById('rvErr').innerText = '연결 중입니다. 잠시 후 다시 눌러 주세요.'; return; }
       document.getElementById('rvErr').innerText = '';
       document.getElementById('rvSubmit').disabled = true;
-      resolve({ reserve: { dong: dong, ho: ho }, fresh: true });
+      resolve({ reserve: { dong: dong, ho: ho }, fresh: true, upgrade: upgradeMode });
     }
     function showReserveDenied(res, unit) {
       store.remove('jl_reserve_unit');
@@ -739,15 +793,22 @@
         return;
       }
       show('reserveSection');
+      document.body.classList.remove('walkin-mode');
       document.getElementById('rvAsk').style.display = 'none';
       document.getElementById('rvDenied').style.display = 'block';
+      // 이미 현장 접수 번호가 있는 손님(예약 확인 시도)은 그 번호표로 돌아가게 한다.
+      document.getElementById('rvWalkinBtn').innerText = res.keep ? '현장 접수 번호표 보기' : '현장 접수 번호표 받기';
       const who = unit ? unit.dong + '동 ' + unit.ho + '호' : '입력하신 세대';
       const title = document.getElementById('rvDeniedTitle');
       const desc = document.getElementById('rvDeniedDesc');
       if (res.reason === 'time') {
         title.innerText = '예약 시간이 아닙니다';
         desc.innerHTML = who + ' 예약 시간은<br><b>' + (res.slots || []).join(', ') + '</b>입니다.<br>' +
-          '시간대별 예약 인원이 정해져 있어 예약 시간에 오신 분이 우선입니다.<br>지금은 현장 접수로 받으실 수 있습니다.';
+          (res.opensAt
+            ? '<b style="color:#c2410c;">' + res.opensAt + '부터 예약 고객으로 접수됩니다.</b><br>' +
+              (res.keep ? '그 시간에 번호표 화면의 [예약 확인]을 다시 눌러 주세요.'
+                : '그때 동·호수를 넣으시거나, 지금 현장 접수로 받으셨다가<br>그 시간에 번호표 화면의 [예약 확인]을 누르시면<br>예약 순서로 바뀝니다.')
+            : '시간대별 예약 인원이 정해져 있어 예약 시간에 오신 분이 우선입니다.<br>지금은 현장 접수로 받으실 수 있습니다.');
       } else if (res.reason === 'used') {
         title.innerText = '이미 번호표를 받은 예약입니다';
         desc.innerHTML = who + ' 예약으로 이미 번호표가 발급되었습니다.<br>가족분이 따로 오셨다면 현장 접수로 받아 주세요.';
@@ -793,6 +854,7 @@
       // 시간예약자 확인: 방금 입력한 동·호수, 없으면 오늘 이 폰으로 확인된 동·호수
       if (currentBank === JL) {
         if (opts.walkin) req.walkin = true;
+        else if (opts.upgrade && opts.reserve) { req.reserve = opts.reserve; req.upgrade = true; }
         else {
           const unit = opts.reserve || readReserveUnit();
           if (unit) req.reserve = unit;
@@ -826,6 +888,7 @@
 
       switch (res.status) {
         case 'ticket': {
+          upgradeMode = false;
           const isNew = !myTicket || myTicket.id !== res.ticket.id;
           myTicket = res.ticket;
           saveTicket(myTicket);
