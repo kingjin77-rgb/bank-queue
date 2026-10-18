@@ -11,9 +11,11 @@
 
   var params = new URLSearchParams(window.location.search);
   var bank = (params.get('bank') || params.get('b') || '').toLowerCase().trim();
+  var desk = /^\d{1,2}$/.test(params.get('desk') || '') ? params.get('desk') : '';
 
-  // 1) 매니페스트 연결
-  var href = '/manifest.webmanifest?role=' + encodeURIComponent(role) + (bank ? '&b=' + encodeURIComponent(bank) : '');
+  // 1) 매니페스트 연결 (상담사 앱은 창구 번호까지)
+  var href = '/manifest.webmanifest?role=' + encodeURIComponent(role) + (bank ? '&b=' + encodeURIComponent(bank) : '') +
+    (role === 'teller' && desk ? '&desk=' + desk : '');
   var link = document.querySelector('link[rel="manifest"]');
   if (!link) {
     link = document.createElement('link');
@@ -21,6 +23,20 @@
     document.head.appendChild(link);
   }
   link.href = href;
+
+  // 아이폰: 홈 화면에 추가했을 때 사파리 링크가 아니라 앱(전체 화면)으로 열리게 한다.
+  function headTag(tag, attrs) {
+    var sel = tag + Object.keys(attrs).filter(function (k) { return k !== 'content' && k !== 'href'; })
+      .map(function (k) { return '[' + k + '="' + attrs[k] + '"]'; }).join('');
+    var el = document.head.querySelector(sel);
+    if (!el) { el = document.createElement(tag); document.head.appendChild(el); }
+    Object.keys(attrs).forEach(function (k) { el.setAttribute(k, attrs[k]); });
+  }
+  var appIcon = '/icons/' + (bank && role !== 'admin' && role !== 'board' ? bank : (role === 'admin' ? 'admin' : (role === 'board' ? 'board' : 'default'))) + '-192.png';
+  headTag('meta', { name: 'apple-mobile-web-app-capable', content: 'yes' });
+  headTag('meta', { name: 'mobile-web-app-capable', content: 'yes' });
+  headTag('meta', { name: 'apple-mobile-web-app-status-bar-style', content: 'default' });
+  headTag('link', { rel: 'apple-touch-icon', href: appIcon });
 
   // 2) 서비스 워커 등록
   if ('serviceWorker' in navigator) {
@@ -59,8 +75,23 @@
            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   }
 
+  // 카카오톡 안 브라우저 → 기본 브라우저(크롬·사파리)로 바로 넘긴다. 안드로이드·아이폰 모두 된다.
+  function openOutsideKakao() {
+    window.location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(window.location.href);
+  }
+
   // 앱 안 브라우저면 제일 먼저 크게 알려준다. 소리가 안 나는 대부분의 원인이다.
   var inApp = inAppBrowser();
+  // 직원 화면(상담사·현장안내·관리자 등)은 카카오톡 안에서 열리면 자동으로 크롬·사파리로 연다.
+  // 카톡방 링크를 눌러도 앱 설치·알림·소리가 되는 진짜 브라우저에서 열리게 하기 위해서다.
+  if (inApp === '카카오톡' && role !== 'customer') {
+    try {
+      if (sessionStorage.getItem('kakao_ext_tried') !== '1') {
+        sessionStorage.setItem('kakao_ext_tried', '1');
+        openOutsideKakao();
+      }
+    } catch (e) {}
+  }
   if (inApp) {
     showInAppWarning(inApp);
     return;
@@ -96,7 +127,10 @@
           '이 상태에서는 <b>호출 음성과 알림음이 나오지 않을 수 있습니다.</b><br>' + howto +
         '</div>' +
         '<div style="display:flex;gap:8px;margin-top:12px;">' +
-          (isAndroid()
+          (appName === '카카오톡'
+            ? '<button id="pwaOpenKakaoExt" style="flex:1;min-height:52px;border:none;border-radius:14px;background:#fff;color:#7f1d1d;font-size:16px;font-weight:900;cursor:pointer;">' + openLabel + '</button>'
+            : '') +
+          (isAndroid() && appName !== '카카오톡'
             ? '<button id="pwaOpenExternal" style="flex:1;min-height:52px;border:none;border-radius:14px;background:#fff;color:#7f1d1d;font-size:16px;font-weight:900;cursor:pointer;">' + openLabel + '</button>'
             : '') +
           '<button id="pwaCopyUrl" style="flex:1;min-height:52px;border:2px solid rgba(255,255,255,0.6);border-radius:14px;background:transparent;color:#fff;font-size:16px;font-weight:900;cursor:pointer;">주소 복사</button>' +
@@ -105,6 +139,8 @@
       document.body.appendChild(bar);
 
       var ext = document.getElementById('pwaOpenExternal');
+      var kakaoBtn = document.getElementById('pwaOpenKakaoExt');
+      if (kakaoBtn) kakaoBtn.onclick = openOutsideKakao;
       if (ext) {
         ext.onclick = function () {
           // 안드로이드는 크롬으로 직접 넘길 수 있다.

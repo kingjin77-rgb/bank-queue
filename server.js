@@ -66,7 +66,7 @@ function clone(v) { return JSON.parse(JSON.stringify(v)); }
 // 역할과 상담처에 따라 앱 이름/아이콘/시작주소가 달라지므로 서버에서 만들어 준다.
 const ROLE_MANIFEST = {
   teller:   { name: '창구 상담사', short: '창구', page: '/teller.html', icon: null, theme: null, bg: '#f2f4f6' },
-  customer: { name: '번호표', short: '번호표', page: '/kiosk.html', icon: null, theme: null, bg: '#f2f4f6' },
+  customer: { name: '번호표', short: '번호표', page: '/index.html', icon: null, theme: null, bg: '#f2f4f6' },
   admin:    { name: '관리자 콘솔', short: '관리자', page: '/admin.html', icon: 'admin', theme: '#0f172a', bg: '#0f172a' },
   operator: { name: '진행요원 패널', short: '진행요원', page: '/operator.html', icon: 'operator', theme: '#0b101b', bg: '#0b101b' },
   board:    { name: '전광판', short: '전광판', page: '/display.html', icon: 'board', theme: '#05080f', bg: '#05080f' },
@@ -83,11 +83,15 @@ app.get('/manifest.webmanifest', (req, res) => {
   const iconName = cfg.icon || (bank ? bankKey : 'default');
   const themeColor = cfg.theme || (bank ? bank.color : '#3182f6');
   const label = bank ? bank.name : '현장 상담';
-  const startUrl = cfg.page + (bank ? '?b=' + bankKey : '');
+  // 상담사 앱은 창구 번호까지 넣어 설치하면 열자마자 그 창구로 시작한다(창구마다 따로 설치 가능).
+  const deskNo = parseInt(req.query.desk, 10);
+  const desk = role === 'teller' && bank && deskNo >= 1 && deskNo <= 50 ? deskNo : 0;
+  const startUrl = cfg.page + (bank ? '?b=' + bankKey : '') + (desk ? '&desk=' + desk : '');
 
   res.type('application/manifest+json').json({
-    name: label + ' ' + cfg.name,
-    short_name: bank ? bank.name.slice(0, 6) : cfg.short,
+    id: startUrl,
+    name: label + ' ' + (desk ? desk + '번 ' : '') + cfg.name,
+    short_name: bank ? (desk ? (bankKey === 'jl' ? '제이엘' : bank.name.slice(0, 4)) + desk + '번' : bank.name.slice(0, 6)) : cfg.short,
     description: '법무법인 제이엘 현장 상담 대기·호출 시스템',
     start_url: startUrl,
     scope: '/',
