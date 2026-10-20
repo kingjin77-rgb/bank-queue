@@ -1,7 +1,9 @@
 # 현장 상담 대기·호출 관제 시스템
 
-> **현재 운영 종료(전체 차단)** — 2026-10-18 전주 행사 종료 후, 링크 유출로 인한 프로그램 유포를 막기 위해 모든 화면·파일·실시간 연결을 막아 두었습니다(`/healthz` 만 응답).
-> 다시 열기: 대표님 지시 → `server.js` 의 `SITE_CLOSED` 를 `false` 로 바꿔 배포. 비상시 Render 환경변수 `SITE_OPEN=1` 로도 열 수 있습니다.
+> **현재 운영: 2026-10-21 수원역푸르지오자이 분양전환 · 우리은행 단독 5창구 · 일반(선착순)** — 현장 프로필 `suwon` (server.js `ACTIVE_PROFILE`).
+> 고객 QR `index.html?b=woori` · 상담사 `teller.html?b=woori&desk=1~5` · 인쇄물 `qr_posters/suwon/` (생성: `python3 -I qr_posters/make_suwon.py public/icons qr_posters/suwon`).
+> 행사가 끝나면 대표님 지시로 `SITE_CLOSED = true` 로 바꿔 전체 차단합니다(비상시 Render 환경변수 `SITE_CLOSE=1` 로 즉시 차단, `SITE_OPEN=1` 로 열기).
+> 전주 구성(제이엘 먼저 → 은행 4곳)은 프로필 `jeonju` 로 남아 있습니다.
 
 법무법인 제이엘 분양전환 현장(전주)에서 **법무법인 제이엘 상담을 먼저 받고, 그다음 은행 상담**으로 이어지는 대기열을 운영하는 실시간 시스템입니다.
 

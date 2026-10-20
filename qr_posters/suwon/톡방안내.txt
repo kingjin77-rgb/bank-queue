@@ -1,0 +1,44 @@
+📢 [수원역푸르지오자이 분양전환 · 우리은행 상담] 번호표 시스템 안내
+
+■ 운영 방식
+- 우리은행 상담 창구 5개 (1~5번)
+- 사전예약 없음 · 오신 순서대로 번호표 1, 2, 3…
+- 손님은 게시된 QR 을 찍으면 바로 번호표가 나옵니다. 번호가 불리면 방송·전광판·손님 폰으로 안내됩니다.
+※ 휴대폰이 없는 분은 아래 [2] 현장안내앱에서 '🎫 대리발권'을 눌러 주세요.
+
+━━━━━━━━━━━━━━
+■ 내 역할 링크만 여세요
+
+[1] 우리은행 상담사 (자기 창구 링크만 · 열면 그 창구로 바로 시작)
+ 1번 https://bank-queue.onrender.com/teller.html?b=woori&desk=1
+ 2번 https://bank-queue.onrender.com/teller.html?b=woori&desk=2
+ 3번 https://bank-queue.onrender.com/teller.html?b=woori&desk=3
+ 4번 https://bank-queue.onrender.com/teller.html?b=woori&desk=4
+ 5번 https://bank-queue.onrender.com/teller.html?b=woori&desk=5
+※ 상담이 끝나면 [상담 완료]만 누르세요. 준비되면 [다음 고객 호출]을 누르세요.
+  상담 중에 [다음 고객 호출]을 누르면 지금 손님은 자동으로 상담 완료됩니다.
+※ PC 는 [📌 작은 창 띄우기], 휴대폰은 [🔔 새 손님 알림 켜기]를 한 번 눌러 두세요.
+
+[2] 현장안내 직원 (대리발권 · 번호 강제종료 · 📢 안내 방송)
+https://bank-queue.onrender.com/reserve.html
+
+[3] 현장알림 · 스피커 PC (1대만, 하루 종일 켜두기)
+https://bank-queue.onrender.com/admin.html
+- 열고 '🔊 스피커 방송 켜기'를 누르세요. 맨 위 운영 방식이 '🎫 일반 단지(선착순)'인지 확인하세요.
+
+[4] 전광판 TV
+https://bank-queue.onrender.com/display.html
+- 스피커 PC와 같은 공간이면 소리는 한쪽만 켜세요(두 번 들림 방지).
+
+[5] 진행요원 (전체 창구 현황)
+https://bank-queue.onrender.com/operator.html
+
+[고객 QR 주소 · 게시물에 인쇄된 주소]
+https://bank-queue.onrender.com/index.html?b=woori
+
+━━━━━━━━━━━━━━
+■ 꼭 지켜 주세요
+- 상담사 링크는 자기 창구 것만 여세요.
+- 화면이 멈춘 것 같으면 새로고침하면 됩니다. 대기 손님은 지워지지 않습니다.
+- 시작 전 관리자 화면에서 [전체 번호표 리셋]을 한 번 눌러 주세요.
+- 이 링크는 행사 기간에만 열려 있습니다(외부 공유 금지).

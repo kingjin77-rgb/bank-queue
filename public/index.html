@@ -302,7 +302,8 @@
       nh:      { name: 'NH농협은행',   color: '#1f8a3b', sub: '#e7f5ea', btnText: '#ffffff' },
       shinhan: { name: '신한은행',     color: '#0046ff', sub: '#e8f0fe', btnText: '#ffffff' },
       kb:      { name: '국민은행',     color: '#ffbc00', sub: '#fff9e6', btnText: '#2b2b2b' },
-      fubon:   { name: '푸본현대생명', color: '#00A88F', sub: '#e6f7f4', btnText: '#ffffff' }
+      fubon:   { name: '푸본현대생명', color: '#00A88F', sub: '#e6f7f4', btnText: '#ffffff' },
+      woori:   { name: '우리은행',     color: '#0067AC', sub: '#e6f0f8', btnText: '#ffffff' }
     };
 
     function applyTheme(info) {
@@ -650,7 +651,7 @@
       document.getElementById('doneTitle').innerText = jlDone ? '법무법인 제이엘 상담을 마치셨습니다.' : '상담이 완료되었습니다.';
       document.getElementById('doneDesc').innerHTML = jlDone
         ? '이제 은행 상담 차례입니다.<br>상담받으실 은행을 선택해 주세요.'
-        : '추가 상담이 필요하시면<br>아래에서 기관을 선택해주세요.';
+        : (singleSite() ? '이용해 주셔서 감사합니다.' : '추가 상담이 필요하시면<br>아래에서 기관을 선택해주세요.');
       document.getElementById('jlBanner').style.display = 'none';
 
       const heldBtn = document.getElementById('doneHeldBtn');
@@ -663,10 +664,21 @@
       renderBankSelection();
     }
 
+    // 이 현장에서 고를 수 있는 다른 상담처가 없으면(예: 우리은행 단독 현장) 기관 선택을 띄우지 않는다.
+    function otherBanks() {
+      const info = lastBankInfo || {};
+      return Object.keys(info).filter(function (b) { return b !== JL; });
+    }
+    function singleSite() {
+      const others = otherBanks();
+      return !!lastBankInfo && !lastBankInfo[JL] && others.length <= 1;
+    }
     function renderBankSelection() {
       const grid = document.getElementById('bankSelectGrid');
       const info = lastBankInfo || LOCAL_BANK_THEMES;
       grid.innerHTML = '';
+      grid.style.display = singleSite() ? 'none' : '';
+      if (singleSite()) return;
       Object.keys(info).forEach(function (b) {
         if (b === JL) return;   // 제이엘은 이미 마친 상담
         const it = info[b];
@@ -920,8 +932,16 @@
           location.replace('/index.html?bank=' + JL + '&from=' + encodeURIComponent(currentBank));
           break;
         case 'unknown_bank':
-          navigated = true;
-          location.replace('/index.html?bank=' + JL);
+          // 이 현장에 없는 기관 QR(지난 현장 QR 등) → 서버가 알려준 이 현장 기관으로 한 번만 이동한다.
+          if (res.defaultBank && res.defaultBank !== currentBank && !urlParams.get('moved')) {
+            navigated = true;
+            location.replace('/index.html?b=' + encodeURIComponent(res.defaultBank) + '&moved=1');
+          } else {
+            show('blockedSection');
+            document.getElementById('blockedTitle').innerText = '이 현장의 QR 이 아닙니다';
+            document.getElementById('blockedDesc').innerHTML = '현장에 붙어 있는 QR 을 다시 찍어 주시거나<br>안내 직원에게 문의해 주세요.';
+            document.getElementById('blockedGoBtn').style.display = 'none';
+          }
           break;
         case 'jl_done':
         case 'completed': {
@@ -930,7 +950,7 @@
             saveAnnounceFlags(stored.id, { done: true });
             enqueueSpeech(currentBank === JL
               ? '분양전환 상담이 완료되었습니다. 이제 은행 상담을 받으실 차례입니다.'
-              : '상담이 완료되었습니다. 추가 상담이 필요하시면 기관을 선택해 주세요.');
+              : (singleSite() ? '상담이 완료되었습니다. 이용해 주셔서 감사합니다.' : '상담이 완료되었습니다. 추가 상담이 필요하시면 기관을 선택해 주세요.'));
           }
           showDoneView(res.heldElsewhere);
           break;
@@ -982,7 +1002,13 @@
       enqueueSpeech(msg);
     }
 
-    socket.on('connect', function () { resolve(); });
+    socket.on('connect', function () {
+      resolve();
+      // 이 현장의 기관 목록(상담 완료 화면의 기관 선택에 쓴다)
+      socket.emit('get_banks', null, function (info) {
+        if (info && typeof info === 'object' && Object.keys(info).length) lastBankInfo = info;
+      });
+    });
 
     socket.on('all_state_update', function (data) {
       if (data.bankInfo) {
