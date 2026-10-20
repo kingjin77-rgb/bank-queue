@@ -15,6 +15,8 @@
       ['상담 순서 안내', '법무법인 제이엘 상담을 먼저 받으신 뒤 은행 상담이 진행됩니다.']
     ]
   };
+  // 제이엘 상담이 없는 현장(예: 은행 단독)에서는 제이엘 관련 멘트를 뺀다.
+  function jlText(t) { return /제이엘/.test(t[1]); }
   var COMMON = [
     ['호출 알림 켜기', '번호표를 받으신 후 호출 알림 켜기를 꼭 눌러 주십시오. 순서가 되면 휴대폰과 방송으로 안내해 드립니다.'],
     ['은행 번호표', '법무법인 제이엘 상담을 마치신 고객님께서는 휴대폰에서 은행을 선택하시고 은행 번호표를 받아 주십시오.'],
@@ -49,13 +51,14 @@
         msg.innerText = '📢 방송했습니다 · ' + new Date().toLocaleTimeString('ko-KR');
       });
     }
-    var mode = '';
-    function renderButtons(m) {
+    var mode = '', hasJl = true;
+    function renderButtons(m, jl) {
       m = m === 'reserve' ? 'reserve' : 'general';
-      if (m === mode) return;
-      mode = m;
+      if (typeof jl === 'boolean') jl = jl; else jl = hasJl;
+      if (m === mode && jl === hasJl && grid.children.length) return;
+      mode = m; hasJl = jl;
       grid.innerHTML = '';
-      FIRST[m].concat(COMMON).forEach(addButton);
+      FIRST[m].concat(COMMON).filter(function (t) { return hasJl || !jlText(t); }).forEach(addButton);
     }
     function addButton(p, i) {
       var b = document.createElement('button');
@@ -67,7 +70,7 @@
       grid.appendChild(b);
     }
     renderButtons(opt.mode || 'general');
-    socket.on('all_state_update', function (d) { if (d && d.settings) renderButtons(d.settings.siteMode); });
+    socket.on('all_state_update', function (d) { if (d && d.settings) renderButtons(d.settings.siteMode, !!(d.bankInfo && d.bankInfo.jl)); });
     socket.on('reserve_state', function (d) { if (d && d.siteMode) renderButtons(d.siteMode); });
     box.querySelector('.nt-send').onclick = function () {
       var inp = box.querySelector('.nt-input');

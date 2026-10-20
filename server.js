@@ -11,8 +11,9 @@ const crypto = require('crypto');
 // 행사가 끝나면 링크가 밖으로 퍼져도 아무것도 쓸 수 없게 전체를 닫아 둔다(프로그램 유포 방지).
 // 다시 여는 것은 대표님 지시로만: 이 값을 false 로 바꿔 배포한다.
 // (비상시 대표님이 Render 환경변수 SITE_OPEN=1 을 넣으면 코드 수정 없이 열린다)
-const SITE_CLOSED = true;   // 2026-10-18 전주 행사 종료 → 차단
-const SITE_IS_CLOSED = SITE_CLOSED && process.env.SITE_OPEN !== '1';
+const SITE_CLOSED = false;  // 2026-10-21 수원역푸르지오자이 운영 (10-18 전주 종료 후 차단했다가 재개)
+// 비상시 Render 환경변수 SITE_CLOSE=1 을 넣으면 코드 수정 없이 바로 닫힌다.
+const SITE_IS_CLOSED = (SITE_CLOSED && process.env.SITE_OPEN !== '1') || process.env.SITE_CLOSE === '1';
 
 const app = express();
 const server = http.createServer(app);
@@ -59,19 +60,33 @@ app.get('/healthz', (req, res) => {
 // 법무법인 제이엘 상담을 먼저 받아야 은행 번호표를 받을 수 있다.
 const JL = 'jl';
 
-// 현장에 QR 로 안내하는 상담처. 여기 등록된 곳만 서버가 재시작해도(배포, 절전 후 재기동,
-// 비상 복구) 그대로 유지된다. 모든 화면이 이 순서대로 그리므로 제이엘을 맨 앞에 둔다.
-const INITIAL_BANKS = {
+// ===== 현장 프로필 =====
+// 현장마다 상담처(기관)와 창구 수가 다르다. 여기 등록된 곳만 서버가 재시작해도(배포, 절전 후 재기동,
+// 비상 복구) 그대로 유지된다. 모든 화면이 이 순서대로 그린다.
+// 제이엘이 들어 있는 현장은 '제이엘 상담 먼저 → 은행' 순서로 운영한다.
+const BANK_CATALOG = {
   jl: { name: '법무법인 제이엘', color: '#8b0029', sub: '#fbe9ee', btnText: '#ffffff' },
   nh: { name: 'NH농협은행', color: '#1f8a3b', sub: '#e7f5ea', btnText: '#ffffff' },
   shinhan: { name: '신한은행', color: '#0046ff', sub: '#e8f0fe', btnText: '#ffffff' },
   kb: { name: '국민은행', color: '#ffbc00', sub: '#fff9e6', btnText: '#2b2b2b' },
-  fubon: { name: '푸본현대생명', color: '#00A88F', sub: '#e6f7f4', btnText: '#ffffff' }
+  fubon: { name: '푸본현대생명', color: '#00A88F', sub: '#e6f7f4', btnText: '#ffffff' },
+  woori: { name: '우리은행', color: '#0067AC', sub: '#e6f0f8', btnText: '#ffffff' }
 };
+const SITE_PROFILES = {
+  // 2026-10-17·18 전주 분양전환 (제이엘 먼저 → 은행 4곳)
+  jeonju: { desks: { jl: 5, nh: 2, shinhan: 3, kb: 2, fubon: 1 } },
+  // 2026-10-21 수원역푸르지오자이 분양전환 (우리은행 단독 5창구, 제이엘 상담 없음)
+  suwon: { desks: { woori: 5 } }
+};
+const ACTIVE_PROFILE = SITE_PROFILES[process.env.SITE_PROFILE] ? process.env.SITE_PROFILE : 'suwon';
+const INITIAL_BANKS = {};
+Object.keys(SITE_PROFILES[ACTIVE_PROFILE].desks).forEach(b => { INITIAL_BANKS[b] = BANK_CATALOG[b]; });
 
 // 상담처별 기본 창구 수. 현장에서 관리자 콘솔로 늘리고 줄일 수 있다.
-// 배포하면 저장 파일이 사라지므로 상시 운영 창구 수가 바뀌면 이 값도 고친다.
-const INITIAL_DESK_COUNTS = { jl: 5, nh: 2, shinhan: 3, kb: 2, fubon: 1 };
+const INITIAL_DESK_COUNTS = { ...SITE_PROFILES[ACTIVE_PROFILE].desks };
+// 이 현장에 제이엘 상담이 있으면 은행 번호표는 제이엘 상담을 마친 손님만 받는다.
+const JL_FIRST = !!INITIAL_BANKS[JL];
+console.log('[현장] ' + ACTIVE_PROFILE + ' · ' + Object.keys(INITIAL_BANKS).map(b => INITIAL_BANKS[b].name + ' ' + INITIAL_DESK_COUNTS[b] + '창구').join(', '));
 
 function makeDesks(count) {
   return Array.from({ length: count }, (_, i) => ({
@@ -696,7 +711,7 @@ function knownBank(b) {
 }
 
 function sanitizeBank(b) {
-  return knownBank(b) || JL;
+  return knownBank(b) || Object.keys(db.bankInfo)[0];
 }
 
 function hasLiveData() {
@@ -862,7 +877,7 @@ function jlProof(deviceId, attest) {
 
 // 은행 대기 손님이 지금 제이엘에서 상담 중(또는 제이엘 대기 중)이면 은행은 부르면 안 된다.
 function isHeldAtJl(bank, cust) {
-  return bank !== JL && !!cust && !!cust.deviceId && deviceAtJl(cust.deviceId);
+  return JL_FIRST && bank !== JL && !!cust && !!cust.deviceId && deviceAtJl(cust.deviceId);
 }
 
 function heldIdsOf(bank) {
@@ -1013,6 +1028,11 @@ io.on('connection', (socket) => {
     socket.emit('state_update', bankPayload(b));
   });
 
+  // 손님 화면용: 이 현장의 기관 목록만(가볍게)
+  socket.on('get_banks', (payload, callback) => {
+    if (typeof callback === 'function') callback(db.bankInfo);
+  });
+
   socket.on('get_all_state', () => {
     socket.emit('all_state_update', allPayload());
   });
@@ -1031,7 +1051,8 @@ io.on('connection', (socket) => {
     const ack = typeof callback === 'function' ? callback : () => {};
     const p = payload || {};
     const b = knownBank(p.bank);
-    if (!b) return ack({ success: false, status: 'unknown_bank' });
+    // 이 현장에 없는 기관 QR(예: 지난 현장 QR)이면 이 현장의 첫 기관을 알려준다(손님 폰이 한 번만 이동).
+    if (!b) return ack({ success: false, status: 'unknown_bank', defaultBank: Object.keys(db.bankInfo)[0] || '' });
 
     if (p.proxy) {
       if (restoring()) return ack({ success: false, status: 'wait', message: '서버 복구 중입니다. 잠시 후 다시 눌러 주세요.' });
@@ -1098,7 +1119,7 @@ io.on('connection', (socket) => {
     const elsewhere = liveTicketElsewhere(deviceId, b);
     if (elsewhere) return ack({ success: false, status: 'blocked', held: ticketBrief(elsewhere) });
 
-    if (b !== JL && !jlId) return ack({ success: false, status: 'jl_required' });
+    if (JL_FIRST && b !== JL && !jlId) return ack({ success: false, status: 'jl_required' });
 
     // 폰에 번호가 있었는데 서버에서 사라진 경우(번호 초기화·일마감 등)는 새 번호를 자동으로 주지 않는다.
     // 화면이 열려 있던 손님 폰들이 한꺼번에 새 번호를 뽑아 대기열이 유령 번호로 차는 것을 막는다.
