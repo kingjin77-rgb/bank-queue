@@ -76,7 +76,15 @@ const SITE_PROFILES = {
   // 2026-10-17·18 전주 분양전환 (제이엘 먼저 → 은행 4곳)
   jeonju: { desks: { jl: 5, nh: 2, shinhan: 3, kb: 2, fubon: 1 } },
   // 2026-10-21 수원역푸르지오자이 분양전환 (우리은행 단독 5창구, 제이엘 상담 없음)
-  suwon: { desks: { woori: 5 } }
+  // 번호표 발급 시간: 평일 14:30~21:00, 토요일 12:30~17:00, 일요일 없음(관리자 화면에서 바꿀 수 있음)
+  suwon: {
+    desks: { woori: 5 },
+    hours: {
+      weekday: { on: true, open: '14:30', close: '21:00' },
+      sat: { on: true, open: '12:30', close: '17:00' },
+      sun: { on: false, open: '12:30', close: '17:00' }
+    }
+  }
 };
 const ACTIVE_PROFILE = SITE_PROFILES[process.env.SITE_PROFILE] ? process.env.SITE_PROFILE : 'suwon';
 const INITIAL_BANKS = {};
@@ -106,7 +114,9 @@ const INITIAL_SETTINGS = {
   // 운영 방식: 'reserve' 사전예약 단지(동·호수 확인·현장 접수 1001~·예약 우선) / 'general' 일반 단지(선착순 1,2,3…)
   // 관리자 화면 버튼으로 바꾼다. siteModeAt 은 마지막으로 바꾼 시각(0 = 아직 아무도 정하지 않음, 기본값 사용 중).
   siteMode: process.env.SITE_MODE === 'reserve' ? 'reserve' : 'general',
-  siteModeAt: 0
+  siteModeAt: 0,
+  // 손님 QR 번호표 발급 시간(평일·토·일). null 이면 시간 제한 없음. 대리발권(직원)은 제한 없음.
+  issueHours: SITE_PROFILES[ACTIVE_PROFILE].hours || null
 };
 
 function clone(v) { return JSON.parse(JSON.stringify(v)); }
@@ -509,6 +519,7 @@ function normalizeDb() {
   db.settings = { ...INITIAL_SETTINGS, ...(db.settings || {}) };
   if (db.settings.siteMode !== 'reserve' && db.settings.siteMode !== 'general') db.settings.siteMode = INITIAL_SETTINGS.siteMode;
   db.settings.siteModeAt = Number(db.settings.siteModeAt) > 0 ? Number(db.settings.siteModeAt) : 0;
+  db.settings.issueHours = db.settings.issueHours === null ? null : cleanHours(db.settings.issueHours);
   db.resetAt = Number.isFinite(Number(db.resetAt)) ? Number(db.resetAt) : 0;
   db.walkinSeq = safeCount(db.walkinSeq, 90000);
   normalizeReservations();
@@ -596,6 +607,41 @@ const SEOUL_DATE_FMT = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul'
 function seoulDate(v) {
   const d = new Date(v);
   return isNaN(d.getTime()) ? '' : SEOUL_DATE_FMT.format(d);
+}
+
+// ===== 번호표 발급 시간 =====
+// 너무 일찍 QR 을 찍어 앞번호를 가져가는 것을 막는다. 시간 전이면 '몇 시부터' 안내만 하고 발권하지 않는다.
+// (서버가 켜질 때 저장 파일을 읽으며 바로 쓰이므로 상수 대신 함수로 둔다)
+function isHm(v) { return /^([01]\d|2[0-3]):[0-5]\d$|^24:00$/.test(String(v)); }
+function hmToMin(v) { const [h, m] = String(v).split(':').map(Number); return h * 60 + m; }
+function cleanHours(h) {
+  if (!h || typeof h !== 'object') return null;
+  const out = {};
+  for (const k of ['weekday', 'sat', 'sun']) {
+    const g = h[k] || {};
+    const open = isHm(g.open) ? g.open : '00:00';
+    const close = isHm(g.close) ? g.close : '24:00';
+    out[k] = { on: g.on === true, open, close: hmToMin(close) > hmToMin(open) ? close : '24:00' };
+  }
+  return out;
+}
+const SEOUL_PARTS_FMT = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', weekday: 'short', hourCycle: 'h23' });
+// 지금(한국 시간) 손님 발권이 되는지. { ok, reason: 'before'|'after'|'closed_day', open, close, openAtMs }
+function issueWindow(now) {
+  const H = db.settings.issueHours;
+  if (!H) return { ok: true };
+  const o = {};
+  SEOUL_PARTS_FMT.formatToParts(new Date(now)).forEach(x => { o[x.type] = x.value; });
+  const wd = o.weekday;                       // Sun, Mon, ...
+  const g = wd === 'Sat' ? H.sat : (wd === 'Sun' ? H.sun : H.weekday);
+  const label = wd === 'Sat' ? '토요일' : (wd === 'Sun' ? '일요일' : '평일');
+  if (!g || !g.on) return { ok: false, reason: 'closed_day', day: label };
+  const nowMin = Number(o.hour) * 60 + Number(o.minute);
+  const midnight = Date.UTC(Number(o.year), Number(o.month) - 1, Number(o.day)) - 9 * 3600000;
+  const info = { open: g.open, close: g.close, day: label, openAtMs: midnight + hmToMin(g.open) * 60000 };
+  if (nowMin < hmToMin(g.open)) return { ok: false, reason: 'before', ...info };
+  if (nowMin >= hmToMin(g.close)) return { ok: false, reason: 'after', ...info };
+  return { ok: true, ...info };
 }
 
 function avg(arr) {
@@ -1127,6 +1173,13 @@ io.on('connection', (socket) => {
       // 시간예약 운영 중 제이엘 화면은 '다시 받기' 대신 바로 동·호수 입력 화면을 보여준다(입력해야 발권되므로 유령 번호 없음).
       if (b === JL && reserveGateOn()) return ack({ success: false, status: 'reserve_required' });
       return ack({ success: false, status: 'gone' });
+    }
+
+    // 번호표 발급 시간 밖이면 새 번호를 주지 않는다(이미 받은 번호는 위에서 그대로 돌려준다).
+    const win = issueWindow(Date.now());
+    if (!win.ok) {
+      return ack({ success: false, status: 'not_open', reason: win.reason, open: win.open || '', close: win.close || '',
+        day: win.day || '', openAtMs: win.openAtMs || 0, serverTime: Date.now() });
     }
 
     // 시간예약자 우선: 예약자 명단이 올라와 있으면 제이엘 번호표는 지금 예약 시간대의 예약자만 받는다.
@@ -1670,6 +1723,9 @@ io.on('connection', (socket) => {
       if (!isNaN(h) && h >= 0 && h <= 23) next.closeHour = h;
     }
     if (patch && typeof patch.reserveGate === 'boolean') next.reserveGate = patch.reserveGate;
+    if (patch && Object.prototype.hasOwnProperty.call(patch, 'issueHours')) {
+      next.issueHours = patch.issueHours === null ? null : cleanHours(patch.issueHours);
+    }
     if (patch && (patch.siteMode === 'reserve' || patch.siteMode === 'general')) {
       next.siteMode = patch.siteMode;
       next.siteModeAt = Date.now();
@@ -1821,6 +1877,10 @@ io.on('connection', (socket) => {
         standardMinutes: Math.min(safeCount(snapshot.settings.standardMinutes, 180), 180) || db.settings.standardMinutes,
         repeatCount: Math.min(safeCount(snapshot.settings.repeatCount, 3), 3) || db.settings.repeatCount
       };
+      // 발권 시간도 되살린다.
+      if (Object.prototype.hasOwnProperty.call(snapshot.settings, 'issueHours')) {
+        db.settings.issueHours = snapshot.settings.issueHours === null ? null : cleanHours(snapshot.settings.issueHours);
+      }
       // 운영 방식도 되살린다(관리자가 정한 적이 있을 때만).
       if ((snapshot.settings.siteMode === 'reserve' || snapshot.settings.siteMode === 'general') && Number(snapshot.settings.siteModeAt) > 0) {
         db.settings.siteMode = snapshot.settings.siteMode;

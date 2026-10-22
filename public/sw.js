@@ -1,6 +1,6 @@
 // 현장 네트워크가 불안정해도 화면이 뜨도록 하는 서비스 워커.
 // HTML 은 항상 최신을 먼저 받아오고(배포 즉시 반영), 정적 파일만 캐시를 먼저 쓴다.
-const CACHE = 'bankqueue-v14';
+const CACHE = 'bankqueue-v15';
 const ASSETS = [
   '/chime.wav',
   '/silent.wav',

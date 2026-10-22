@@ -234,6 +234,17 @@
       </div>
     </section>
 
+    <!-- 번호표 발급 시간 전·후 -->
+    <section id="hoursSection" style="display:none;">
+      <div class="done-card">
+        <span class="rv-badge">번호표 발급 시간 안내</span>
+        <div class="rv-title" id="hrTitle"></div>
+        <div class="rv-desc" id="hrDesc"></div>
+        <div id="hrCount" style="font-size:22px;font-weight:900;color:var(--brand);margin-top:14px;"></div>
+        <button class="btn-big btn-brand" id="hrBtn" onclick="hoursIssue()" disabled>번호표 받기</button>
+      </div>
+    </section>
+
     <!-- 다른 기관 상담이 끝나지 않은 경우 -->
     <section id="blockedSection">
       <div class="done-card">
@@ -540,7 +551,8 @@
     /* ================= 화면 ================= */
 
     function show(section) {
-      ['ticketSection', 'blockedSection', 'completeSection', 'reserveSection'].forEach(function (id) {
+      if (section !== 'hoursSection') { clearInterval(hrTimer); hoursWaiting = false; }
+      ['ticketSection', 'blockedSection', 'completeSection', 'reserveSection', 'hoursSection'].forEach(function (id) {
         document.getElementById(id).style.display = (id === section) ? 'block' : 'none';
       });
       // 주황 헤더는 현장 접수 번호표를 보고 있을 때만
@@ -972,6 +984,9 @@
         case 'reserve_denied':
           showReserveDenied(res, opts.reserve || readReserveUnit());
           break;
+        case 'not_open':
+          showNotOpen(res);
+          break;
         case 'wait':
           show('ticketSection');
           setHint('서버를 준비하고 있습니다. 잠시만 기다려 주세요.');
@@ -980,6 +995,56 @@
         default:
           setHint('화면을 새로고침해 주세요.');
       }
+    }
+
+    /* ================= 번호표 발급 시간 =================
+       시간 전에 QR 을 찍은 손님에게는 '몇 시부터' 안내와 남은 시간을 보여 주고,
+       시간이 되면 [번호표 받기] 버튼이 켜진다(자동으로 번호를 주지 않는다). */
+    var hrTimer = null, hoursWaiting = false;   // var: show() 가 먼저 불려도 안전하게
+    function showNotOpen(res) {
+      show('hoursSection');
+      hoursWaiting = true;
+      const btn = document.getElementById('hrBtn');
+      const title = document.getElementById('hrTitle');
+      const desc = document.getElementById('hrDesc');
+      const count = document.getElementById('hrCount');
+      count.innerText = '';
+      clearInterval(hrTimer);
+      if (res.reason === 'before') {
+        const offset = res.serverTime ? res.serverTime - Date.now() : 0;
+        title.innerText = '번호표는 ' + res.open + '부터 발급됩니다';
+        desc.innerHTML = res.day + ' 번호표 발급 시간 <b>' + res.open + ' ~ ' + res.close + '</b><br>시간이 되면 아래 [번호표 받기]를 눌러 주세요.';
+        btn.style.display = 'flex';
+        btn.disabled = true;
+        const tick = function () {
+          const left = Math.ceil((res.openAtMs - (Date.now() + offset)) / 1000);
+          if (left <= 0) {
+            clearInterval(hrTimer);
+            btn.disabled = false;
+            count.innerText = '지금 번호표를 받으실 수 있습니다';
+            return;
+          }
+          const h = Math.floor(left / 3600), m = Math.floor((left % 3600) / 60), sec = left % 60;
+          count.innerText = '남은 시간 ' + (h ? h + '시간 ' : '') + (h || m ? m + '분 ' : '') + sec + '초';
+        };
+        tick();
+        hrTimer = setInterval(tick, 1000);
+      } else if (res.reason === 'after') {
+        title.innerText = '오늘 번호표 발급이 마감되었습니다';
+        desc.innerHTML = res.day + ' 번호표 발급 시간 <b>' + res.open + ' ~ ' + res.close + '</b><br>현장 안내 직원에게 문의해 주세요.';
+        btn.style.display = 'none';
+      } else {
+        title.innerText = '오늘은 번호표를 발급하지 않습니다';
+        desc.innerHTML = '상담 일정을 확인해 주시고,<br>현장 안내 직원에게 문의해 주세요.';
+        btn.style.display = 'none';
+      }
+    }
+    function hoursIssue() {
+      const btn = document.getElementById('hrBtn');
+      btn.disabled = true;
+      hoursWaiting = false;
+      setTimeout(function () { btn.disabled = false; }, 3000);
+      resolve({ fresh: true });
     }
 
     // 발권 안내 멘트 (알림을 켠 뒤에 한 번만)
@@ -1003,7 +1068,8 @@
     }
 
     socket.on('connect', function () {
-      resolve();
+      // 발급 시간 안내 화면에서 기다리는 중이면 다시 연결돼도 자동으로 번호를 받지 않는다(버튼을 눌러야 받음).
+      if (!hoursWaiting) resolve();
       // 이 현장의 기관 목록(상담 완료 화면의 기관 선택에 쓴다)
       socket.emit('get_banks', null, function (info) {
         if (info && typeof info === 'object' && Object.keys(info).length) lastBankInfo = info;

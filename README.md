@@ -1,6 +1,7 @@
 # 현장 상담 대기·호출 관제 시스템
 
 > **현재 운영: 2026-10-21 수원역푸르지오자이 분양전환 · 우리은행 단독 5창구 · 일반(선착순)** — 현장 프로필 `suwon` (server.js `ACTIVE_PROFILE`).
+> 손님 번호표 발급 시간: 평일 14:30~21:00 · 토 12:30~17:00 · 일 없음(관리자 화면 '🕐 손님 번호표 발급 시간'에서 변경, 대리발권은 제한 없음).
 > 고객 QR `index.html?b=woori` · 상담사 `teller.html?b=woori&desk=1~5` · 인쇄물 `qr_posters/suwon/` (생성: `python3 -I qr_posters/make_suwon.py public/icons qr_posters/suwon`).
 > 행사가 끝나면 대표님 지시로 `SITE_CLOSED = true` 로 바꿔 전체 차단합니다(비상시 Render 환경변수 `SITE_CLOSE=1` 로 즉시 차단, `SITE_OPEN=1` 로 열기).
 > 전주 구성(제이엘 먼저 → 은행 4곳)은 프로필 `jeonju` 로 남아 있습니다.
