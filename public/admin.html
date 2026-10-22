@@ -149,6 +149,11 @@
     .gate-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; background: #0b1120; border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; margin-top: 14px; }
     .gate-row .g-text { font-size: 15px; font-weight: 800; color: #cbd5e1; line-height: 1.5; }
     .gate-row b { color: #fff; }
+    .hours-grid { display: grid; gap: 8px; }
+    .hours-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: #0b1120; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; font-size: 16px; font-weight: 800; color: #cbd5e1; }
+    .hours-row .hr-day { min-width: 90px; color: #fff; }
+    .hours-row input[type=time] { font-size: 17px; font-weight: 900; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: #111827; color: #fff; }
+    .hours-row input[type=checkbox] { width: 22px; height: 22px; }
     .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     @media (max-width: 640px) { .mode-grid { grid-template-columns: 1fr; } }
     .mode-btn { padding: 18px 14px; border-radius: 16px; border: 2px solid var(--border); background: #0b1120; color: #cbd5e1; font-size: 20px; font-weight: 900; cursor: pointer; text-align: left; line-height: 1.3; }
@@ -236,6 +241,20 @@
         <button class="mode-btn" id="modeGeneral" onclick="setSiteMode('general')">🎫 일반 단지 (선착순)<small>온 순서대로 1, 2, 3… · 제이엘 상담 먼저 → 은행</small></button>
       </div>
       <div id="modeNote" style="font-size: 14px; color: #94a3b8; margin-top: 10px; line-height: 1.6;"></div>
+    </div>
+
+    <div class="card" id="hoursCard">
+      <h2>🕐 손님 번호표 발급 시간</h2>
+      <div style="font-size: 14px; color: #94a3b8; margin-bottom: 12px; line-height: 1.6;">
+        이 시간에만 손님이 QR 로 번호표를 받습니다. 시간 전에 찍으면 '몇 시부터' 안내와 남은 시간이 나오고, 시간이 되면 [번호표 받기] 버튼이 켜집니다.
+        마감 후에는 '발급 마감' 안내. 대리발권(직원)은 시간과 관계없이 됩니다. 이미 받은 번호는 그대로 유지됩니다.
+      </div>
+      <div class="hours-grid" id="hoursGrid"></div>
+      <div id="hoursNow" style="font-size: 15px; font-weight: 800; color: #e2e8f0; margin-top: 10px;"></div>
+      <div class="btn-grid" style="margin-top: 12px;">
+        <button class="btn-act" style="background: var(--success); color: #000;" onclick="saveHours()">발급 시간 저장</button>
+        <button class="btn-act btn-dark" onclick="clearHours()">시간 제한 없애기</button>
+      </div>
     </div>
 
     <div class="card" id="noticeCard">
@@ -861,6 +880,7 @@
         }
         renderWindows(data.settings);
         renderSiteMode(data.settings);
+        renderHours(data.settings.issueHours);
       }
       renderMiniDisplay(data);
       renderDeskStatus(data);
@@ -1241,6 +1261,53 @@
         socket.emit('admin_set_settings', { siteMode: pref });
       }
     }
+    // 손님 번호표 발급 시간 (평일 / 토요일 / 일요일)
+    const HOUR_ROWS = [['weekday', '평일(월~금)'], ['sat', '토요일'], ['sun', '일요일']];
+    let hoursRendered = '';
+    function renderHours(h) {
+      const sig = JSON.stringify(h);
+      const grid = document.getElementById('hoursGrid');
+      if (sig === hoursRendered && grid.children.length) return;     // 입력 중인 칸을 덮어쓰지 않는다
+      if (grid.contains(document.activeElement)) return;
+      hoursRendered = sig;
+      grid.innerHTML = '';
+      HOUR_ROWS.forEach(function (r) {
+        const g = (h && h[r[0]]) || { on: false, open: '09:00', close: '18:00' };
+        const row = document.createElement('div');
+        row.className = 'hours-row';
+        row.innerHTML = '<input type="checkbox" data-k="' + r[0] + '" class="hr-on"' + (h && g.on ? ' checked' : '') + '>' +
+          '<span class="hr-day">' + r[1] + '</span>' +
+          '<input type="time" class="hr-open" data-k="' + r[0] + '" value="' + g.open + '"> ~ ' +
+          '<input type="time" class="hr-close" data-k="' + r[0] + '" value="' + (g.close === '24:00' ? '23:59' : g.close) + '">';
+        grid.appendChild(row);
+      });
+      document.getElementById('hoursNow').innerText = h
+        ? '지금 적용: ' + HOUR_ROWS.map(function (r) { const g = h[r[0]]; return r[1].replace('(월~금)', '') + ' ' + (g.on ? g.open + '~' + g.close : '발급 안 함'); }).join(' · ')
+        : '지금 적용: 시간 제한 없음 (언제든 발급)';
+    }
+    function saveHours() {
+      const out = {};
+      HOUR_ROWS.forEach(function (r) {
+        const k = r[0];
+        const open = document.querySelector('.hr-open[data-k="' + k + '"]').value || '00:00';
+        let close = document.querySelector('.hr-close[data-k="' + k + '"]').value || '23:59';
+        if (close === '23:59') close = '24:00';
+        out[k] = { on: document.querySelector('.hr-on[data-k="' + k + '"]').checked, open: open, close: close };
+      });
+      for (let i = 0; i < HOUR_ROWS.length; i++) {
+        const g = out[HOUR_ROWS[i][0]];
+        if (g.on && g.close <= g.open) { alert(HOUR_ROWS[i][1] + ': 마감 시각이 시작보다 늦어야 합니다.'); return; }
+      }
+      hoursRendered = '';
+      socket.emit('admin_set_settings', { issueHours: out });
+      alert('번호표 발급 시간을 저장했습니다.');
+    }
+    function clearHours() {
+      if (!confirm('발급 시간 제한을 없앨까요?\n손님이 언제든 QR 로 번호표를 받습니다.')) return;
+      hoursRendered = '';
+      socket.emit('admin_set_settings', { issueHours: null });
+    }
+
     function kstDay(ms) { return new Date(ms + 9 * 3600000).toISOString().slice(0, 10); }
     function setSiteMode(m) {
       if (m === siteMode) return;
