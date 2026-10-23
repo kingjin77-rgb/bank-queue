@@ -207,9 +207,8 @@
   <!-- 창구 선택 / 이동 -->
   <div class="modal" id="bankErrorModal">
     <div class="sheet">
-      <h2 style="color:#f04452;">잘못된 창구 주소</h2>
-      <p id="bankErrorMsg">이 주소의 기관이 시스템에 등록되어 있지 않습니다.<br>관리자에게 문의하거나 아래에서 기관을 선택하세요.</p>
-      <div class="desk-options" id="bankOptions"></div>
+      <h2 style="color:#f04452;">이 현장의 상담사 링크가 아닙니다</h2>
+      <p id="bankErrorMsg">이 링크의 기관은 지금 현장에 없습니다.<br>다른 기관의 창구는 열 수 없습니다.<br><br>관리자에게 받은 <b>자기 창구 링크</b>로 다시 접속해 주세요.</p>
     </div>
   </div>
 
@@ -423,15 +422,8 @@
         document.getElementById('bankErrorModal').classList.remove('show');
         return;
       }
-      const box = document.getElementById('bankOptions');
-      box.innerHTML = '';
-      Object.keys(data.bankInfo).forEach(function (b) {
-        const btn = document.createElement('button');
-        btn.className = 'desk-opt';
-        btn.innerHTML = '<span>' + data.bankInfo[b].name + '</span><span class="d-sub">이 기관으로 이동</span>';
-        btn.onclick = function () { window.location.href = '/teller.html?bank=' + b; };
-        box.appendChild(btn);
-      });
+      // 다른 기관으로 옮겨 가는 버튼은 두지 않는다(다른 은행 상담사가 이 현장 창구를 열지 못하게).
+      myDesk = null;
       document.getElementById('deskModal').classList.remove('show');
       document.getElementById('bankErrorModal').classList.add('show');
     });
