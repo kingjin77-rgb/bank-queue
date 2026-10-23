@@ -45,6 +45,20 @@ if (SITE_IS_CLOSED) {
   io.use((socket, next) => next(new Error('closed')));
 }
 
+// 지난 현장 링크(이 현장에 없는 기관의 손님 QR·상담사 링크, 예: 전주 ?b=jl·nh·shinhan·kb·fubon)는
+// 앱을 내려주지 않고 '운영 종료' 한 장만 보여 준다. 링크가 한 서버에 고정이라 현장이 바뀌어도 주소는 남기 때문.
+const SITE_PAGES = new Set(['/', '/index.html', '/kiosk', '/kiosk.html', '/teller.html']);
+app.use((req, res, next) => {
+  if (!SITE_PAGES.has(req.path)) return next();
+  const raw = req.query.bank != null ? req.query.bank : req.query.b;
+  if (raw == null || raw === '') return next();
+  const b = String(Array.isArray(raw) ? raw[0] : raw).toLowerCase().trim();
+  if (INITIAL_BANKS[b]) return next();
+  res.set('Cache-Control', 'no-store');
+  res.set('X-Robots-Tag', 'noindex, nofollow');
+  return res.status(503).type('html').send(CLOSED_PAGE);
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // 발권 전용 링크(/kiosk.html?b=xx)는 고객 발권 화면(index.html)과 동일 - 기존 QR/주소 유지
